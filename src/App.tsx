@@ -60,39 +60,39 @@ function App() {
     );
   }
 
-  if (currentCase) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <header className="p-4 border-b flex justify-between items-center">
-          <h1 className="text-xl font-bold">The Bench</h1>
-          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Resign Session</Button>
-        </header>
-        <main>
-          <ArraignmentView caseData={currentCase} />
-        </main>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 space-y-4">
-      <h1 className="text-4xl font-bold tracking-tight">The Bench</h1>
-      <p className="text-muted-foreground text-center max-w-md">
-        Honorable Judge, the court is waiting. <br />
-        Your reputation is at stake.
-      </p>
+    <>
+      {currentCase ? (
+        <div className="min-h-screen bg-background text-foreground">
+          <header className="p-4 border-b flex justify-between items-center">
+            <h1 className="text-xl font-bold">The Bench</h1>
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Resign Session</Button>
+          </header>
+          <main>
+            <ArraignmentView caseData={currentCase} />
+          </main>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 space-y-4">
+          <h1 className="text-4xl font-bold tracking-tight">The Bench</h1>
+          <p className="text-muted-foreground text-center max-w-md">
+            Honorable Judge, the court is waiting. <br />
+            Your reputation is at stake.
+          </p>
 
-      {error && (
-        <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-          {error}
+          {error && (
+            <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
+              {error}
+            </div>
+          )}
+
+          <Button size="lg" onClick={handleStartGame} disabled={isLoading}>
+            {isLoading ? "Generating Docket..." : "Call to Order"}
+          </Button>
         </div>
       )}
-
-      <Button size="lg" onClick={handleStartGame} disabled={isLoading}>
-        {isLoading ? "Generating Docket..." : "Call to Order"}
-      </Button>
       <Toaster />
-    </div>
+    </>
   );
 }
 
