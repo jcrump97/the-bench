@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import type { CourtCase, CaseOutcome } from '../types/game';
+import type { CourtCase, CaseOutcome, ArraignmentRuling } from '../types/game';
 
 interface GameState {
     apiKey: string | null;
@@ -12,6 +12,7 @@ interface GameState {
     setApiKey: (key: string) => void;
     setCurrentCase: (caseData: CourtCase) => void;
     resolveCurrentCase: (outcome: CaseOutcome) => void;
+    submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
     updateReputation: (amount: number) => void;
     setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
 }
@@ -49,6 +50,18 @@ export const useGameStore = create<GameState>()(
                     set((state) => ({
                         playerReputation: Math.max(0, state.playerReputation + amount),
                     })),
+
+
+                submitArraignmentRuling: (ruling) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+                        return {
+                            currentCase: {
+                                ...state.currentCase,
+                                arraignment_ruling: ruling,
+                            },
+                        };
+                    }),
 
                 setGameStage: (stage) => set({ gameStage: stage }),
             }),
