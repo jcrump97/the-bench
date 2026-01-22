@@ -1,5 +1,5 @@
 import React from 'react';
-import { CourtCase } from '../../types/game';
+import type { CourtCase } from '../../types/game';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 
