@@ -47,7 +47,9 @@ export interface GameState {
     current_stage: string;
     is_mistrial: boolean;
     defense_attorney_aggression: number;
+
     prosecutor_competence: number;
+    presiding_judge_reputation?: number;
 }
 
 export interface CourtCase {

@@ -9,6 +9,7 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
+import { useToast } from '../../hooks/use-toast';
 
 const BOND_CONDITIONS = [
     "Surrender Passport",
@@ -20,7 +21,8 @@ const BOND_CONDITIONS = [
 ];
 
 export const ArraignmentControls: React.FC = () => {
-    const { submitArraignmentRuling } = useGameStore();
+    const { submitArraignmentRuling, currentCase } = useGameStore();
+    const { toast } = useToast();
 
     const [bailType, setBailType] = useState<"ROR" | "Cash" | "Remand">("ROR");
     const [bailAmount, setBailAmount] = useState<number>(0);
@@ -34,7 +36,27 @@ export const ArraignmentControls: React.FC = () => {
             conditions,
             rulingReasoning: reasoning
         };
+
         submitArraignmentRuling(ruling);
+
+        // Calculate reputation change for feedback (mirroring store logic)
+        let reputationChange = 2;
+        if (currentCase) {
+            const flightRisk = currentCase.defendant.flight_risk_score;
+            if (flightRisk >= 8 && ruling.bailType === "ROR") {
+                reputationChange = -15;
+            } else if (flightRisk >= 8 && ruling.bailType === "Cash" && (ruling.bailAmount || 0) < 10000) {
+                reputationChange = -10;
+            } else if (flightRisk <= 3 && (ruling.bailAmount || 0) > 50000) {
+                reputationChange = -5;
+            }
+        }
+
+        toast({
+            title: "Ruling Issued",
+            description: `Reputation Update: ${reputationChange > 0 ? '+' : ''}${reputationChange}`,
+            variant: reputationChange < 0 ? "destructive" : "default",
+        });
     };
 
     const handleConditionToggle = (condition: string) => {

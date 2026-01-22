@@ -49,9 +49,29 @@ export const useGameStore = create<GameState>()(
                 submitArraignmentRuling: (ruling) =>
                     set((state) => {
                         if (!state.currentCase) return state;
+
+                        const flightRisk = state.currentCase.defendant.flight_risk_score;
+                        let reputationChange = 2;
+
+                        if (flightRisk >= 8 && ruling.bailType === "ROR") {
+                            reputationChange = -15;
+                        } else if (flightRisk >= 8 && ruling.bailType === "Cash" && (ruling.bailAmount || 0) < 10000) {
+                            reputationChange = -10;
+                        } else if (flightRisk <= 3 && (ruling.bailAmount || 0) > 50000) {
+                            reputationChange = -5;
+                        }
+
+                        const newReputation = Math.max(0, state.playerReputation + reputationChange);
+
                         return {
+                            playerReputation: newReputation,
                             currentCase: {
                                 ...state.currentCase,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: "Pre-Trial",
+                                    presiding_judge_reputation: newReputation
+                                },
                                 arraignment_ruling: ruling
                             }
                         };

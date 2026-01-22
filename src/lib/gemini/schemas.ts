@@ -50,6 +50,7 @@ export const GameStateSchema = z.object({
     is_mistrial: z.boolean(),
     defense_attorney_aggression: z.number().int().min(1).max(10),
     prosecutor_competence: z.number().int().min(1).max(10),
+    presiding_judge_reputation: z.number().optional(),
 });
 
 export const CourtCaseSchema = z.object({
