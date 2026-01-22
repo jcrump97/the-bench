@@ -5,6 +5,7 @@ import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/ui/card';
 import { ArraignmentView } from './components/game/ArraignmentView';
+import { JudicialLayout } from './components/game/JudicialLayout';
 import { Toaster } from "./components/ui/toaster";
 import './App.css';
 
@@ -69,7 +70,11 @@ function App() {
             <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Resign Session</Button>
           </header>
           <main>
-            <ArraignmentView caseData={currentCase} />
+            {currentCase.game_state.current_stage === 'Arraignment' ? (
+              <ArraignmentView caseData={currentCase} />
+            ) : (
+              <JudicialLayout caseData={currentCase} />
+            )}
           </main>
         </div>
       ) : (

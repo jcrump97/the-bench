@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import type { CourtCase, CaseOutcome, ArraignmentRuling } from '../types/game';
+import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry } from '../types/game';
 
 interface GameState {
     apiKey: string | null;
@@ -13,6 +13,7 @@ interface GameState {
     setCurrentCase: (caseData: CourtCase) => void;
     resolveCurrentCase: (outcome: CaseOutcome) => void;
     submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
+    addTranscriptEntry: (entry: TranscriptEntry) => void;
     updateReputation: (amount: number) => void;
     setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
 }
@@ -73,6 +74,17 @@ export const useGameStore = create<GameState>()(
                                     presiding_judge_reputation: newReputation
                                 },
                                 arraignment_ruling: ruling
+                            }
+                        };
+                    }),
+
+                addTranscriptEntry: (entry) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+                        return {
+                            currentCase: {
+                                ...state.currentCase,
+                                transcript: [...(state.currentCase.transcript || []), entry]
                             }
                         };
                     }),

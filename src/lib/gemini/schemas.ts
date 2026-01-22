@@ -60,5 +60,12 @@ export const CourtCaseSchema = z.object({
     evidence: z.array(EvidenceSchema),
     witnesses: z.array(WitnessSchema),
     game_state: GameStateSchema,
+    transcript: z.array(z.object({
+        id: z.string(),
+        speaker: z.string(),
+        text: z.string(),
+        timestamp: z.string(),
+        type: z.enum(['testimony', 'ruling', 'procedure'])
+    })).default([]),
     outcome: CaseOutcomeSchema.optional(),
 });

@@ -61,6 +61,15 @@ export interface CourtCase {
     game_state: GameState;
     outcome?: CaseOutcome;
     arraignment_ruling?: ArraignmentRuling;
+    transcript: TranscriptEntry[];
+}
+
+export interface TranscriptEntry {
+    id: string;
+    speaker: string;
+    text: string;
+    timestamp: string;
+    type: 'testimony' | 'ruling' | 'procedure';
 }
 
 export interface ArraignmentRuling {
