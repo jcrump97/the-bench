@@ -101,7 +101,29 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
 
             {/* Controls Section - Full Width */}
             <div className="col-span-1 md:col-span-4 pb-8">
-                <ArraignmentControls />
+                {caseData.arraignment_ruling ? (
+                    <Card className="w-full mt-4 border-t-2 border-primary bg-muted/10">
+                        <CardHeader>
+                            <CardTitle>Ruling Issued</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col gap-2">
+                                <p><strong>Decision:</strong> {caseData.arraignment_ruling.bailType}
+                                    {caseData.arraignment_ruling.bailAmount && ` ($${caseData.arraignment_ruling.bailAmount.toLocaleString()})`}
+                                </p>
+                                {caseData.arraignment_ruling.conditions.length > 0 && (
+                                    <p><strong>Conditions:</strong> {caseData.arraignment_ruling.conditions.join(', ')}</p>
+                                )}
+                                <p className="italic text-muted-foreground">"{caseData.arraignment_ruling.rulingReasoning}"</p>
+                                <div className="pt-4 border-t mt-4">
+                                    <p className="text-sm text-center text-muted-foreground">The court has recessed. Awaiting pre-trial motions.</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <ArraignmentControls />
+                )}
             </div>
         </div>
     );
