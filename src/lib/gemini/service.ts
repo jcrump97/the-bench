@@ -4,9 +4,9 @@ import type { CourtCase, CaseOutcome } from '../../types/game';
 
 
 export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
-    const model = getGeminiModel(apiKey);
+  const model = getGeminiModel(apiKey);
 
-    const prompt = `
+  const prompt = `
     You are an AI Dungeon Master for a judicial simulation game called "The Bench".
     Generate a new, unique felony court case.
     The case should be realistic, with ambiguous elements that challenge the judge (player).
@@ -25,23 +25,24 @@ export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
     Ensure "current_stage" is "Arraignment".
   `;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  const text = response.text();
 
-    try {
-        const json = JSON.parse(text);
-        return CourtCaseSchema.parse(json) as CourtCase;
-    } catch (error) {
-        console.error("Failed to parse Gemini response:", text, error);
-        throw new Error("Failed to generate a valid court case.");
-    }
+  try {
+    const json = JSON.parse(text);
+    const data = Array.isArray(json) ? json[0] : json;
+    return CourtCaseSchema.parse(data) as CourtCase;
+  } catch (error) {
+    console.error("Failed to parse Gemini response:", text, error);
+    throw new Error("Failed to generate a valid court case.");
+  }
 };
 
 export const generateOutcome = async (apiKey: string, caseData: CourtCase, decision: string): Promise<CaseOutcome> => {
-    const model = getGeminiModel(apiKey);
+  const model = getGeminiModel(apiKey);
 
-    const prompt = `
+  const prompt = `
     You are an AI Judge Review Board.
     Review the following case and the player's (Judge's) decision.
     
@@ -57,15 +58,15 @@ export const generateOutcome = async (apiKey: string, caseData: CourtCase, decis
     }
   `;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  const text = response.text();
 
-    try {
-        const json = JSON.parse(text);
-        return CaseOutcomeSchema.parse(json) as CaseOutcome;
-    } catch (error) {
-        console.error("Failed to parse Gemini outcome:", text, error);
-        throw new Error("Failed to generate a valid case outcome.");
-    }
+  try {
+    const json = JSON.parse(text);
+    return CaseOutcomeSchema.parse(json) as CaseOutcome;
+  } catch (error) {
+    console.error("Failed to parse Gemini outcome:", text, error);
+    throw new Error("Failed to generate a valid case outcome.");
+  }
 };
