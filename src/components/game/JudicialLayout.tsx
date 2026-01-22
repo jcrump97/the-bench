@@ -24,7 +24,7 @@ export const JudicialLayout: React.FC<JudicialLayoutProps> = ({ caseData }) => {
                 </div>
             </header>
 
-            <ResizablePanelGroup direction="horizontal" className="flex-1">
+            <ResizablePanelGroup orientation="horizontal" className="flex-1">
                 {/* Left Panel: Defense Strategy (20%) */}
                 <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
                     <div className="h-full flex flex-col p-2 bg-muted/10">
@@ -43,7 +43,7 @@ export const JudicialLayout: React.FC<JudicialLayoutProps> = ({ caseData }) => {
 
                 {/* Center Panel: Transcript & Action Tray (60%) */}
                 <ResizablePanel defaultSize={60}>
-                    <ResizablePanelGroup direction="vertical">
+                    <ResizablePanelGroup orientation="vertical">
                         {/* Transcript Area (80%) */}
                         <ResizablePanel defaultSize={80}>
                             <div className="h-full flex flex-col">
