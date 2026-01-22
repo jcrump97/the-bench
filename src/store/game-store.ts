@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import { CourtCase, CaseOutcome } from '../types/game';
+import type { CourtCase, CaseOutcome } from '../types/game';
 
 interface GameState {
     apiKey: string | null;

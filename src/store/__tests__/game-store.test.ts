@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../game-store';
-import { CourtCase, CaseOutcome } from '../../types/game';
+import type { CourtCase, CaseOutcome } from '../../types/game';
 
 // Mock Case Data
 const mockCase: CourtCase = {
