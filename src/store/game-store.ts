@@ -46,22 +46,21 @@ export const useGameStore = create<GameState>()(
                         };
                     }),
 
-                updateReputation: (amount) =>
-                    set((state) => ({
-                        playerReputation: Math.max(0, state.playerReputation + amount),
-                    })),
-
-
                 submitArraignmentRuling: (ruling) =>
                     set((state) => {
                         if (!state.currentCase) return state;
                         return {
                             currentCase: {
                                 ...state.currentCase,
-                                arraignment_ruling: ruling,
-                            },
+                                arraignment_ruling: ruling
+                            }
                         };
                     }),
+
+                updateReputation: (amount) =>
+                    set((state) => ({
+                        playerReputation: Math.max(0, state.playerReputation + amount),
+                    })),
 
                 setGameStage: (stage) => set({ gameStage: stage }),
             }),

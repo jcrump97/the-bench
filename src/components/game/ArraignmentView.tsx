@@ -2,6 +2,7 @@ import React from 'react';
 import type { CourtCase } from '../../types/game';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { ArraignmentControls } from './ArraignmentControls';
 
 interface ArraignmentViewProps {
     caseData: CourtCase;
@@ -97,6 +98,11 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Controls Section - Full Width */}
+            <div className="col-span-1 md:col-span-4 pb-8">
+                <ArraignmentControls />
+            </div>
         </div>
     );
 };

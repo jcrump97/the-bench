@@ -50,13 +50,6 @@ export interface GameState {
     prosecutor_competence: number;
 }
 
-export interface ArraignmentRuling {
-    bailType: "ROR" | "Cash" | "Remand";
-    bailAmount?: number;
-    conditions: string[];
-    rulingReasoning: string;
-}
-
 export interface CourtCase {
     case_metadata: CaseMetadata;
     defendant: Defendant;
@@ -66,4 +59,11 @@ export interface CourtCase {
     game_state: GameState;
     outcome?: CaseOutcome;
     arraignment_ruling?: ArraignmentRuling;
+}
+
+export interface ArraignmentRuling {
+    bailType: "ROR" | "Cash" | "Remand";
+    bailAmount?: number;
+    conditions: string[];
+    rulingReasoning: string;
 }
