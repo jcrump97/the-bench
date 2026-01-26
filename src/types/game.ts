@@ -62,6 +62,7 @@ export interface CourtCase {
     outcome?: CaseOutcome;
     arraignment_ruling?: ArraignmentRuling;
     transcript: TranscriptEntry[];
+    motions: Motion[];
 }
 
 export interface TranscriptEntry {
@@ -73,8 +74,17 @@ export interface TranscriptEntry {
 }
 
 export interface ArraignmentRuling {
-    bailType: "ROR" | "Cash" | "Remand";
     bailAmount?: number;
     conditions: string[];
     rulingReasoning: string;
+}
+
+export interface Motion {
+    id: string;
+    title: string;
+    type: "Suppression" | "Dismissal" | "Limine";
+    description: string; // The lawyer's argument
+    proposed_order_text: string; // The text the judge signs
+    status: "Pending" | "Granted" | "Denied" | "Modified";
+    final_ruling_text?: string; // The text after the judge edits it
 }
