@@ -1,0 +1,191 @@
+import type { CourtCase } from '../types/game';
+
+export const demoCases: CourtCase[] = [
+  {
+    case_metadata: {
+      docket_number: "CR-2026-042",
+      charge_level: "Felony Class B",
+      presiding_judge_reputation_stake: 7,
+    },
+    defendant: {
+      name: "Derrick Cole",
+      demographics: "34yo Male, Diesel Mechanic",
+      prior_history: [
+        "2022 — DUI — Convicted",
+        "2024 — Assault 3rd — Dismissed",
+      ],
+      flight_risk_score: 3,
+      public_trust_impact: "Med",
+    },
+    charges: [
+      {
+        code: "Ala. Code § 13A-6-2",
+        description: "Manslaughter — recklessly caused the death of another person while operating a motor vehicle under the influence",
+        min_sentence_months: 24,
+        max_sentence_months: 120,
+      },
+      {
+        code: "Ala. Code § 32-5A-191",
+        description: "DUI — operated a motor vehicle with a blood alcohol concentration of 0.15% or higher",
+        min_sentence_months: 12,
+        max_sentence_months: 36,
+      },
+    ],
+    evidence: [
+      {
+        id: "E-001",
+        description: "Dashcam footage captured by the defendant's vehicle showing erratic driving and the collision",
+        type: "Physical",
+        prosecution_argument: "The footage shows the defendant swerving for 300 feet before impact, demonstrating conscious disregard for human life.",
+        defense_argument: "The footage is grainy and timestamped incorrectly; the defendant was swerving to avoid debris in the roadway.",
+        admissibility_status: "Admitted",
+      },
+      {
+        id: "E-002",
+        description: "Toxicology report showing BAC of 0.179%, blood drawn 45 minutes post-arrest",
+        type: "Documentary",
+        prosecution_argument: "Scientific proof of impairment. The defendant was nearly double the legal limit.",
+        defense_argument: "Blood draw lacked proper chain of custody documentation; technician was uncertified.",
+        admissibility_status: "Admitted",
+      },
+      {
+        id: "E-003",
+        description: "Eyewitness testimony from pedestrian who witnessed the crash from a coffee shop patio",
+        type: "Testimonial",
+        prosecution_argument: "Independent third-party corroboration of the defendant's reckless behavior.",
+        defense_argument: "Witness was 150 feet away, it was dusk, and the witness had consumed two glasses of wine.",
+        admissibility_status: "Pending",
+      },
+    ],
+    witnesses: [
+      {
+        id: "W-01",
+        name: "Officer Marcus Delgado",
+        role: "Arresting Officer",
+        credibility_score: 9,
+        key_testimony: "Upon arrival, the defendant was slumped over the wheel, eyes bloodshot, and emitted a strong odor of alcohol. He refused all field sobriety tests.",
+      },
+      {
+        id: "W-02",
+        name: "Dr. Sarah Whitfield",
+        role: "Forensic Toxicologist",
+        credibility_score: 10,
+        key_testimony: "The blood sample of 0.179% BAC corresponds to severe intoxication. Retrograde extrapolation suggests the defendant's BAC was approximately 0.195% at the time of the crash.",
+      },
+      {
+        id: "W-03",
+        name: "Jennifer Cole",
+        role: "Defendant's Sister",
+        credibility_score: 5,
+        key_testimony: "My brother was at my house that evening. He had two beers over four hours. He's not a violent person — he's a mechanic who works 60-hour weeks.",
+      },
+    ],
+    game_state: {
+      current_stage: "Arraignment",
+      is_mistrial: false,
+      defense_attorney_aggression: 4,
+      prosecutor_competence: 8,
+    },
+    transcript: [],
+  },
+  {
+    case_metadata: {
+      docket_number: "CR-2026-089",
+      charge_level: "Felony Class A",
+      presiding_judge_reputation_stake: 9,
+    },
+    defendant: {
+      name: "Lisa Marquez",
+      demographics: "28yo Female, Pharmacy Technician",
+      prior_history: [
+        "2023 — Forgery — Deferred Adjudication",
+        "2024 — Drug Paraphernalia — Misdemeanor Conviction",
+      ],
+      flight_risk_score: 7,
+      public_trust_impact: "High",
+    },
+    charges: [
+      {
+        code: "Ala. Code § 13A-12-215",
+        description: "Trafficking Methamphetamine — possession with intent to distribute 28 grams or more",
+        min_sentence_months: 120,
+        max_sentence_months: 360,
+      },
+      {
+        code: "Ala. Code § 13A-8-1",
+        description: "Possession of a Firearm by a Prohibited Person — convicted of prior drug offense, in unlawful possession of a loaded 9mm semi-automatic",
+        min_sentence_months: 120,
+        max_sentence_months: 240,
+      },
+    ],
+    evidence: [
+      {
+        id: "E-001",
+        description: "Cell phone containing text messages arranging drug sales and delivery locations",
+        type: "Documentary",
+        prosecution_argument: "Direct communication showing intent to distribute methamphetamine over a six-month period.",
+        defense_argument: "The phone's PIN was 0000. Multiple people had access. Texts lack specific weights or values.",
+        admissibility_status: "Admitted",
+      },
+      {
+        id: "E-002",
+        description: "28.4 grams of crystal methamphetamine recovered from vehicle glove compartment during traffic stop",
+        type: "Physical",
+        prosecution_argument: "Exact weight meets trafficking threshold. Sealed packaging indicates intent to distribute, not personal use.",
+        defense_argument: "The vehicle was registered to the defendant's boyfriend, who was driving without her knowledge that night.",
+        admissibility_status: "Admitted",
+      },
+      {
+        id: "E-003",
+        description: "9mm Glock 19 recovered from the center console with the defendant's fingerprints on the magazine only",
+        type: "Physical",
+        prosecution_argument: "Fingerprints on the magazine prove handling and constructive possession of the weapon.",
+        defense_argument: "The magazine was removed from the firearm during a traffic stop while the defendant was handcuffed. The prints are from the officer's glove transfer.",
+        admissibility_status: "Pending",
+      },
+      {
+        id: "E-004",
+        description: "Traffic stop dashcam with audio showing the defendant becoming physically compliant only after being pepper sprayed twice",
+        type: "Physical",
+        prosecution_argument: "Evidence of consciousness of guilt and aggressive resistance to lawful authority.",
+        defense_argument: "The dashcam audio was muffled and officer commands were shouted simultaneously with her partner's, creating confusion.",
+        admissibility_status: "Pending",
+      },
+    ],
+    witnesses: [
+      {
+        id: "W-01",
+        name: "Officer Rebecca Cho",
+        role: "Arresting Officer",
+        credibility_score: 9,
+        key_testimony: "I saw the defendant repeatedly reach toward the glove compartment during the stop. After ordering her to put her hands on the dash, she tried to open the passenger door and run.",
+      },
+      {
+        id: "W-02",
+        name: "Agent Derek Mills",
+        role: "DEA Task Force",
+        credibility_score: 8,
+        key_testimony: "Two separate CI purchases linked to this defendant over six months. The vehicle tag and cell number match our investigation files exactly.",
+      },
+      {
+        id: "W-03",
+        name: "Terrence Wade",
+        role: "Defendant's Boyfriend",
+        credibility_score: 3,
+        key_testimony: "Lisa doesn't know anything about the stuff in my car. I told her I was moving furniture. That's my gun and my phone. She's never touched any of it.",
+      },
+    ],
+    game_state: {
+      current_stage: "Arraignment",
+      is_mistrial: false,
+      defense_attorney_aggression: 9,
+      prosecutor_competence: 7,
+    },
+    transcript: [],
+  },
+];
+
+export function getRandomDemoCase(): CourtCase {
+  const randomIndex = Math.floor(Math.random() * demoCases.length);
+  return JSON.parse(JSON.stringify(demoCases[randomIndex]));
+}

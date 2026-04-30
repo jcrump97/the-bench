@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry } from '../types/game';
 
-interface GameState {
+interface GameStoreState {
     apiKey: string | null;
     currentCase: CourtCase | null;
     caseHistory: CourtCase[];
     playerReputation: number;
     gameStage: 'intro' | 'active' | 'scoring';
+    isDemoMode: boolean;
 
     setApiKey: (key: string) => void;
     setCurrentCase: (caseData: CourtCase) => void;
@@ -16,9 +17,10 @@ interface GameState {
     addTranscriptEntry: (entry: TranscriptEntry) => void;
     updateReputation: (amount: number) => void;
     setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
+    setDemoMode: (isDemo: boolean) => void;
 }
 
-export const useGameStore = create<GameState>()(
+export const useGameStore = create<GameStoreState>()(
     devtools(
         persist(
             (set) => ({
@@ -27,6 +29,7 @@ export const useGameStore = create<GameState>()(
                 caseHistory: [],
                 playerReputation: 100,
                 gameStage: 'intro',
+                isDemoMode: false,
 
                 setApiKey: (key) => set({ apiKey: key }),
 
@@ -95,6 +98,8 @@ export const useGameStore = create<GameState>()(
                     })),
 
                 setGameStage: (stage) => set({ gameStage: stage }),
+
+                setDemoMode: (isDemo) => set({ isDemoMode: isDemo }),
             }),
             {
                 name: 'the-bench-storage',
@@ -102,12 +107,9 @@ export const useGameStore = create<GameState>()(
                     apiKey: state.apiKey,
                     caseHistory: state.caseHistory,
                     playerReputation: state.playerReputation,
-                    // currentCase and gameStage might not be desirable to persist across hard reloads depending on UX,
-                    // but for now we follow the general "persist data layer" instruction.
-                    // If the user wants a fresh start on reload for the active case, we might exclude it.
-                    // However, to resume a session, persisting everything is usually safer.
                     currentCase: state.currentCase,
                     gameStage: state.gameStage,
+                    isDemoMode: state.isDemoMode,
                 }),
             }
         )
