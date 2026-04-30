@@ -25,6 +25,8 @@ const mockCase: CourtCase = {
         defense_attorney_aggression: 5,
         prosecutor_competence: 5,
     },
+    transcript: [],
+    motions: [],
 };
 
 const mockOutcome: CaseOutcome = {

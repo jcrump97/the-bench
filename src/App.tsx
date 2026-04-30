@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from './store/game-store';
-import { generateNewCase, generateOutcome } from './lib/gemini/service';
+import { generateNewCase } from './lib/gemini/service';
 import { getRandomDemoCase } from './data/demo-cases';
 import { Button } from './components/ui/button';
 import { ApiKeyForm } from './components/game/ApiKeyForm';
@@ -11,7 +11,7 @@ import { useToast } from "./hooks/use-toast";
 import './App.css';
 
 function App() {
-  const { apiKey, currentCase, isDemoMode, setApiKey, setCurrentCase, resolveCurrentCase, setDemoMode } = useGameStore();
+  const { apiKey, currentCase, isDemoMode, setApiKey, setCurrentCase, setDemoMode } = useGameStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
