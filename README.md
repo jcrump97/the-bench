@@ -1,73 +1,97 @@
-# React + TypeScript + Vite
+# The Bench ⚖️
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI-powered judicial simulation game. Step into the robe of a county felony court judge, review AI-generated felony cases, rule on bond at arraignment, oversee the trial, and render verdict — all while managing your reputation on the bench.
 
-Currently, two official plugins are available:
+[Play The Bench →](https://jcrump97.github.io/the-bench/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## What It Is
 
-## React Compiler
+The Bench is a browser-based game where you act as a **County Court Judge**. Gemini AI generates realistic felony cases complete with defendants, evidence, witnesses, and charges. You manage each case through multiple stages — arraignment, pre-trial, trial, and sentencing — making rulings that affect your judicial reputation.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Key decisions you make:**
+- Set bond type and amount at arraignment
+- Rule on evidence admissibility during trial
+- Respond to motions from prosecution and defense
+- Render final verdict and sentence
+- Survive appeals that test the soundness of your rulings
 
-## Expanding the ESLint configuration
+Wrong calls damage your reputation. Accumulate too many, and your career ends.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## How to Play
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+1. **Get a Gemini API Key** (free at [aistudio.google.com](https://aistudio.google.com)) — or try **Demo Mode** below
+2. **Enter your key** in the API Key form or click **Play Demo**
+3. **Call to Order** — Gemini generates a felony case
+4. **Arraignment** — Review the defendant profile, charges, and evidence
+5. **Set Bond** — Choose bond type (ROR, Cash, Surety) and conditions
+6. **Trial Dashboard** — Watch evidence, review motions, manage the courtroom
+7. **Call for Verdict** — When ready, render final judgement
+8. **Review Outcome** — See how the public reacted, your reputation shift, and session score
+9. **Adjudicate Next Case** — Rinse and repeat
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Every case is procedurally generated. No two dockets are alike.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Demo Mode
+
+No API key? No problem. Click **Play Demo** on the start screen to play with pre-generated static cases. Demo mode skips the Gemini API entirely — all case data is hardcoded.
+
+## Tech Stack
+
+- **React 18** + **TypeScript 5** + **Vite 5**
+- **Tailwind CSS 3** + **shadcn/ui** (Radix primitives)
+- **Zustand** state management (persisted to localStorage)
+- **Zod** runtime schema validation for AI responses
+- **Google Generative AI SDK** (client-side, user-provided API key)
+- **GitHub Pages** hosting
+
+## Getting Started
+
+```bash
+git clone https://github.com/jcrump97/the-bench.git
+cd the-bench
+npm install
+npm run dev          # localhost:5173
+npm run build        # production dist/
+npm run preview      # preview dist on localhost:4173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Configuration
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The app requires a **Google Gemini API key**. You can get one free at:
+- [Google AI Studio](https://aistudio.google.com) — create key → copy → paste in-game
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The key is stored in **your browser's localStorage** — it never leaves your machine.
+
+## Project Config
+
+Default OpenCode model (project-level): `ollama-cloud/glm-5.1`
+
+```bash
+# Run tasks with the project agent
+cd ~/repos/jcrump97-the-bench
+oc run "Your task here" --model ollama-cloud/glm-5.1
 ```
+
+## License
+
+[MIT License](./LICENSE) © 2026 Jonathan Crump
+
+## Roadmap
+
+- [x] Core case generation via Gemini
+- [x] Arraignment with bond setting
+- [x] Trial dashboard with resizable panels
+- [x] Reputation scoring
+- [x] Demo mode (no API key needed)
+- [x] Mobile-responsive layout
+- [ ] Evidence admissibility rulings during trial
+- [ ] Jury vs bench trial selection
+- [ ] Motion review and signing
+- [ ] Appeals system
+- [ ] Session summary scoring
+- [ ] Leaderboard / case history browser
+- [ ] Dark mode
+
+---
+
+Built with 💻, 🧠, and an unhealthy familiarity with *Law & Order* reruns.
