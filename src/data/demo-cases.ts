@@ -87,6 +87,7 @@ export const demoCases: CourtCase[] = [
       prosecutor_competence: 8,
     },
     transcript: [],
+    motions: [],
   },
   {
     case_metadata: {
@@ -182,6 +183,7 @@ export const demoCases: CourtCase[] = [
       prosecutor_competence: 7,
     },
     transcript: [],
+    motions: [],
   },
 ];
 
