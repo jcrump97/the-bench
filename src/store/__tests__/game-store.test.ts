@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../game-store';
-import type { CourtCase, CaseOutcome } from '../../types/game';
+import type { CourtCase, CaseOutcome, TranscriptEntry } from '../../types/game';
 
 // Mock Case Data
 const mockCase: CourtCase = {
@@ -82,9 +82,11 @@ describe('Game Store', () => {
         expect(useGameStore.getState().apiKey).toBe('test-key');
     });
 
-    it('should set current case', () => {
+    it('should set current case with transcript entries', () => {
         useGameStore.getState().setCurrentCase(mockCase);
-        expect(useGameStore.getState().currentCase).toEqual(mockCase);
+        const currentCase = useGameStore.getState().currentCase!;
+        expect(currentCase.case_metadata).toEqual(mockCase.case_metadata);
+        expect(currentCase.transcript.length).toBeGreaterThan(0);
     });
 
     it('should resolve current case and move it to history', () => {
@@ -94,10 +96,8 @@ describe('Game Store', () => {
         const state = useGameStore.getState();
         expect(state.currentCase).toBeNull();
         expect(state.caseHistory).toHaveLength(1);
-        expect(state.caseHistory[0]).toMatchObject({
-            ...mockCase,
-            outcome: mockOutcome,
-        });
+        expect(state.caseHistory[0].outcome).toEqual(mockOutcome);
+        expect(state.caseHistory[0].case_metadata.docket_number).toBe('TEST-001');
     });
 
     it('should update reputation', () => {
@@ -111,5 +111,53 @@ describe('Game Store', () => {
     it('should prevent reputation from dropping below 0', () => {
         useGameStore.getState().updateReputation(-150);
         expect(useGameStore.getState().playerReputation).toBe(0);
+    });
+
+    it('should add transcript entries when setting a case', () => {
+        useGameStore.getState().setCurrentCase(mockCase);
+        const transcript = useGameStore.getState().currentCase!.transcript;
+        expect(transcript.length).toBe(2);
+        expect(transcript[0].type).toBe('procedure');
+        expect(transcript[0].speaker).toBe('System');
+        expect(transcript[0].text).toContain('TEST-001');
+        expect(transcript[1].text).toContain('arraignment');
+    });
+
+    it('should add transcript entries when submitting arraignment ruling', () => {
+        useGameStore.getState().setCurrentCase(mockCase);
+        useGameStore.getState().submitArraignmentRuling({
+            bailType: 'ROR',
+            conditions: [],
+            rulingReasoning: 'Low flight risk.',
+        });
+        const transcript = useGameStore.getState().currentCase!.transcript;
+        expect(transcript.length).toBeGreaterThanOrEqual(4);
+        const rulingEntries = transcript.filter(e => e.type === 'ruling');
+        expect(rulingEntries.length).toBe(2);
+        expect(rulingEntries[0].text).toContain('Release on Recognizance');
+    });
+
+    it('should add transcript entry via addTranscriptEntry', () => {
+        useGameStore.getState().setCurrentCase(mockCase);
+        const entry: TranscriptEntry = {
+            id: 'test-entry-1',
+            speaker: 'Judge',
+            text: 'Order in the court.',
+            timestamp: new Date().toISOString(),
+            type: 'procedure',
+        };
+        useGameStore.getState().addTranscriptEntry(entry);
+        const transcript = useGameStore.getState().currentCase!.transcript;
+        expect(transcript).toContainEqual(entry);
+    });
+
+    it('should update case stage and add transcript entry via setCaseStage', () => {
+        useGameStore.getState().setCurrentCase(mockCase);
+        useGameStore.getState().setCaseStage('Motions');
+        const currentCase = useGameStore.getState().currentCase!;
+        expect(currentCase.game_state.current_stage).toBe('Motions');
+        const lastEntry = currentCase.transcript[currentCase.transcript.length - 1];
+        expect(lastEntry.type).toBe('procedure');
+        expect(lastEntry.text).toContain('motions');
     });
 });

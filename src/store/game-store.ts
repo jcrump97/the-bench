@@ -2,6 +2,16 @@ import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry } from '../types/game';
 
+function makeTranscriptEntry(speaker: string, text: string, type: TranscriptEntry['type']): TranscriptEntry {
+    return {
+        id: crypto.randomUUID(),
+        speaker,
+        text,
+        timestamp: new Date().toISOString(),
+        type,
+    };
+}
+
 interface GameStoreState {
     apiKey: string | null;
     currentCase: CourtCase | null;
@@ -15,6 +25,7 @@ interface GameStoreState {
     resolveCurrentCase: (outcome: CaseOutcome) => void;
     submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
     addTranscriptEntry: (entry: TranscriptEntry) => void;
+    setCaseStage: (stage: string) => void;
     updateReputation: (amount: number) => void;
     setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
     setDemoMode: (isDemo: boolean) => void;
@@ -33,7 +44,15 @@ export const useGameStore = create<GameStoreState>()(
 
                 setApiKey: (key) => set({ apiKey: key }),
 
-                setCurrentCase: (caseData) => set({ currentCase: caseData }),
+                setCurrentCase: (caseData) => set(() => {
+                    const sessionEntry = makeTranscriptEntry('System', `Court is now in session. Docket: ${caseData.case_metadata.docket_number}.`, 'procedure');
+                    const arraignmentEntry = makeTranscriptEntry('System', 'Proceeding to arraignment.', 'procedure');
+                    const caseWithTranscript: CourtCase = {
+                        ...caseData,
+                        transcript: [...(caseData.transcript || []), sessionEntry, arraignmentEntry],
+                    };
+                    return { currentCase: caseWithTranscript };
+                }),
 
                 resolveCurrentCase: (outcome) =>
                     set((state) => {
@@ -67,6 +86,23 @@ export const useGameStore = create<GameStoreState>()(
 
                         const newReputation = Math.max(0, state.playerReputation + reputationChange);
 
+                        const bailDescription = ruling.bailType === 'ROR'
+                            ? 'Release on Recognizance'
+                            : ruling.bailType === 'Remand'
+                                ? 'Remand without bail'
+                                : `Cash bail set at $${(ruling.bailAmount || 0).toLocaleString()}`;
+
+                        const conditionsText = ruling.conditions.length > 0
+                            ? ` Conditions: ${ruling.conditions.join(', ')}.`
+                            : '';
+
+                        const rulingEntries: TranscriptEntry[] = [
+                            makeTranscriptEntry('System', 'Arraignment ruling issued.', 'procedure'),
+                            makeTranscriptEntry('Judge', `Ruling: ${bailDescription}.${conditionsText}`, 'ruling'),
+                            makeTranscriptEntry('Judge', ruling.rulingReasoning, 'ruling'),
+                            makeTranscriptEntry('System', 'Court is now in session for Pre-Trial.', 'procedure'),
+                        ];
+
                         return {
                             playerReputation: newReputation,
                             currentCase: {
@@ -76,7 +112,8 @@ export const useGameStore = create<GameStoreState>()(
                                     current_stage: "Pre-Trial",
                                     presiding_judge_reputation: newReputation
                                 },
-                                arraignment_ruling: ruling
+                                arraignment_ruling: ruling,
+                                transcript: [...(state.currentCase.transcript || []), ...rulingEntries]
                             }
                         };
                     }),
@@ -88,6 +125,30 @@ export const useGameStore = create<GameStoreState>()(
                             currentCase: {
                                 ...state.currentCase,
                                 transcript: [...(state.currentCase.transcript || []), entry]
+                            }
+                        };
+                    }),
+
+                setCaseStage: (stage) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+                        const stageMessages: Record<string, string> = {
+                            'Pre-Trial': 'Court is now in session for Pre-Trial.',
+                            'Motions': 'Court will now hear pre-trial motions.',
+                            'Evidence': 'Court will now consider evidence admissibility.',
+                            'Verdict': 'The court will now hear closing arguments and render a verdict.',
+                            'Sentencing': 'The court will now proceed to sentencing.',
+                        };
+                        const message = stageMessages[stage] ?? `Court proceeding to ${stage}.`;
+                        const entry = makeTranscriptEntry('System', message, 'procedure');
+                        return {
+                            currentCase: {
+                                ...state.currentCase,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: stage,
+                                },
+                                transcript: [...(state.currentCase.transcript || []), entry],
                             }
                         };
                     }),

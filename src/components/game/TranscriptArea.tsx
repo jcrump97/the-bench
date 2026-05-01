@@ -1,46 +1,70 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
+import { useGameStore } from '../../store/game-store';
+import type { TranscriptEntry } from '../../types/game';
 
-interface TranscriptEntry {
-    id: string;
-    speaker: string;
-    role: 'Judge' | 'Prosecution' | 'Defense' | 'System';
-    text: string;
-}
+const ENTRY_STYLES: Record<TranscriptEntry['type'], string> = {
+    testimony: "self-start bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100 rounded-bl-none",
+    ruling: "self-center bg-primary/10 text-center border font-bold w-full max-w-[90%]",
+    procedure: "self-center text-xs text-muted-foreground italic my-2 w-full text-center",
+};
 
-const MOCK_TRANSCRIPT: TranscriptEntry[] = [
-    { id: '1', speaker: 'System', role: 'System', text: 'Court is now in session. The Honorable Judge AI presiding.' },
-    { id: '2', speaker: 'Judge', role: 'Judge', text: 'Counsel, are we ready to proceed with opening statements?' },
-    { id: '3', speaker: 'Prosecution', role: 'Prosecution', text: 'The State is ready, Your Honor. We intend to prove the defendant acted with clear intent.' },
-    { id: '4', speaker: 'Defense', role: 'Defense', text: 'The Defense is ready, Your Honor. We argue this was a clear case of self-defense.' },
-    { id: '5', speaker: 'Judge', role: 'Judge', text: 'Very well. Mr. Prosecutor, you may begin.' },
-];
+const SPEAKER_COLORS: Record<string, string> = {
+    Judge: "text-primary",
+    Prosecution: "text-right text-slate-700 dark:text-slate-300",
+    Defense: "text-left text-blue-700 dark:text-blue-300",
+    System: "",
+};
 
 export const TranscriptArea: React.FC = () => {
+    const transcript = useGameStore((state) => state.currentCase?.transcript ?? []);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            const el = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (el) {
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+    }, [transcript.length]);
+
+    if (transcript.length === 0) {
+        return (
+            <div className="h-full flex flex-col">
+                <div className="p-2 border-b bg-card/50 backdrop-blur z-10">
+                    <h2 className="font-semibold text-sm text-center text-muted-foreground uppercase tracking-widest">Court Transcript</h2>
+                </div>
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
+                    Awaiting proceedings...
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="h-full flex flex-col">
             <div className="p-2 border-b bg-card/50 backdrop-blur z-10">
-                <h2 className="font-semibold text-sm text-center text-muted-foreground uppercase tracking-widest">Court/Transcript</h2>
+                <h2 className="font-semibold text-sm text-center text-muted-foreground uppercase tracking-widest">Court Transcript</h2>
             </div>
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea ref={scrollRef} className="flex-1 p-4">
                 <div className="flex flex-col gap-4 pb-4">
-                    {MOCK_TRANSCRIPT.map((entry) => (
+                    {transcript.map((entry) => (
                         <div
                             key={entry.id}
                             className={cn(
                                 "flex flex-col max-w-[80%] rounded-lg p-3 text-sm",
-                                entry.role === 'Judge' && "self-center bg-primary/10 text-center border font-bold w-full max-w-[90%]",
-                                entry.role === 'Prosecution' && "self-end bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100 rounded-br-none",
-                                entry.role === 'Defense' && "self-start bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100 rounded-bl-none",
-                                entry.role === 'System' && "self-center text-xs text-muted-foreground italic my-2 w-full text-center"
+                                ENTRY_STYLES[entry.type],
                             )}
                         >
-                            {entry.role !== 'System' && entry.role !== 'Judge' && (
-                                <span className={cn(
-                                    "text-xs font-bold mb-1 opacity-70",
-                                    entry.role === 'Prosecution' ? "text-right" : "text-left"
-                                )}>
+                            {entry.type !== 'procedure' && (
+                                <span
+                                    className={cn(
+                                        "text-xs font-bold mb-1 opacity-70",
+                                        SPEAKER_COLORS[entry.speaker] ?? "text-left",
+                                    )}
+                                >
                                     {entry.speaker}
                                 </span>
                             )}
