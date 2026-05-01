@@ -95,12 +95,13 @@ export const SentencingForm: React.FC = () => {
                             min={minMonths}
                             max={maxMonths}
                             step={1}
+                            className="py-2"
                         />
                     </div>
 
                     <div className="space-y-3">
                         <Label>Conditions</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {CONDITION_OPTIONS.map((condition) => (
                                 <div key={condition} className="flex items-center space-x-2">
                                     <Checkbox

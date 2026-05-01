@@ -66,23 +66,20 @@ export const VerdictForm: React.FC = () => {
                                             Sentence range: {charge.min_sentence_months}–{charge.max_sentence_months} months
                                         </p>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
                                         <Button
-                                            size="sm"
                                             variant={v.verdict === 'Guilty' ? 'default' : 'outline'}
                                             onClick={() => handleVerdictSelect(charge.code, 'Guilty')}
                                         >
                                             Guilty
                                         </Button>
                                         <Button
-                                            size="sm"
                                             variant={v.verdict === 'Not Guilty' ? 'default' : 'outline'}
                                             onClick={() => handleVerdictSelect(charge.code, 'Not Guilty')}
                                         >
                                             Not Guilty
                                         </Button>
                                         <Button
-                                            size="sm"
                                             variant={v.verdict === 'No Contest' ? 'default' : 'outline'}
                                             onClick={() => handleVerdictSelect(charge.code, 'No Contest')}
                                         >
@@ -94,6 +91,7 @@ export const VerdictForm: React.FC = () => {
                                         <Textarea
                                             id={`reasoning-${charge.code}`}
                                             placeholder="Enter your reasoning for this verdict..."
+                                            className="min-h-[100px]"
                                             value={v.reasoning || ''}
                                             onChange={(e) => handleReasoningChange(charge.code, e.target.value)}
                                         />

@@ -82,7 +82,7 @@ export const EvidenceRulingDialog: React.FC<EvidenceRulingDialogProps> = ({ open
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[625px]">
+            <DialogContent className="w-[95vw] max-w-[625px] sm:w-auto sm:max-w-[625px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         Exhibit {evidence.id}
@@ -99,7 +99,7 @@ export const EvidenceRulingDialog: React.FC<EvidenceRulingDialogProps> = ({ open
                         <p className="text-sm">{evidence.description}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="border p-3 rounded bg-red-950/20">
                             <span className="font-semibold block mb-1 text-xs text-red-400 uppercase tracking-wider">Prosecution</span>
                             <p className="text-sm">{evidence.prosecution_argument}</p>
@@ -121,8 +121,8 @@ export const EvidenceRulingDialog: React.FC<EvidenceRulingDialogProps> = ({ open
                     </div>
                 </div>
 
-                <DialogFooter className="gap-2 sm:gap-0">
-                    <div className="flex gap-2 w-full sm:w-auto">
+                <DialogFooter className="flex-col sm:flex-row gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <Button
                             variant="destructive"
                             onClick={handleSuppress}
