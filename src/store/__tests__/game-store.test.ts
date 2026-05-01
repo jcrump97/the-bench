@@ -3,6 +3,51 @@ import { useGameStore } from '../game-store';
 import type { CourtCase, CaseOutcome, TranscriptEntry } from '../../types/game';
 
 // Mock Case Data
+const mockCaseWithMotions: CourtCase = {
+    case_metadata: {
+        docket_number: 'TEST-001',
+        charge_level: 'Felony A',
+        presiding_judge_reputation_stake: 5,
+    },
+    defendant: {
+        name: 'John Doe',
+        demographics: 'Male, 30',
+        prior_history: [],
+        flight_risk_score: 3,
+        public_trust_impact: 'Med',
+    },
+    charges: [],
+    evidence: [],
+    witnesses: [],
+    game_state: {
+        current_stage: 'Motions',
+        is_mistrial: false,
+        defense_attorney_aggression: 5,
+        prosecutor_competence: 5,
+    },
+    transcript: [],
+    motions: [
+        {
+            id: 'M-001',
+            title: 'Motion to Suppress Evidence',
+            type: 'Suppression',
+            description: 'Defense argues the search was unconstitutional.',
+            proposed_order_text: 'The Court orders the evidence suppressed.',
+            status: 'Pending',
+            merit: true,
+        },
+        {
+            id: 'M-002',
+            title: 'Motion to Dismiss',
+            type: 'Dismissal',
+            description: 'Defense argues lack of probable cause.',
+            proposed_order_text: 'The Court dismisses the charge.',
+            status: 'Pending',
+            merit: false,
+        },
+    ],
+};
+
 const mockCase: CourtCase = {
     case_metadata: {
         docket_number: 'TEST-001',
@@ -159,5 +204,31 @@ describe('Game Store', () => {
         const lastEntry = currentCase.transcript[currentCase.transcript.length - 1];
         expect(lastEntry.type).toBe('procedure');
         expect(lastEntry.text).toContain('motions');
+    });
+
+    it('should grant a meritorious motion and increase reputation', () => {
+        useGameStore.getState().setCurrentCase(mockCaseWithMotions);
+        useGameStore.getState().ruleMotion('M-001', 'Granted', 'Defense arguments are valid.');
+        const currentCase = useGameStore.getState().currentCase!;
+        expect(currentCase.motions[0].status).toBe('Granted');
+        expect(currentCase.motions[0].final_ruling_text).toBe('Defense arguments are valid.');
+        expect(useGameStore.getState().playerReputation).toBe(100); // capped at max
+        expect(currentCase.transcript.length).toBeGreaterThan(0);
+    });
+
+    it('should deny a non-meritorious motion and increase reputation', () => {
+        useGameStore.getState().setCurrentCase(mockCaseWithMotions);
+        useGameStore.getState().ruleMotion('M-002', 'Denied', 'Probable cause is established.');
+        const currentCase = useGameStore.getState().currentCase!;
+        expect(currentCase.motions[1].status).toBe('Denied');
+        expect(useGameStore.getState().playerReputation).toBe(100); // capped at max
+    });
+
+    it('should advance to Evidence stage when all motions ruled', () => {
+        useGameStore.getState().setCurrentCase(mockCaseWithMotions);
+        useGameStore.getState().ruleMotion('M-001', 'Granted', 'Valid.');
+        useGameStore.getState().ruleMotion('M-002', 'Denied', 'PC established.');
+        const currentCase = useGameStore.getState().currentCase!;
+        expect(currentCase.game_state.current_stage).toBe('Evidence');
     });
 });

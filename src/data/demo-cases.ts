@@ -87,7 +87,35 @@ export const demoCases: CourtCase[] = [
       prosecutor_competence: 8,
     },
     transcript: [],
-    motions: [],
+    motions: [
+      {
+        id: "M-001",
+        title: "Motion to Suppress Evidence",
+        type: "Suppression",
+        description: "Defense moves to suppress the toxicology report (E-002), arguing the blood draw lacked proper chain of custody and the technician was uncertified, rendering the BAC result inadmissible.",
+        proposed_order_text: "The Court orders that the toxicology report and all derived testimony be suppressed from evidence.",
+        status: "Pending",
+        merit: true,
+      },
+      {
+        id: "M-002",
+        title: "Motion in Limine",
+        type: "Limine",
+        description: "Defense requests that the prosecution be precluded from introducing evidence of the defendant's prior DUI conviction (2022), arguing it is prejudicial and unrelated to the current vehicular manslaughter charge.",
+        proposed_order_text: "The Court precludes the prosecution from introducing evidence of the defendant's prior DUI conviction.",
+        status: "Pending",
+        merit: true,
+      },
+      {
+        id: "M-003",
+        title: "Motion to Dismiss",
+        type: "Dismissal",
+        description: "Defense moves to dismiss the manslaughter charge for insufficient probable cause, citing discrepancies in the initial police report regarding the point of impact and road conditions.",
+        proposed_order_text: "The Court dismisses the charge of Manslaughter under Ala. Code § 13A-6-2 for lack of probable cause.",
+        status: "Pending",
+        merit: false,
+      },
+    ],
   },
   {
     case_metadata: {
@@ -183,7 +211,35 @@ export const demoCases: CourtCase[] = [
       prosecutor_competence: 7,
     },
     transcript: [],
-    motions: [],
+    motions: [
+      {
+        id: "M-004",
+        title: "Motion to Suppress Evidence",
+        type: "Suppression",
+        description: "Defense moves to suppress the 9mm firearm evidence (E-003), arguing that fingerprints on the magazine resulted from glove transfer during the traffic stop, not from voluntary handling, and that the search of the center console exceeded the scope of the stop.",
+        proposed_order_text: "The Court orders that the 9mm Glock 19 and all related forensic testimony be suppressed from evidence.",
+        status: "Pending",
+        merit: true,
+      },
+      {
+        id: "M-005",
+        title: "Motion to Suppress Statements",
+        type: "Suppression",
+        description: "Defense moves to suppress the dashcam audio (E-004), arguing that the defendant was pepper-sprayed twice during the stop and that any statements made during the encounter were obtained under duress and not voluntarily.",
+        proposed_order_text: "The Court orders that all audio from the traffic stop dashcam be suppressed from evidence.",
+        status: "Pending",
+        merit: false,
+      },
+      {
+        id: "M-006",
+        title: "Motion for Discovery",
+        type: "Dismissal",
+        description: "Defense moves for dismissal of all charges, arguing that the prosecution has failed to establish constructive possession of either the methamphetamine or the firearm, as the vehicle belonged to the defendant's boyfriend and the defendant was not driving.",
+        proposed_order_text: "The Court dismisses all charges against the defendant for failure to establish constructive possession.",
+        status: "Pending",
+        merit: false,
+      },
+    ],
   },
 ];
 

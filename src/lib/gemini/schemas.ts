@@ -53,6 +53,17 @@ export const GameStateSchema = z.object({
     presiding_judge_reputation: z.number().optional(),
 });
 
+export const MotionSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    type: z.enum(['Suppression', 'Dismissal', 'Limine']),
+    description: z.string(),
+    proposed_order_text: z.string(),
+    status: z.enum(['Pending', 'Granted', 'Denied', 'Modified']),
+    final_ruling_text: z.string().optional(),
+    merit: z.boolean(),
+});
+
 export const CourtCaseSchema = z.object({
     case_metadata: CaseMetadataSchema,
     defendant: DefendantSchema,
@@ -67,5 +78,6 @@ export const CourtCaseSchema = z.object({
         timestamp: z.string(),
         type: z.enum(['testimony', 'ruling', 'procedure'])
     })).default([]),
+    motions: z.array(MotionSchema).default([]),
     outcome: CaseOutcomeSchema.optional(),
 });

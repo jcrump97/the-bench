@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry } from '../types/game';
+import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry, Motion } from '../types/game';
 
 function makeTranscriptEntry(speaker: string, text: string, type: TranscriptEntry['type']): TranscriptEntry {
     return {
@@ -24,6 +24,7 @@ interface GameStoreState {
     setCurrentCase: (caseData: CourtCase) => void;
     resolveCurrentCase: (outcome: CaseOutcome) => void;
     submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
+    ruleMotion: (motionId: string, ruling: Motion['status'], reasoning: string) => void;
     addTranscriptEntry: (entry: TranscriptEntry) => void;
     setCaseStage: (stage: string) => void;
     updateReputation: (amount: number) => void;
@@ -114,6 +115,63 @@ export const useGameStore = create<GameStoreState>()(
                                 },
                                 arraignment_ruling: ruling,
                                 transcript: [...(state.currentCase.transcript || []), ...rulingEntries]
+                            }
+                        };
+                    }),
+
+                ruleMotion: (motionId, ruling, reasoning) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+
+                        const motion = state.currentCase.motions.find(m => m.id === motionId);
+                        if (!motion) return state;
+
+                        let reputationChange = 0;
+                        const isMeritorious = motion.merit;
+
+                        if (isMeritorious) {
+                            reputationChange = ruling === 'Granted' ? 5 : (ruling === 'Denied' ? -8 : 3);
+                        } else {
+                            reputationChange = ruling === 'Denied' ? 5 : (ruling === 'Granted' ? -8 : 3);
+                        }
+
+                        if (ruling === 'Modified') {
+                            reputationChange = Math.abs(reputationChange) > 3 ? Math.sign(reputationChange) * 3 : reputationChange;
+                        }
+
+                        const newReputation = Math.max(0, Math.min(100, state.playerReputation + reputationChange));
+
+                        const rulingLabel = ruling === 'Granted' ? 'Granted' : ruling === 'Denied' ? 'Denied' : 'Modified';
+                        const updatedMotions = state.currentCase.motions.map(m =>
+                            m.id === motionId
+                                ? { ...m, status: ruling, final_ruling_text: reasoning }
+                                : m
+                        );
+
+                        const rulingEntries: TranscriptEntry[] = [
+                            makeTranscriptEntry('System', `Motion: ${motion.title}`, 'procedure'),
+                            makeTranscriptEntry('Judge', `Motion ${rulingLabel}. ${reasoning}`, 'ruling'),
+                        ];
+
+                        const allRuled = updatedMotions.every(m => m.status !== 'Pending');
+
+                        const stageEntries: TranscriptEntry[] = allRuled
+                            ? [makeTranscriptEntry('System', 'All motions ruled upon. Court will now consider evidence admissibility.', 'procedure')]
+                            : [];
+
+                        const newStage = allRuled ? 'Evidence' : state.currentCase.game_state.current_stage;
+
+                        return {
+                            playerReputation: newReputation,
+                            currentCase: {
+                                ...state.currentCase,
+                                motions: updatedMotions,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: newStage,
+                                    presiding_judge_reputation: newReputation,
+                                },
+                                transcript: [...(state.currentCase.transcript || []), ...rulingEntries, ...stageEntries],
                             }
                         };
                     }),

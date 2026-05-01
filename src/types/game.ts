@@ -84,8 +84,9 @@ export interface Motion {
     id: string;
     title: string;
     type: "Suppression" | "Dismissal" | "Limine";
-    description: string; // The lawyer's argument
-    proposed_order_text: string; // The text the judge signs
+    description: string;
+    proposed_order_text: string;
     status: "Pending" | "Granted" | "Denied" | "Modified";
-    final_ruling_text?: string; // The text after the judge edits it
+    final_ruling_text?: string;
+    merit: boolean;
 }
