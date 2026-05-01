@@ -11,12 +11,52 @@ import { CaseFilePanel } from './CaseFilePanel';
 import { TranscriptArea } from './TranscriptArea';
 import { MotionTray } from './MotionTray';
 import { ReputationBar } from './ReputationBar';
+import { VerdictForm } from './VerdictForm';
+import { SentencingForm } from './SentencingForm';
 
 export const JudicialLayout: React.FC = () => {
     const currentCase = useGameStore((state) => state.currentCase);
 
     if (!currentCase) {
         return <div className="flex items-center justify-center h-screen">Loading case data...</div>;
+    }
+
+    const stage = currentCase.game_state.current_stage;
+
+    if (stage === 'Verdict') {
+        return (
+            <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col">
+                <header className="p-3 border-b flex justify-between items-center bg-card z-10">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-lg font-bold">The Bench: Judicial Chamber</h1>
+                        <Badge variant="outline">Case: {currentCase.case_metadata.docket_number}</Badge>
+                        <Badge variant="secondary">{stage}</Badge>
+                    </div>
+                    <ReputationBar />
+                </header>
+                <div className="flex-1 overflow-auto">
+                    <VerdictForm />
+                </div>
+            </div>
+        );
+    }
+
+    if (stage === 'Sentencing') {
+        return (
+            <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col">
+                <header className="p-3 border-b flex justify-between items-center bg-card z-10">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-lg font-bold">The Bench: Judicial Chamber</h1>
+                        <Badge variant="outline">Case: {currentCase.case_metadata.docket_number}</Badge>
+                        <Badge variant="secondary">{stage}</Badge>
+                    </div>
+                    <ReputationBar />
+                </header>
+                <div className="flex-1 overflow-auto">
+                    <SentencingForm />
+                </div>
+            </div>
+        );
     }
 
     return (

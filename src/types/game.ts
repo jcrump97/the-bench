@@ -1,3 +1,15 @@
+export interface ChargeVerdict {
+    chargeId: string;
+    verdict: 'Guilty' | 'Not Guilty' | 'No Contest';
+    reasoning: string;
+}
+
+export interface SentenceRuling {
+    months: number;
+    conditions: string[];
+    reasoning: string;
+}
+
 export interface CaseOutcome {
     verdict: string;
     sentence?: string;
@@ -24,6 +36,7 @@ export interface Charge {
     description: string;
     min_sentence_months: number;
     max_sentence_months: number;
+    severity?: 'Low' | 'Med' | 'High';
 }
 
 export interface Evidence {
@@ -63,6 +76,8 @@ export interface CourtCase {
     game_state: GameState;
     outcome?: CaseOutcome;
     arraignment_ruling?: ArraignmentRuling;
+    verdict_rulings?: ChargeVerdict[];
+    sentence_ruling?: SentenceRuling;
     transcript: TranscriptEntry[];
     motions: Motion[];
 }

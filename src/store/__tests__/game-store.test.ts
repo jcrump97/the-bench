@@ -164,7 +164,7 @@ describe('Game Store', () => {
             currentCase: null,
             caseHistory: [],
             playerReputation: 100,
-            gameStage: 'intro',
+            gameStage: 'landing',
         });
     });
 
@@ -391,6 +391,112 @@ describe('Game Store', () => {
             const currentCase = useGameStore.getState().currentCase!;
             expect(currentCase.evidence[0].admissibility_status).toBe('Suppressed');
             expect(currentCase.evidence[0].ruling_reasoning).toBe('Chain of custody.');
+        });
+    });
+
+    describe('submitVerdict', () => {
+        const mockCaseWithCharges: CourtCase = {
+            case_metadata: { docket_number: 'TEST-VERDICT-001', charge_level: 'Felony', presiding_judge_reputation_stake: 5 },
+            defendant: { name: 'Alex Roe', demographics: 'Male, 40', prior_history: [], flight_risk_score: 5, public_trust_impact: 'Med' },
+            charges: [
+                { code: 'C-001', description: 'Armed Robbery', min_sentence_months: 60, max_sentence_months: 120, severity: 'High' },
+                { code: 'C-002', description: 'Petty Theft', min_sentence_months: 1, max_sentence_months: 6, severity: 'Low' },
+            ],
+            evidence: [],
+            witnesses: [],
+            game_state: { current_stage: 'Verdict', is_mistrial: false, defense_attorney_aggression: 5, prosecutor_competence: 5 },
+            transcript: [],
+            motions: [],
+        };
+
+        it('should submit Guilty verdicts and increase reputation', () => {
+            useGameStore.setState({ playerReputation: 80 });
+            useGameStore.getState().setCurrentCase(mockCaseWithCharges);
+            useGameStore.getState().submitVerdict([
+                { chargeId: 'C-001', verdict: 'Guilty', reasoning: 'Overwhelming evidence of armed robbery.' },
+                { chargeId: 'C-002', verdict: 'Guilty', reasoning: 'Clear video evidence.' },
+            ]);
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.verdict_rulings).toHaveLength(2);
+            expect(currentCase.game_state.current_stage).toBe('Sentencing');
+            expect(useGameStore.getState().playerReputation).toBe(95); // 80+10+5
+            expect(currentCase.transcript.some(e => e.text.includes('Verdict on charge C-001: Guilty'))).toBe(true);
+        });
+
+        it('should submit Not Guilty verdict and decrease reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithCharges);
+            useGameStore.getState().submitVerdict([
+                { chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Prosecution failed to prove beyond reasonable doubt.' },
+            ]);
+            expect(useGameStore.getState().playerReputation).toBe(75); // 90-15
+            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('Sentencing');
+        });
+
+        it('should submit No Contest verdict with neutral reputation', () => {
+            useGameStore.setState({ playerReputation: 50 });
+            useGameStore.getState().setCurrentCase(mockCaseWithCharges);
+            useGameStore.getState().submitVerdict([
+                { chargeId: 'C-001', verdict: 'No Contest', reasoning: 'Defendant accepts penalty without admitting guilt.' },
+            ]);
+            expect(useGameStore.getState().playerReputation).toBe(53); // 50+3
+        });
+
+        it('should trigger gameover when reputation drops to 0', () => {
+            useGameStore.setState({ playerReputation: 10 });
+            useGameStore.getState().setCurrentCase(mockCaseWithCharges);
+            useGameStore.getState().submitVerdict([
+                { chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Insufficient evidence.' },
+            ]);
+            expect(useGameStore.getState().playerReputation).toBe(0);
+            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('gameover');
+            expect(useGameStore.getState().gameStage).toBe('gameover');
+        });
+    });
+
+    describe('submitSentence', () => {
+        const mockCaseForSentencing: CourtCase = {
+            case_metadata: { docket_number: 'TEST-SENT-001', charge_level: 'Felony', presiding_judge_reputation_stake: 5 },
+            defendant: { name: 'Sam Doe', demographics: 'Male, 35', prior_history: [], flight_risk_score: 5, public_trust_impact: 'Med' },
+            charges: [
+                { code: 'C-001', description: 'Burglary', min_sentence_months: 12, max_sentence_months: 36, severity: 'Med' },
+            ],
+            evidence: [],
+            witnesses: [],
+            game_state: { current_stage: 'Sentencing', is_mistrial: false, defense_attorney_aggression: 5, prosecutor_competence: 5 },
+            transcript: [],
+            motions: [],
+            verdict_rulings: [{ chargeId: 'C-001', verdict: 'Guilty', reasoning: 'Proven beyond doubt.' }],
+        };
+
+        it('should submit sentence within range and increase reputation', () => {
+            useGameStore.setState({ playerReputation: 80 });
+            useGameStore.getState().setCurrentCase(mockCaseForSentencing);
+            useGameStore.getState().submitSentence({ months: 24, conditions: ['Probation'], reasoning: 'Within statutory guidelines.' });
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.sentence_ruling).toEqual({ months: 24, conditions: ['Probation'], reasoning: 'Within statutory guidelines.' });
+            expect(currentCase.game_state.current_stage).toBe('Outcome');
+            expect(useGameStore.getState().playerReputation).toBe(85); // 80+5
+        });
+
+        it('should submit sentence outside range and decrease reputation', () => {
+            useGameStore.setState({ playerReputation: 80 });
+            useGameStore.getState().setCurrentCase(mockCaseForSentencing);
+            useGameStore.getState().submitSentence({ months: 6, conditions: [], reasoning: 'Mitigating circumstances.' });
+            expect(useGameStore.getState().playerReputation).toBe(72); // 80-8
+            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('Outcome');
+        });
+
+        it('should allow zero-month sentence when no guilty verdicts', () => {
+            const caseNoGuilty: CourtCase = {
+                ...mockCaseForSentencing,
+                verdict_rulings: [{ chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Acquitted.' }],
+            };
+            useGameStore.setState({ playerReputation: 80 });
+            useGameStore.getState().setCurrentCase(caseNoGuilty);
+            useGameStore.getState().submitSentence({ months: 0, conditions: [], reasoning: 'Defendant acquitted.' });
+            expect(useGameStore.getState().currentCase!.sentence_ruling!.months).toBe(0);
+            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('Outcome');
         });
     });
 });

@@ -2,6 +2,25 @@ import { getGeminiModel } from './client';
 import { CourtCaseSchema, CaseOutcomeSchema } from './schemas';
 import type { CourtCase, CaseOutcome } from '../../types/game';
 
+function generateDemoOutcome(caseData: CourtCase): CaseOutcome {
+    const guiltyCount = caseData.verdict_rulings?.filter(v => v.verdict === 'Guilty').length || 0;
+    const totalCharges = caseData.charges.length;
+    const sentence = caseData.sentence_ruling;
+    return {
+        verdict: `Guilty on ${guiltyCount} of ${totalCharges} charges.`,
+        sentence: sentence ? `${sentence.months} months. Conditions: ${sentence.conditions.join(', ')}` : undefined,
+        rationale: `The court considered the evidence presented and the defendant's conduct during proceedings.`,
+        public_reaction: (caseData.game_state.presiding_judge_reputation ?? 100) > 70 ? "Public trusts the court's judgment." : 'Mixed public reaction to the ruling.',
+    };
+}
+
+export const generateOutcomeWithFallback = (caseData: CourtCase, isDemoMode: boolean): CaseOutcome => {
+    if (isDemoMode) {
+        return generateDemoOutcome(caseData);
+    }
+    throw new Error('Live mode requires async call. Use generateOutcome for live mode.');
+};
+
 
 export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
   const model = getGeminiModel(apiKey);

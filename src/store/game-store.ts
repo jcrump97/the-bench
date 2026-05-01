@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry, Motion, Evidence } from '../types/game';
+import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry, Motion, Evidence, ChargeVerdict, SentenceRuling } from '../types/game';
 
 function makeTranscriptEntry(speaker: string, text: string, type: TranscriptEntry['type']): TranscriptEntry {
     return {
@@ -17,7 +17,7 @@ interface GameStoreState {
     currentCase: CourtCase | null;
     caseHistory: CourtCase[];
     playerReputation: number;
-    gameStage: 'intro' | 'active' | 'scoring';
+    gameStage: 'landing' | 'arraignment' | 'motions' | 'evidence' | 'verdict' | 'sentencing' | 'outcome' | 'gameover';
     isDemoMode: boolean;
 
     setApiKey: (key: string) => void;
@@ -26,10 +26,12 @@ interface GameStoreState {
     submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
     ruleMotion: (motionId: string, ruling: Motion['status'], reasoning: string) => void;
     ruleEvidence: (evidenceId: string, ruling: Evidence['admissibility_status'], reasoning: string) => void;
+    submitVerdict: (verdicts: ChargeVerdict[]) => void;
+    submitSentence: (sentence: SentenceRuling) => void;
     addTranscriptEntry: (entry: TranscriptEntry) => void;
     setCaseStage: (stage: string) => void;
     updateReputation: (amount: number) => void;
-    setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
+    setGameStage: (stage: 'landing' | 'arraignment' | 'motions' | 'evidence' | 'verdict' | 'sentencing' | 'outcome' | 'gameover') => void;
     setDemoMode: (isDemo: boolean) => void;
 }
 
@@ -41,7 +43,7 @@ export const useGameStore = create<GameStoreState>()(
                 currentCase: null,
                 caseHistory: [],
                 playerReputation: 100,
-                gameStage: 'intro',
+                gameStage: 'landing',
                 isDemoMode: false,
 
                 setApiKey: (key) => set({ apiKey: key }),
@@ -243,6 +245,107 @@ export const useGameStore = create<GameStoreState>()(
                             currentCase: {
                                 ...state.currentCase,
                                 transcript: [...(state.currentCase.transcript || []), entry]
+                            }
+                        };
+                    }),
+
+                submitVerdict: (verdicts) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+
+                        let totalReputationChange = 0;
+                        const transcriptEntries: TranscriptEntry[] = [];
+
+                        verdicts.forEach((v) => {
+                            const charge = state.currentCase!.charges.find(c => c.code === v.chargeId);
+                            const severity = charge?.severity || 'Med';
+
+                            let change = 0;
+                            if (v.verdict === 'Guilty') {
+                                change = severity === 'High' ? 10 : severity === 'Low' ? 5 : 7;
+                            } else if (v.verdict === 'Not Guilty') {
+                                change = severity === 'High' ? -15 : severity === 'Low' ? -10 : -12;
+                            } else {
+                                change = 3;
+                            }
+
+                            totalReputationChange += change;
+
+                            transcriptEntries.push(
+                                makeTranscriptEntry('System', `Verdict on charge ${v.chargeId}: ${v.verdict}`, 'procedure'),
+                                makeTranscriptEntry('Judge', `${v.verdict} on ${v.chargeId}. ${v.reasoning}`, 'ruling'),
+                            );
+                        });
+
+                        transcriptEntries.push(
+                            makeTranscriptEntry('System', 'The court will now proceed to sentencing.', 'procedure'),
+                        );
+
+                        const newReputation = Math.max(0, Math.min(100, state.playerReputation + totalReputationChange));
+
+                        const newStage = newReputation <= 0 ? 'gameover' : 'Sentencing';
+
+                        return {
+                            playerReputation: newReputation,
+                            gameStage: newReputation <= 0 ? 'gameover' : state.gameStage,
+                            currentCase: {
+                                ...state.currentCase,
+                                verdict_rulings: verdicts,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: newStage,
+                                    presiding_judge_reputation: newReputation,
+                                },
+                                transcript: [...(state.currentCase.transcript || []), ...transcriptEntries],
+                            }
+                        };
+                    }),
+
+                submitSentence: (sentence) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+
+                        const charges = state.currentCase.charges;
+                        const verdictRulings = state.currentCase.verdict_rulings || [];
+
+                        const guiltyCharges = charges.filter((c) => {
+                            const v = verdictRulings.find(vr => vr.chargeId === c.code);
+                            return v && (v.verdict === 'Guilty' || v.verdict === 'No Contest');
+                        });
+
+                        let withinRange = true;
+                        if (guiltyCharges.length > 0) {
+                            const minRange = Math.min(...guiltyCharges.map(c => c.min_sentence_months));
+                            const maxRange = Math.max(...guiltyCharges.map(c => c.max_sentence_months));
+                            withinRange = sentence.months >= minRange && sentence.months <= maxRange;
+                        }
+
+                        const reputationChange = withinRange ? 5 : -8;
+
+                        const conditionsText = sentence.conditions.length > 0
+                            ? ` Conditions: ${sentence.conditions.join(', ')}.`
+                            : '';
+
+                        const rulingEntries: TranscriptEntry[] = [
+                            makeTranscriptEntry('System', 'Sentencing ruling issued.', 'procedure'),
+                            makeTranscriptEntry('Judge', `Sentence: ${sentence.months} months.${conditionsText} ${sentence.reasoning}`, 'ruling'),
+                        ];
+
+                        const newReputation = Math.max(0, Math.min(100, state.playerReputation + reputationChange));
+                        const newStage = newReputation <= 0 ? 'gameover' : 'Outcome';
+
+                        return {
+                            playerReputation: newReputation,
+                            gameStage: newReputation <= 0 ? 'gameover' : state.gameStage,
+                            currentCase: {
+                                ...state.currentCase,
+                                sentence_ruling: sentence,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: newStage,
+                                    presiding_judge_reputation: newReputation,
+                                },
+                                transcript: [...(state.currentCase.transcript || []), ...rulingEntries],
                             }
                         };
                     }),

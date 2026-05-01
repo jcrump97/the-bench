@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+export const ChargeVerdictSchema = z.object({
+    chargeId: z.string(),
+    verdict: z.enum(['Guilty', 'Not Guilty', 'No Contest']),
+    reasoning: z.string(),
+});
+
+export const SentenceRulingSchema = z.object({
+    months: z.number().int(),
+    conditions: z.array(z.string()),
+    reasoning: z.string(),
+});
+
 export const CaseOutcomeSchema = z.object({
     verdict: z.string(),
     sentence: z.string().optional(),
@@ -26,6 +38,7 @@ export const ChargeSchema = z.object({
     description: z.string(),
     min_sentence_months: z.number().int(),
     max_sentence_months: z.number().int(),
+    severity: z.enum(['Low', 'Med', 'High']).optional(),
 });
 
 export const EvidenceSchema = z.object({
@@ -82,4 +95,6 @@ export const CourtCaseSchema = z.object({
     })).default([]),
     motions: z.array(MotionSchema).default([]),
     outcome: CaseOutcomeSchema.optional(),
+    verdict_rulings: z.array(ChargeVerdictSchema).optional(),
+    sentence_ruling: SentenceRulingSchema.optional(),
 });
