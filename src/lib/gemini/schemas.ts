@@ -68,6 +68,21 @@ export const GameStateSchema = z.object({
     presiding_judge_reputation: z.number().optional(),
 });
 
+export const ArraignmentRulingSchema = z.object({
+    bailType: z.enum(['ROR', 'Cash', 'Remand']),
+    bailAmount: z.number().int().optional(),
+    conditions: z.array(z.string()),
+    rulingReasoning: z.string(),
+});
+
+export const TranscriptEntrySchema = z.object({
+    id: z.string(),
+    speaker: z.string(),
+    text: z.string(),
+    timestamp: z.string(),
+    type: z.enum(['testimony', 'ruling', 'procedure']),
+});
+
 export const MotionSchema = z.object({
     id: z.string(),
     title: z.string(),
@@ -86,15 +101,16 @@ export const CourtCaseSchema = z.object({
     evidence: z.array(EvidenceSchema),
     witnesses: z.array(WitnessSchema),
     game_state: GameStateSchema,
-    transcript: z.array(z.object({
-        id: z.string(),
-        speaker: z.string(),
-        text: z.string(),
-        timestamp: z.string(),
-        type: z.enum(['testimony', 'ruling', 'procedure'])
-    })).default([]),
+    transcript: z.array(TranscriptEntrySchema).default([]),
     motions: z.array(MotionSchema).default([]),
     outcome: CaseOutcomeSchema.optional(),
+    arraignment_ruling: ArraignmentRulingSchema.optional(),
     verdict_rulings: z.array(ChargeVerdictSchema).optional(),
     sentence_ruling: SentenceRulingSchema.optional(),
+});
+
+export const ResolvedCaseSchema = CourtCaseSchema.extend({
+    outcome: CaseOutcomeSchema,
+    verdict_rulings: z.array(ChargeVerdictSchema),
+    sentence_ruling: SentenceRulingSchema,
 });

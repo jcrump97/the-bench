@@ -6,21 +6,76 @@ function generateDemoOutcome(caseData: CourtCase): CaseOutcome {
     const guiltyCount = caseData.verdict_rulings?.filter(v => v.verdict === 'Guilty').length || 0;
     const totalCharges = caseData.charges.length;
     const sentence = caseData.sentence_ruling;
+    const allNotGuilty = caseData.verdict_rulings?.every(v => v.verdict === 'Not Guilty') ?? false;
+
+    let verdictStr: string;
+    if (allNotGuilty) {
+        verdictStr = `Not Guilty on all ${totalCharges} charges.`;
+    } else if (guiltyCount === totalCharges) {
+        verdictStr = `Guilty on all ${totalCharges} charges.`;
+    } else {
+        verdictStr = `Guilty on ${guiltyCount} of ${totalCharges} charges.`;
+    }
+
     return {
-        verdict: `Guilty on ${guiltyCount} of ${totalCharges} charges.`,
-        sentence: sentence ? `${sentence.months} months. Conditions: ${sentence.conditions.join(', ')}` : undefined,
+        verdict: verdictStr,
+        sentence: sentence ? `${sentence.months} months${sentence.conditions.length ? `. Conditions: ${sentence.conditions.join(', ')}` : ''}` : undefined,
         rationale: `The court considered the evidence presented and the defendant's conduct during proceedings.`,
         public_reaction: (caseData.game_state.presiding_judge_reputation ?? 100) > 70 ? "Public trusts the court's judgment." : 'Mixed public reaction to the ruling.',
     };
 }
 
-export const generateOutcomeWithFallback = (caseData: CourtCase, isDemoMode: boolean): CaseOutcome => {
+export async function generateOutcome(caseData: CourtCase, isDemoMode: boolean, apiKey?: string, decision?: string): Promise<CaseOutcome> {
     if (isDemoMode) {
         return generateDemoOutcome(caseData);
     }
-    throw new Error('Live mode requires async call. Use generateOutcome for live mode.');
-};
 
+    if (!apiKey) {
+        throw new Error('API key is required for live mode.');
+    }
+
+    const { docket_number, charges, defendant } = caseData.case_metadata
+        ? { docket_number: caseData.case_metadata.docket_number, charges: caseData.charges, defendant: caseData.defendant }
+        : { docket_number: 'Unknown', charges: caseData.charges, defendant: caseData.defendant };
+
+    const verdicts = caseData.verdict_rulings?.map(v => `${v.chargeId}: ${v.verdict}`).join(', ') ?? 'No verdicts';
+    const sentence = caseData.sentence_ruling
+        ? `${caseData.sentence_ruling.months} months`
+        : 'No sentence';
+
+    const prompt = `
+You are an AI Judge Review Board for a judicial simulation game called "The Bench".
+Review the following case and generate a narrative outcome.
+
+Case Docket: ${docket_number}
+Defendant: ${defendant.name}
+Charges: ${charges.map(c => c.description).join('; ')}
+Verdicts: ${verdicts}
+Sentence: ${sentence}
+${decision ? `Judge's Reasoning: ${decision}` : ''}
+
+Generate an outcome object strictly adhering to this JSON schema:
+{
+  "verdict": "string",
+  "sentence": "string",
+  "rationale": "string",
+  "public_reaction": "string"
+}
+`;
+
+    const model = getGeminiModel(apiKey);
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+
+    try {
+        const json = JSON.parse(text);
+        return CaseOutcomeSchema.parse(json);
+    } catch (error) {
+        console.error("Failed to parse Gemini outcome:", text, error);
+        throw new Error("Failed to generate a valid case outcome.");
+    }
+}
 
 export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
   const model = getGeminiModel(apiKey);
@@ -56,37 +111,5 @@ export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
   } catch (error) {
     console.error("Failed to parse Gemini response:", text, error);
     throw new Error("Failed to generate a valid court case.");
-  }
-};
-
-export const generateOutcome = async (apiKey: string, caseData: CourtCase, decision: string): Promise<CaseOutcome> => {
-  const model = getGeminiModel(apiKey);
-
-  const prompt = `
-    You are an AI Judge Review Board.
-    Review the following case and the player's (Judge's) decision.
-    
-    Case Data: ${JSON.stringify(caseData)}
-    Judge's Decision: "${decision}"
-    
-    Generate an outcome object strictly adhering to this JSON schema:
-    {
-      "verdict": "string", // Final verdict on the case
-      "sentence": "string", // If applicable, else empty string
-      "rationale": "string", // Explanation of why the outcome occurred based on the decision
-      "public_reaction": "string" // How the public/media reacts
-    }
-  `;
-
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const text = response.text();
-
-  try {
-    const json = JSON.parse(text);
-    return CaseOutcomeSchema.parse(json) as CaseOutcome;
-  } catch (error) {
-    console.error("Failed to parse Gemini outcome:", text, error);
-    throw new Error("Failed to generate a valid case outcome.");
   }
 };

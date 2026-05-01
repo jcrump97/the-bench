@@ -91,10 +91,16 @@ export interface TranscriptEntry {
 }
 
 export interface ArraignmentRuling {
-    bailType?: "ROR" | "Cash" | "Remand";
+    bailType: "ROR" | "Cash" | "Remand";
     bailAmount?: number;
     conditions: string[];
     rulingReasoning: string;
+}
+
+export interface ResolvedCase extends CourtCase {
+    outcome: CaseOutcome;
+    verdict_rulings: ChargeVerdict[];
+    sentence_ruling: SentenceRuling;
 }
 
 export interface Motion {

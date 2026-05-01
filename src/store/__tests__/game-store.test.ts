@@ -165,6 +165,7 @@ describe('Game Store', () => {
             caseHistory: [],
             playerReputation: 100,
             gameStage: 'landing',
+            sessionCaseCount: 0,
         });
     });
 
@@ -204,7 +205,7 @@ describe('Game Store', () => {
         expect(useGameStore.getState().playerReputation).toBe(90);
 
         useGameStore.getState().updateReputation(20);
-        expect(useGameStore.getState().playerReputation).toBe(110);
+        expect(useGameStore.getState().playerReputation).toBe(100);
     });
 
     it('should prevent reputation from dropping below 0', () => {
@@ -384,13 +385,15 @@ describe('Game Store', () => {
             expect(useGameStore.getState().playerReputation).toBe(0);
         });
 
-        it('should allow re-ruling on already-ruled evidence', () => {
+        it('should prevent re-ruling on already-ruled evidence', () => {
+            useGameStore.setState({ playerReputation: 90 });
             useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
             useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Admitted.');
             useGameStore.getState().ruleEvidence('E-001', 'Suppressed', 'Chain of custody.');
             const currentCase = useGameStore.getState().currentCase!;
-            expect(currentCase.evidence[0].admissibility_status).toBe('Suppressed');
-            expect(currentCase.evidence[0].ruling_reasoning).toBe('Chain of custody.');
+            expect(currentCase.evidence[0].admissibility_status).toBe('Admitted');
+            expect(currentCase.evidence[0].ruling_reasoning).toBe('Admitted.');
+            expect(useGameStore.getState().playerReputation).toBe(95);
         });
     });
 
@@ -402,14 +405,33 @@ describe('Game Store', () => {
                 { code: 'C-001', description: 'Armed Robbery', min_sentence_months: 60, max_sentence_months: 120, severity: 'High' },
                 { code: 'C-002', description: 'Petty Theft', min_sentence_months: 1, max_sentence_months: 6, severity: 'Low' },
             ],
-            evidence: [],
+            evidence: [
+                { id: 'E-001', description: 'DNA evidence', type: 'Physical', prosecution_argument: 'DNA match', defense_argument: 'Contaminated', admissibility_status: 'Admitted' as const, strength: 'High' as const },
+                { id: 'E-002', description: 'Video footage', type: 'Physical', prosecution_argument: 'Shows defendant', defense_argument: 'Poor quality', admissibility_status: 'Admitted' as const, strength: 'Med' as const },
+            ],
             witnesses: [],
             game_state: { current_stage: 'Verdict', is_mistrial: false, defense_attorney_aggression: 5, prosecutor_competence: 5 },
             transcript: [],
             motions: [],
         };
 
-        it('should submit Guilty verdicts and increase reputation', () => {
+        const mockCaseWeakEvidence: CourtCase = {
+            case_metadata: { docket_number: 'TEST-VERDICT-002', charge_level: 'Misdemeanor', presiding_judge_reputation_stake: 3 },
+            defendant: { name: 'Jane Roe', demographics: 'Female, 25', prior_history: [], flight_risk_score: 2, public_trust_impact: 'Low' },
+            charges: [
+                { code: 'C-001', description: 'Armed Robbery', min_sentence_months: 60, max_sentence_months: 120, severity: 'High' },
+            ],
+            evidence: [
+                { id: 'E-001', description: 'Weak testimony', type: 'Testimonial', prosecution_argument: 'Witness saw it', defense_argument: 'Unreliable', admissibility_status: 'Admitted' as const, strength: 'Low' as const },
+                { id: 'E-002', description: 'Hearsay', type: 'Testimonial', prosecution_argument: 'Rumor', defense_argument: 'Hearsay', admissibility_status: 'Suppressed' as const, strength: 'Med' as const },
+            ],
+            witnesses: [],
+            game_state: { current_stage: 'Verdict', is_mistrial: false, defense_attorney_aggression: 5, prosecutor_competence: 5 },
+            transcript: [],
+            motions: [],
+        };
+
+        it('should submit Guilty verdict with strong evidence and increase reputation', () => {
             useGameStore.setState({ playerReputation: 80 });
             useGameStore.getState().setCurrentCase(mockCaseWithCharges);
             useGameStore.getState().submitVerdict([
@@ -419,18 +441,28 @@ describe('Game Store', () => {
             const currentCase = useGameStore.getState().currentCase!;
             expect(currentCase.verdict_rulings).toHaveLength(2);
             expect(currentCase.game_state.current_stage).toBe('Sentencing');
-            expect(useGameStore.getState().playerReputation).toBe(95); // 80+10+5
+            expect(useGameStore.getState().gameStage).toBe('sentencing');
+            expect(useGameStore.getState().playerReputation).toBe(95);
             expect(currentCase.transcript.some(e => e.text.includes('Verdict on charge C-001: Guilty'))).toBe(true);
         });
 
-        it('should submit Not Guilty verdict and decrease reputation', () => {
+        it('should submit Not Guilty verdict with weak evidence and increase reputation', () => {
+            useGameStore.setState({ playerReputation: 80 });
+            useGameStore.getState().setCurrentCase(mockCaseWeakEvidence);
+            useGameStore.getState().submitVerdict([
+                { chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Prosecution failed to prove beyond reasonable doubt.' },
+            ]);
+        expect(useGameStore.getState().playerReputation).toBe(90);
+        expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('Sentencing');
+        });
+
+        it('should submit Not Guilty verdict with strong evidence and decrease reputation', () => {
             useGameStore.setState({ playerReputation: 90 });
             useGameStore.getState().setCurrentCase(mockCaseWithCharges);
             useGameStore.getState().submitVerdict([
                 { chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Prosecution failed to prove beyond reasonable doubt.' },
             ]);
-            expect(useGameStore.getState().playerReputation).toBe(75); // 90-15
-            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('Sentencing');
+            expect(useGameStore.getState().playerReputation).toBe(75);
         });
 
         it('should submit No Contest verdict with neutral reputation', () => {
@@ -439,7 +471,7 @@ describe('Game Store', () => {
             useGameStore.getState().submitVerdict([
                 { chargeId: 'C-001', verdict: 'No Contest', reasoning: 'Defendant accepts penalty without admitting guilt.' },
             ]);
-            expect(useGameStore.getState().playerReputation).toBe(53); // 50+3
+            expect(useGameStore.getState().playerReputation).toBe(53);
         });
 
         it('should trigger gameover when reputation drops to 0', () => {
@@ -449,7 +481,6 @@ describe('Game Store', () => {
                 { chargeId: 'C-001', verdict: 'Not Guilty', reasoning: 'Insufficient evidence.' },
             ]);
             expect(useGameStore.getState().playerReputation).toBe(0);
-            expect(useGameStore.getState().currentCase!.game_state.current_stage).toBe('gameover');
             expect(useGameStore.getState().gameStage).toBe('gameover');
         });
     });
