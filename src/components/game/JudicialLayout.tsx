@@ -10,6 +10,7 @@ import { DefendantPanel } from './DefendantPanel';
 import { CaseFilePanel } from './CaseFilePanel';
 import { TranscriptArea } from './TranscriptArea';
 import { MotionTray } from './MotionTray';
+import { ReputationBar } from './ReputationBar';
 
 export const JudicialLayout: React.FC = () => {
     const currentCase = useGameStore((state) => state.currentCase);
@@ -26,6 +27,7 @@ export const JudicialLayout: React.FC = () => {
                     <Badge variant="outline">Case: {currentCase.case_metadata.docket_number}</Badge>
                     <Badge variant="secondary">{currentCase.game_state.current_stage}</Badge>
                 </div>
+                <ReputationBar />
             </header>
 
             <ResizablePanelGroup orientation="horizontal" className="flex-1">

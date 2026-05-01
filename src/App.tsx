@@ -6,6 +6,7 @@ import { Button } from './components/ui/button';
 import { ApiKeyForm } from './components/game/ApiKeyForm';
 import { ArraignmentView } from './components/game/ArraignmentView';
 import { JudicialLayout } from './components/game/JudicialLayout';
+import { ReputationBar } from './components/game/ReputationBar';
 import { Toaster } from "./components/ui/toaster";
 import { useToast } from "./hooks/use-toast";
 import './App.css';
@@ -62,6 +63,7 @@ function App() {
       {apiKey && !currentCase && (
         <div className="flex flex-col items-center space-y-4">
           <h1 className="text-4xl font-bold tracking-tight">The Bench</h1>
+          <ReputationBar />
           <p className="text-muted-foreground text-center max-w-md">
             Honorable Judge, the court is waiting. <br />
             Your reputation is at stake.
