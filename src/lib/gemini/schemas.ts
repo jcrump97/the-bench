@@ -35,6 +35,8 @@ export const EvidenceSchema = z.object({
     prosecution_argument: z.string(),
     defense_argument: z.string(),
     admissibility_status: z.enum(['Pending', 'Admitted', 'Suppressed']),
+    ruling_reasoning: z.string().optional(),
+    strength: z.enum(['Low', 'Med', 'High']),
 });
 
 export const WitnessSchema = z.object({

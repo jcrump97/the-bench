@@ -16,12 +16,13 @@ export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
       "case_metadata": { "docket_number": "string", "charge_level": "string", "presiding_judge_reputation_stake": number },
       "defendant": { "name": "string", "demographics": "string", "prior_history": ["string"], "flight_risk_score": number, "public_trust_impact": "High" | "Med" | "Low" },
       "charges": [{ "code": "string", "description": "string", "min_sentence_months": number, "max_sentence_months": number }],
-      "evidence": [{ "id": "string", "description": "string", "type": "string", "prosecution_argument": "string", "defense_argument": "string", "admissibility_status": "Pending" }],
+      "evidence": [{ "id": "string", "description": "string", "type": "string", "prosecution_argument": "string", "defense_argument": "string", "admissibility_status": "Pending", "strength": "Low" | "Med" | "High" }],
       "witnesses": [{ "id": "string", "name": "string", "role": "string", "credibility_score": number, "key_testimony": "string" }],
       "game_state": { "current_stage": "Arraignment", "is_mistrial": false, "defense_attorney_aggression": number, "prosecutor_competence": number }
     }
     
     Ensure "admissibility_status" is always "Pending" for new evidence.
+    Ensure "strength" reflects how strong or weak each piece of evidence is, with mixed values.
     Ensure "current_stage" is "Arraignment".
   `;
 

@@ -33,6 +33,8 @@ export interface Evidence {
     prosecution_argument: string;
     defense_argument: string;
     admissibility_status: 'Pending' | 'Admitted' | 'Suppressed';
+    ruling_reasoning?: string;
+    strength: 'Low' | 'Med' | 'High';
 }
 
 export interface Witness {

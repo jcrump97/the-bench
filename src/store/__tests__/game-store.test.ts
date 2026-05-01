@@ -74,6 +74,60 @@ const mockCase: CourtCase = {
     motions: [],
 };
 
+const mockCaseWithEvidence: CourtCase = {
+    case_metadata: {
+        docket_number: 'TEST-EVID-001',
+        charge_level: 'Felony B',
+        presiding_judge_reputation_stake: 7,
+    },
+    defendant: {
+        name: 'Jane Smith',
+        demographics: 'Female, 28',
+        prior_history: [],
+        flight_risk_score: 4,
+        public_trust_impact: 'Low',
+    },
+    charges: [],
+    evidence: [
+        {
+            id: 'E-001',
+            description: 'Fingerprint analysis linking defendant to weapon',
+            type: 'Physical',
+            prosecution_argument: 'Fingerprints prove the defendant handled the weapon.',
+            defense_argument: 'Fingerprints could have been transferred via secondary contact.',
+            admissibility_status: 'Pending',
+            strength: 'High',
+        },
+        {
+            id: 'E-002',
+            description: 'Hearsay testimony from neighbor',
+            type: 'Testimonial',
+            prosecution_argument: 'Neighbor heard the defendant threaten the victim.',
+            defense_argument: 'The neighbor was 200 feet away and the statement is hearsay.',
+            admissibility_status: 'Pending',
+            strength: 'Low',
+        },
+        {
+            id: 'E-003',
+            description: 'Surveillance footage from convenience store',
+            type: 'Physical',
+            prosecution_argument: 'Video shows defendant near the scene at time of incident.',
+            defense_argument: 'Video quality is poor; identification is speculative.',
+            admissibility_status: 'Pending',
+            strength: 'Med',
+        },
+    ],
+    witnesses: [],
+    game_state: {
+        current_stage: 'Evidence',
+        is_mistrial: false,
+        defense_attorney_aggression: 6,
+        prosecutor_competence: 7,
+    },
+    transcript: [],
+    motions: [],
+};
+
 const mockOutcome: CaseOutcome = {
     verdict: 'Guilty',
     sentence: '5 years',
@@ -230,5 +284,113 @@ describe('Game Store', () => {
         useGameStore.getState().ruleMotion('M-002', 'Denied', 'PC established.');
         const currentCase = useGameStore.getState().currentCase!;
         expect(currentCase.game_state.current_stage).toBe('Evidence');
+    });
+
+    describe('ruleEvidence', () => {
+        it('should admit strong evidence and increase reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Fingerprints are reliable identification.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[0].admissibility_status).toBe('Admitted');
+            expect(currentCase.evidence[0].ruling_reasoning).toBe('Fingerprints are reliable identification.');
+            expect(useGameStore.getState().playerReputation).toBe(95);
+        });
+
+        it('should suppress strong evidence and decrease reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Suppressed', 'Chain of custody issues.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[0].admissibility_status).toBe('Suppressed');
+            expect(useGameStore.getState().playerReputation).toBe(80);
+        });
+
+        it('should suppress weak evidence and increase reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-002', 'Suppressed', 'Hearsay is inadmissible.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[1].admissibility_status).toBe('Suppressed');
+            expect(useGameStore.getState().playerReputation).toBe(92);
+        });
+
+        it('should admit weak evidence and decrease reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-002', 'Admitted', 'Relevant to the case.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[1].admissibility_status).toBe('Admitted');
+            expect(useGameStore.getState().playerReputation).toBe(85);
+        });
+
+        it('should admit medium evidence and moderately increase reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-003', 'Admitted', 'Video is probative.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[2].admissibility_status).toBe('Admitted');
+            expect(useGameStore.getState().playerReputation).toBe(93);
+        });
+
+        it('should suppress medium evidence and moderately decrease reputation', () => {
+            useGameStore.setState({ playerReputation: 90 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-003', 'Suppressed', 'Quality too poor.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[2].admissibility_status).toBe('Suppressed');
+            expect(useGameStore.getState().playerReputation).toBe(83);
+        });
+
+        it('should add transcript entries when ruling on evidence', () => {
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Fingerprints are reliable.');
+            const currentCase = useGameStore.getState().currentCase!;
+            const transcript = currentCase.transcript;
+            const rulingEntries = transcript.filter(e => e.type === 'ruling');
+            expect(rulingEntries.length).toBeGreaterThanOrEqual(1);
+            expect(rulingEntries[rulingEntries.length - 1].text).toContain('Admitted');
+        });
+
+        it('should advance to Verdict stage when all evidence is ruled upon', () => {
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Fingerprints are reliable.');
+            useGameStore.getState().ruleEvidence('E-002', 'Suppressed', 'Hearsay is inadmissible.');
+            useGameStore.getState().ruleEvidence('E-003', 'Admitted', 'Video is probative.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.game_state.current_stage).toBe('Verdict');
+            const lastEntry = currentCase.transcript[currentCase.transcript.length - 1];
+            expect(lastEntry.text).toContain('verdict');
+        });
+
+        it('should not advance to Verdict stage when some evidence is still pending', () => {
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Fingerprints are reliable.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.game_state.current_stage).toBe('Evidence');
+        });
+
+        it('should cap reputation at 100', () => {
+            useGameStore.setState({ playerReputation: 98 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Fingerprints are reliable.');
+            expect(useGameStore.getState().playerReputation).toBe(100);
+        });
+
+        it('should cap reputation at 0', () => {
+            useGameStore.setState({ playerReputation: 5 });
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Suppressed', 'Chain of custody issues.');
+            expect(useGameStore.getState().playerReputation).toBe(0);
+        });
+
+        it('should allow re-ruling on already-ruled evidence', () => {
+            useGameStore.getState().setCurrentCase(mockCaseWithEvidence);
+            useGameStore.getState().ruleEvidence('E-001', 'Admitted', 'Admitted.');
+            useGameStore.getState().ruleEvidence('E-001', 'Suppressed', 'Chain of custody.');
+            const currentCase = useGameStore.getState().currentCase!;
+            expect(currentCase.evidence[0].admissibility_status).toBe('Suppressed');
+            expect(currentCase.evidence[0].ruling_reasoning).toBe('Chain of custody.');
+        });
     });
 });

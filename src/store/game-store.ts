@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry, Motion } from '../types/game';
+import type { CourtCase, CaseOutcome, ArraignmentRuling, TranscriptEntry, Motion, Evidence } from '../types/game';
 
 function makeTranscriptEntry(speaker: string, text: string, type: TranscriptEntry['type']): TranscriptEntry {
     return {
@@ -25,6 +25,7 @@ interface GameStoreState {
     resolveCurrentCase: (outcome: CaseOutcome) => void;
     submitArraignmentRuling: (ruling: ArraignmentRuling) => void;
     ruleMotion: (motionId: string, ruling: Motion['status'], reasoning: string) => void;
+    ruleEvidence: (evidenceId: string, ruling: Evidence['admissibility_status'], reasoning: string) => void;
     addTranscriptEntry: (entry: TranscriptEntry) => void;
     setCaseStage: (stage: string) => void;
     updateReputation: (amount: number) => void;
@@ -166,6 +167,65 @@ export const useGameStore = create<GameStoreState>()(
                             currentCase: {
                                 ...state.currentCase,
                                 motions: updatedMotions,
+                                game_state: {
+                                    ...state.currentCase.game_state,
+                                    current_stage: newStage,
+                                    presiding_judge_reputation: newReputation,
+                                },
+                                transcript: [...(state.currentCase.transcript || []), ...rulingEntries, ...stageEntries],
+                            }
+                        };
+                    }),
+
+                ruleEvidence: (evidenceId, ruling, reasoning) =>
+                    set((state) => {
+                        if (!state.currentCase) return state;
+
+                        const evidenceItem = state.currentCase.evidence.find(e => e.id === evidenceId);
+                        if (!evidenceItem) return state;
+
+                        if (ruling !== 'Admitted' && ruling !== 'Suppressed') return state;
+
+                        const strength = evidenceItem.strength;
+                        const isStrong = strength === 'High';
+                        const isWeak = strength === 'Low';
+
+                        let reputationChange = 0;
+                        if (isStrong) {
+                            reputationChange = ruling === 'Admitted' ? 5 : -10;
+                        } else if (isWeak) {
+                            reputationChange = ruling === 'Suppressed' ? 2 : -5;
+                        } else {
+                            reputationChange = ruling === 'Admitted' ? 3 : -7;
+                        }
+
+                        const newReputation = Math.max(0, Math.min(100, state.playerReputation + reputationChange));
+
+                        const updatedEvidence = state.currentCase.evidence.map(e =>
+                            e.id === evidenceId
+                                ? { ...e, admissibility_status: ruling, ruling_reasoning: reasoning }
+                                : e
+                        );
+
+                        const rulingLabel = ruling === 'Admitted' ? 'Admitted' : 'Suppressed';
+                        const rulingEntries: TranscriptEntry[] = [
+                            makeTranscriptEntry('System', `Evidence Ruling: ${evidenceItem.description.slice(0, 80)}...`, 'procedure'),
+                            makeTranscriptEntry('Judge', `Evidence ${rulingLabel}. ${reasoning}`, 'ruling'),
+                        ];
+
+                        const allRuled = updatedEvidence.every(e => e.admissibility_status !== 'Pending');
+
+                        const stageEntries: TranscriptEntry[] = allRuled
+                            ? [makeTranscriptEntry('System', 'All evidence ruled upon. Court will now proceed to verdict.', 'procedure')]
+                            : [];
+
+                        const newStage = allRuled ? 'Verdict' : state.currentCase.game_state.current_stage;
+
+                        return {
+                            playerReputation: newReputation,
+                            currentCase: {
+                                ...state.currentCase,
+                                evidence: updatedEvidence,
                                 game_state: {
                                     ...state.currentCase.game_state,
                                     current_stage: newStage,

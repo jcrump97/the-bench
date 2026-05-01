@@ -39,6 +39,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "The footage shows the defendant swerving for 300 feet before impact, demonstrating conscious disregard for human life.",
         defense_argument: "The footage is grainy and timestamped incorrectly; the defendant was swerving to avoid debris in the roadway.",
         admissibility_status: "Admitted",
+        strength: "High",
       },
       {
         id: "E-002",
@@ -47,6 +48,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Scientific proof of impairment. The defendant was nearly double the legal limit.",
         defense_argument: "Blood draw lacked proper chain of custody documentation; technician was uncertified.",
         admissibility_status: "Admitted",
+        strength: "High",
       },
       {
         id: "E-003",
@@ -55,6 +57,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Independent third-party corroboration of the defendant's reckless behavior.",
         defense_argument: "Witness was 150 feet away, it was dusk, and the witness had consumed two glasses of wine.",
         admissibility_status: "Pending",
+        strength: "Med",
       },
     ],
     witnesses: [
@@ -155,6 +158,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Direct communication showing intent to distribute methamphetamine over a six-month period.",
         defense_argument: "The phone's PIN was 0000. Multiple people had access. Texts lack specific weights or values.",
         admissibility_status: "Admitted",
+        strength: "High",
       },
       {
         id: "E-002",
@@ -163,6 +167,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Exact weight meets trafficking threshold. Sealed packaging indicates intent to distribute, not personal use.",
         defense_argument: "The vehicle was registered to the defendant's boyfriend, who was driving without her knowledge that night.",
         admissibility_status: "Admitted",
+        strength: "High",
       },
       {
         id: "E-003",
@@ -171,6 +176,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Fingerprints on the magazine prove handling and constructive possession of the weapon.",
         defense_argument: "The magazine was removed from the firearm during a traffic stop while the defendant was handcuffed. The prints are from the officer's glove transfer.",
         admissibility_status: "Pending",
+        strength: "Med",
       },
       {
         id: "E-004",
@@ -179,6 +185,7 @@ export const demoCases: CourtCase[] = [
         prosecution_argument: "Evidence of consciousness of guilt and aggressive resistance to lawful authority.",
         defense_argument: "The dashcam audio was muffled and officer commands were shouted simultaneously with her partner's, creating confusion.",
         admissibility_status: "Pending",
+        strength: "Low",
       },
     ],
     witnesses: [
