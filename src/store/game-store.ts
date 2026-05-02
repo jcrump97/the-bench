@@ -9,6 +9,10 @@ interface GameState {
     playerReputation: number;
     gameStage: 'intro' | 'active' | 'scoring';
 
+    // UI State (Persistent)
+    activeSheet: 'defendant' | 'evidence' | null;
+    isMotionsOpen: boolean;
+
     setApiKey: (key: string) => void;
     setCurrentCase: (caseData: CourtCase) => void;
     resolveCurrentCase: (outcome: CaseOutcome) => void;
@@ -16,17 +20,23 @@ interface GameState {
     addTranscriptEntry: (entry: TranscriptEntry) => void;
     updateReputation: (amount: number) => void;
     setGameStage: (stage: 'intro' | 'active' | 'scoring') => void;
+
+    // UI Actions
+    setActiveSheet: (sheet: 'defendant' | 'evidence' | null) => void;
+    setIsMotionsOpen: (isOpen: boolean) => void;
 }
 
 export const useGameStore = create<GameState>()(
     devtools(
         persist(
             (set) => ({
-                apiKey: null,
+                apiKey: import.meta.env.VITE_GEMINI_API_KEY || null,
                 currentCase: null,
                 caseHistory: [],
                 playerReputation: 100,
                 gameStage: 'intro',
+                activeSheet: null,
+                isMotionsOpen: false,
 
                 setApiKey: (key) => set({ apiKey: key }),
 
@@ -95,6 +105,8 @@ export const useGameStore = create<GameState>()(
                     })),
 
                 setGameStage: (stage) => set({ gameStage: stage }),
+                setActiveSheet: (sheet) => set({ activeSheet: sheet }),
+                setIsMotionsOpen: (isOpen) => set({ isMotionsOpen: isOpen }),
             }),
             {
                 name: 'the-bench-storage',
@@ -108,6 +120,8 @@ export const useGameStore = create<GameState>()(
                     // However, to resume a session, persisting everything is usually safer.
                     currentCase: state.currentCase,
                     gameStage: state.gameStage,
+                    activeSheet: state.activeSheet,
+                    isMotionsOpen: state.isMotionsOpen,
                 }),
             }
         )

@@ -74,6 +74,7 @@ export interface TranscriptEntry {
 }
 
 export interface ArraignmentRuling {
+    bailType: 'ROR' | 'Cash' | 'Remand';
     bailAmount?: number;
     conditions: string[];
     rulingReasoning: string;
