@@ -23,6 +23,11 @@ export const generateNewCase = async (apiKey: string): Promise<CourtCase> => {
     
     Ensure "admissibility_status" is always "Pending" for new evidence.
     Ensure "current_stage" is "Arraignment".
+    
+    IMPORTANT CONSTRAINTS:
+    - "presiding_judge_reputation_stake" MUST be an integer between 1 and 10.
+    - "public_trust_impact" MUST be exactly one of: "High", "Med", "Low". Do not use "Medium".
+    - "flight_risk_score" MUST be an integer between 1 and 10.
   `;
 
   const result = await model.generateContent(prompt);
