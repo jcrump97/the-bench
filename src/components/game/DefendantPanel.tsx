@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { ScrollArea } from "../ui/scroll-area";
 import type { Defendant } from '../../types/game';
+import { NarrativeText } from '../ui/narrative-text';
 
 interface DefendantPanelProps {
     defendant: Defendant;
@@ -23,21 +24,21 @@ export const DefendantPanel: React.FC<DefendantPanelProps> = ({ defendant }) => 
                 <div className="space-y-4">
                     <div>
                         <h3 className="text-lg font-bold">{defendant.name}</h3>
-                        <p className="text-sm text-muted-foreground">{defendant.demographics}</p>
+                        <NarrativeText text={defendant.demographics} title="Demographics" maxLength={60} />
                     </div>
 
                     <div className="space-y-2">
                         <h4 className="text-sm font-semibold text-primary">Prior History</h4>
                         <ScrollArea className="h-[200px] w-full rounded-md border p-2 bg-muted/20">
                             {defendant.prior_history.length > 0 ? (
-                                <ul className="space-y-2">
+                                <div className="space-y-2">
                                     {defendant.prior_history.map((record, index) => (
-                                        <li key={index} className="text-sm flex items-start gap-2">
-                                            <span className="text-muted-foreground">•</span>
-                                            <span>{record}</span>
-                                        </li>
+                                        <div key={index} className="flex items-start gap-2">
+                                            <span className="text-muted-foreground mt-1 text-xs">•</span>
+                                            <NarrativeText text={record} title={`History Record #${index + 1}`} maxLength={80} />
+                                        </div>
                                     ))}
-                                </ul>
+                                </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground italic">No prior history on record.</p>
                             )}

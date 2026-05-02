@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 
+import { useGameStore } from '../../store/game-store';
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { MotionReviewDialog } from "./MotionReviewDialog";
+import type { Motion } from '../../types/game';
 
-const MOCK_MOTIONS = [
-    { id: 'm1', title: 'Motion to Limine', type: 'Limine', description: 'Defense requests exclusion of prior bad acts evidence as prejudicial.' },
-    { id: 'm2', title: 'Motion to Dismiss', type: 'Dismissal', description: 'Defense argues lack of probable cause based on initial police report discrepancies.' },
+const FALLBACK_MOTIONS: Motion[] = [
+    { id: 'm1', title: 'Motion to Limine', type: 'Limine', description: 'Defense requests exclusion of prior bad acts evidence as prejudicial.', proposed_order_text: '', status: 'Pending' },
+    { id: 'm2', title: 'Motion to Dismiss', type: 'Dismissal', description: 'Defense argues lack of probable cause based on initial police report discrepancies.', proposed_order_text: '', status: 'Pending' },
 ];
 
 export const MotionTray: React.FC = () => {
-    const [selectedMotion, setSelectedMotion] = useState<typeof MOCK_MOTIONS[0] | null>(null);
+    const currentCase = useGameStore((state) => state.currentCase);
+    const motions = (currentCase?.motions?.length ?? 0) > 0 ? currentCase!.motions : FALLBACK_MOTIONS;
+    const [selectedMotion, setSelectedMotion] = useState<Motion | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    const handleMotionClick = (motion: typeof MOCK_MOTIONS[0]) => {
+    const handleMotionClick = (motion: Motion) => {
         setSelectedMotion(motion);
         setIsDialogOpen(true);
     };
@@ -23,11 +27,11 @@ export const MotionTray: React.FC = () => {
             <div className="h-full flex flex-col bg-background border-t">
                 <div className="p-2 border-b bg-muted/20 flex justify-between items-center">
                     <h3 className="font-semibold text-sm">Action Tray</h3>
-                    <span className="text-xs text-muted-foreground">{MOCK_MOTIONS.length} Pending</span>
+                    <span className="text-xs text-muted-foreground">{motions.length} Pending</span>
                 </div>
                 <ScrollArea className="flex-1 p-4">
                     <div className="grid grid-cols-1 gap-2">
-                        {MOCK_MOTIONS.map((motion) => (
+                        {motions.map((motion) => (
                             <Button
                                 key={motion.id}
                                 variant="secondary"

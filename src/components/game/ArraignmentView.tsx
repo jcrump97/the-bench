@@ -3,6 +3,7 @@ import type { CourtCase } from '../../types/game';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { ArraignmentControls } from './ArraignmentControls';
+import { NarrativeText } from '../ui/narrative-text';
 
 interface ArraignmentViewProps {
     caseData: CourtCase;
@@ -23,7 +24,7 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
                     </div>
                     <div>
                         <h4 className="font-semibold text-sm text-foreground/70 uppercase">Details</h4>
-                        <p className="text-sm">{caseData.defendant.demographics}</p>
+                        <NarrativeText text={caseData.defendant.demographics} title="Defendant Details" />
                     </div>
                     <div>
                         <h4 className="font-semibold text-sm text-foreground/70 uppercase">Flight Risk</h4>
@@ -36,11 +37,11 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
                     </div>
                     <div>
                         <h4 className="font-semibold text-sm text-foreground/70 uppercase">Prior History</h4>
-                        <ul className="list-disc pl-4 text-sm">
+                        <div className="space-y-2 pl-2">
                             {caseData.defendant.prior_history.map((record, index) => (
-                                <li key={index}>{record}</li>
+                                <NarrativeText key={index} text={record} title={`Prior History Record #${index + 1}`} />
                             ))}
-                        </ul>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -58,13 +59,15 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
                                     <span className="font-semibold text-sm">{item.type}</span>
                                     <Badge variant="outline">Admissibility: {item.admissibility_status}</Badge>
                                 </div>
-                                <p className="text-sm">{item.description}</p>
+                                <NarrativeText text={item.description} title={`${item.type} Description`} maxLength={80} />
                                 <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-2">
-                                    <div>
-                                        <span className="font-bold">Pros:</span> {item.prosecution_argument}
+                                    <div className="flex flex-col gap-1">
+                                        <span className="font-bold">Pros:</span>
+                                        <NarrativeText text={item.prosecution_argument} title="Prosecution Argument" maxLength={50} className="ml-0" />
                                     </div>
-                                    <div>
-                                        <span className="font-bold">Def:</span> {item.defense_argument}
+                                    <div className="flex flex-col gap-1">
+                                        <span className="font-bold">Def:</span>
+                                        <NarrativeText text={item.defense_argument} title="Defense Argument" maxLength={50} className="ml-0" />
                                     </div>
                                 </div>
                             </div>

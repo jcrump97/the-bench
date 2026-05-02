@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
 import type { CourtCase } from '../../types/game';
+import { NarrativeText } from '../ui/narrative-text';
 
 interface CaseFilePanelProps {
     caseData: CourtCase;
@@ -38,7 +39,18 @@ export const CaseFilePanel: React.FC<CaseFilePanelProps> = ({ caseData }) => {
                                             </Badge>
                                         </div>
                                         <div className="text-xs text-muted-foreground mb-2 font-mono">Type: {item.type}</div>
-                                        <p className="text-sm">{item.description}</p>
+                                        <NarrativeText text={item.description} title={`Exhibit ${item.id} Description`} maxLength={80} />
+
+                                        <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-2 border-t pt-2 mt-2">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-bold">Pros Argument:</span>
+                                                <NarrativeText text={item.prosecution_argument} title="Prosecution Argument" maxLength={50} className="ml-0" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-bold">Def Argument:</span>
+                                                <NarrativeText text={item.defense_argument} title="Defense Argument" maxLength={50} className="ml-0" />
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -55,7 +67,7 @@ export const CaseFilePanel: React.FC<CaseFilePanelProps> = ({ caseData }) => {
                                             <Badge variant="outline">{witness.role}</Badge>
                                         </div>
                                         <p className="text-xs text-muted-foreground mb-1">Key Testimony:</p>
-                                        <p className="text-sm italic border-l-2 pl-2 border-primary/20">"{witness.key_testimony}"</p>
+                                        <NarrativeText text={witness.key_testimony} title={`${witness.name}'s Testimony`} maxLength={80} className="italic border-l-2 pl-2 border-primary/20" />
                                     </div>
                                 ))}
                             </div>

@@ -1,15 +1,15 @@
 import React from 'react';
+import { useGameStore } from '../../store/game-store';
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
+import { NarrativeText } from "../ui/narrative-text";
+import type { TranscriptEntry as GameTranscriptEntry } from '../../types/game';
 
-interface TranscriptEntry {
-    id: string;
-    speaker: string;
+type TranscriptEntry = Omit<GameTranscriptEntry, 'timestamp' | 'type'> & {
     role: 'Judge' | 'Prosecution' | 'Defense' | 'System';
-    text: string;
-}
+};
 
-const MOCK_TRANSCRIPT: TranscriptEntry[] = [
+const FALLBACK_TRANSCRIPT: TranscriptEntry[] = [
     { id: '1', speaker: 'System', role: 'System', text: 'Court is now in session. The Honorable Judge AI presiding.' },
     { id: '2', speaker: 'Judge', role: 'Judge', text: 'Counsel, are we ready to proceed with opening statements?' },
     { id: '3', speaker: 'Prosecution', role: 'Prosecution', text: 'The State is ready, Your Honor. We intend to prove the defendant acted with clear intent.' },
@@ -17,7 +17,27 @@ const MOCK_TRANSCRIPT: TranscriptEntry[] = [
     { id: '5', speaker: 'Judge', role: 'Judge', text: 'Very well. Mr. Prosecutor, you may begin.' },
 ];
 
+function mapTranscriptRole(type: string): TranscriptEntry['role'] {
+    if (type === 'ruling') return 'Judge';
+    if (type === 'procedure') return 'System';
+    return 'Defense';
+}
+
+function storeTranscriptToLocal(entries: GameTranscriptEntry[]): TranscriptEntry[] {
+    return entries.map((e) => ({
+        id: e.id,
+        speaker: e.speaker,
+        role: mapTranscriptRole(e.type),
+        text: e.text,
+    }));
+}
+
 export const TranscriptArea: React.FC = () => {
+    const currentCase = useGameStore((state) => state.currentCase);
+    const transcriptEntries = (currentCase?.transcript?.length ?? 0) > 0
+        ? storeTranscriptToLocal(currentCase!.transcript)
+        : FALLBACK_TRANSCRIPT;
+
     return (
         <div className="h-full flex flex-col">
             <div className="p-2 border-b bg-card/50 backdrop-blur z-10">
@@ -25,7 +45,7 @@ export const TranscriptArea: React.FC = () => {
             </div>
             <ScrollArea className="flex-1 p-4">
                 <div className="flex flex-col gap-4 pb-4">
-                    {MOCK_TRANSCRIPT.map((entry) => (
+                    {transcriptEntries.map((entry) => (
                         <div
                             key={entry.id}
                             className={cn(
@@ -44,7 +64,7 @@ export const TranscriptArea: React.FC = () => {
                                     {entry.speaker}
                                 </span>
                             )}
-                            <p>{entry.text}</p>
+                            <NarrativeText text={entry.text} title={`${entry.speaker} (${entry.role})`} />
                         </div>
                     ))}
                 </div>
