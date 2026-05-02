@@ -15,7 +15,8 @@ import { ReputationBar } from './ReputationBar';
 import { VerdictForm } from './VerdictForm';
 import { SentencingForm } from './SentencingForm';
 import { useIsMobile } from '../../hooks/use-is-mobile';
-import { User, MessageSquare, Gavel, FileText } from 'lucide-react';
+import { useTheme } from '../../hooks/use-theme';
+import { User, MessageSquare, Gavel, FileText, Sun, Moon } from 'lucide-react';
 
 type MobileTab = 'defendant' | 'transcript' | 'motions' | 'casefile';
 
@@ -27,6 +28,7 @@ const MOBILE_TABS: { id: MobileTab; label: string; icon: React.FC<{ className?: 
 ];
 
 function Header({ docket, stage }: { docket: string; stage: string }) {
+    const { effectiveTheme, toggleTheme } = useTheme();
     return (
         <header className="p-2 md:p-3 border-b flex justify-between items-center bg-card z-10">
             <div className="flex items-center gap-2 md:gap-4 min-w-0">
@@ -34,7 +36,12 @@ function Header({ docket, stage }: { docket: string; stage: string }) {
                 <Badge variant="outline" className="text-xs shrink-0">Case: {docket}</Badge>
                 <Badge variant="secondary" className="text-xs shrink-0">{stage}</Badge>
             </div>
-            <ReputationBar />
+            <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme} aria-label="Toggle theme">
+                    {effectiveTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+                <ReputationBar />
+            </div>
         </header>
     );
 }
