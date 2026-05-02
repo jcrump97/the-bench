@@ -16,7 +16,10 @@ import { VerdictForm } from './VerdictForm';
 import { SentencingForm } from './SentencingForm';
 import { useIsMobile } from '../../hooks/use-is-mobile';
 import { useTheme } from '../../hooks/use-theme';
+import { usePanels } from '../../hooks/use-panels';
+import { CollapsiblePanel } from './CollapsiblePanel';
 import { User, MessageSquare, Gavel, FileText, Sun, Moon } from 'lucide-react';
+import type { CourtCase } from '../../types/game';
 
 type MobileTab = 'defendant' | 'transcript' | 'motions' | 'casefile';
 
@@ -128,37 +131,49 @@ export const JudicialLayout: React.FC = () => {
         <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col">
             <Header docket={currentCase.case_metadata.docket_number} stage={currentCase.game_state.current_stage} />
 
-            <ResizablePanelGroup orientation="horizontal" className="flex-1">
-                <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-                    <div className="h-full flex flex-col p-2 bg-muted/10">
-                        <DefendantPanel defendant={currentCase.defendant} />
-                    </div>
-                </ResizablePanel>
-
-                <ResizableHandle withHandle />
-
-                <ResizablePanel defaultSize={60}>
-                    <ResizablePanelGroup orientation="vertical">
-                        <ResizablePanel defaultSize={80}>
-                            <TranscriptArea />
-                        </ResizablePanel>
-
-                        <ResizableHandle withHandle />
-
-                        <ResizablePanel defaultSize={20} minSize={15}>
-                            <MotionTray />
-                        </ResizablePanel>
-                    </ResizablePanelGroup>
-                </ResizablePanel>
-
-                <ResizableHandle withHandle />
-
-                <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-                    <div className="h-full flex flex-col p-2 bg-muted/10">
-                        <CaseFilePanel caseData={currentCase} />
-                    </div>
-                </ResizablePanel>
-            </ResizablePanelGroup>
+            <DesktopLayout currentCase={currentCase} />
         </div>
     );
 };
+
+function DesktopLayout({ currentCase }: { currentCase: CourtCase }) {
+    const { leftOpen, rightOpen, toggleLeft, toggleRight } = usePanels();
+
+    return (
+        <div className="flex-1 flex overflow-hidden">
+            <CollapsiblePanel
+                side="left"
+                icon={User}
+                label="Defendant"
+                isOpen={leftOpen}
+                onToggle={toggleLeft}
+            >
+                <DefendantPanel defendant={currentCase.defendant} />
+            </CollapsiblePanel>
+
+            <div className="flex-1 overflow-hidden">
+                <ResizablePanelGroup orientation="vertical" className="h-full">
+                    <ResizablePanel defaultSize={80}>
+                        <TranscriptArea />
+                    </ResizablePanel>
+
+                    <ResizableHandle withHandle />
+
+                    <ResizablePanel defaultSize={20} minSize={15}>
+                        <MotionTray />
+                    </ResizablePanel>
+                </ResizablePanelGroup>
+            </div>
+
+            <CollapsiblePanel
+                side="right"
+                icon={FileText}
+                label="Case File"
+                isOpen={rightOpen}
+                onToggle={toggleRight}
+            >
+                <CaseFilePanel caseData={currentCase} />
+            </CollapsiblePanel>
+        </div>
+    );
+}
