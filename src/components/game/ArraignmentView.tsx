@@ -11,7 +11,7 @@ interface ArraignmentViewProps {
 
 export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) => {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full h-full p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 w-full h-full p-2 md:p-4">
             {/* Left Panel: Defendant Info */}
             <Card className="col-span-1 border-border bg-card">
                 <CardHeader>
@@ -60,7 +60,7 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
                                     <Badge variant="outline">Admissibility: {item.admissibility_status}</Badge>
                                 </div>
                                 <NarrativeText text={item.description} title={`${item.type} Description`} maxLength={80} />
-                                <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-2">
+                                <div className="mt-2 text-xs text-muted-foreground grid grid-cols-1 md:grid-cols-2 gap-2">
                                     <div className="flex flex-col gap-1">
                                         <span className="font-bold">Pros:</span>
                                         <NarrativeText text={item.prosecution_argument} title="Prosecution Argument" maxLength={50} className="ml-0" />
@@ -103,7 +103,7 @@ export const ArraignmentView: React.FC<ArraignmentViewProps> = ({ caseData }) =>
             </Card>
 
             {/* Controls Section - Full Width */}
-            <div className="col-span-1 md:col-span-4 pb-8">
+            <div className="col-span-1 md:col-span-4 px-0 md:px-4 pb-8">
                 {caseData.arraignment_ruling ? (
                     <Card className="w-full mt-4 border-t-2 border-primary bg-muted/10">
                         <CardHeader>

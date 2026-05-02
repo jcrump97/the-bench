@@ -5,9 +5,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 interface ApiKeyFormProps {
     onSave: (key: string) => void;
+    onDemo: () => void;
 }
 
-export const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ onSave }) => {
+export const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ onSave, onDemo }) => {
     const [keyInput, setKeyInput] = useState('');
 
     const handleSetKey = () => {
@@ -17,21 +18,36 @@ export const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ onSave }) => {
     };
 
     return (
-        <Card className="w-[350px]">
+        <Card className="w-[380px]">
             <CardHeader>
                 <CardTitle>The Bench</CardTitle>
-                <CardDescription>Enter your Gemini API Key to begin.</CardDescription>
+                <CardDescription>
+                    AI-powered judicial simulation. Take the bench. Rule on cases. Build your reputation.
+                </CardDescription>
             </CardHeader>
-            <CardContent>
-                <Input
-                    type="password"
-                    placeholder="API Key"
-                    value={keyInput}
-                    onChange={(e) => setKeyInput(e.target.value)}
-                />
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                        A Gemini API key is required to generate cases. Get one free at{' '}
+                        <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                            aistudio.google.com
+                        </a>
+                    </p>
+                    <Input
+                        type="password"
+                        placeholder="Gemini API Key"
+                        value={keyInput}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                    />
+                </div>
             </CardContent>
-            <CardFooter>
-                <Button onClick={handleSetKey} className="w-full">Enter Chamber</Button>
+            <CardFooter className="flex flex-col gap-3">
+                <Button onClick={handleSetKey} disabled={!keyInput.trim()} className="w-full">
+                    Enter Chamber
+                </Button>
+                <Button variant="outline" onClick={onDemo} className="w-full">
+                    Play Demo — No API Key Needed
+                </Button>
             </CardFooter>
         </Card>
     );

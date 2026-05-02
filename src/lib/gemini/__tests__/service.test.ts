@@ -32,6 +32,7 @@ describe('Gemini Schemas', () => {
                     prosecution_argument: 'Shows guilt',
                     defense_argument: 'Blurry',
                     admissibility_status: 'Pending',
+                    strength: 'High',
                 },
             ],
             witnesses: [

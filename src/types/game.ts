@@ -1,3 +1,15 @@
+export interface ChargeVerdict {
+    chargeId: string;
+    verdict: 'Guilty' | 'Not Guilty' | 'No Contest';
+    reasoning: string;
+}
+
+export interface SentenceRuling {
+    months: number;
+    conditions: string[];
+    reasoning: string;
+}
+
 export interface CaseOutcome {
     verdict: string;
     sentence?: string;
@@ -24,6 +36,7 @@ export interface Charge {
     description: string;
     min_sentence_months: number;
     max_sentence_months: number;
+    severity?: 'Low' | 'Med' | 'High';
 }
 
 export interface Evidence {
@@ -33,6 +46,8 @@ export interface Evidence {
     prosecution_argument: string;
     defense_argument: string;
     admissibility_status: 'Pending' | 'Admitted' | 'Suppressed';
+    ruling_reasoning?: string;
+    strength: 'Low' | 'Med' | 'High';
 }
 
 export interface Witness {
@@ -61,6 +76,8 @@ export interface CourtCase {
     game_state: GameState;
     outcome?: CaseOutcome;
     arraignment_ruling?: ArraignmentRuling;
+    verdict_rulings?: ChargeVerdict[];
+    sentence_ruling?: SentenceRuling;
     transcript: TranscriptEntry[];
     motions: Motion[];
 }
@@ -74,18 +91,25 @@ export interface TranscriptEntry {
 }
 
 export interface ArraignmentRuling {
-    bailType: 'ROR' | 'Cash' | 'Remand';
+    bailType: "ROR" | "Cash" | "Remand";
     bailAmount?: number;
     conditions: string[];
     rulingReasoning: string;
+}
+
+export interface ResolvedCase extends CourtCase {
+    outcome: CaseOutcome;
+    verdict_rulings: ChargeVerdict[];
+    sentence_ruling: SentenceRuling;
 }
 
 export interface Motion {
     id: string;
     title: string;
     type: "Suppression" | "Dismissal" | "Limine";
-    description: string; // The lawyer's argument
-    proposed_order_text: string; // The text the judge signs
+    description: string;
+    proposed_order_text: string;
     status: "Pending" | "Granted" | "Denied" | "Modified";
-    final_ruling_text?: string; // The text after the judge edits it
+    final_ruling_text?: string;
+    merit: boolean;
 }
