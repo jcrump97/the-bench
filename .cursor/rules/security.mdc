@@ -1,0 +1,32 @@
+---
+description: API keys, secrets, BYOK, localStorage, sessionStorage, cookies, XSS, credential storage, secret hygiene, zero trust, authentication tokens, environment variables, .env
+globs: src/store/**/*.ts, src/services/**/*.ts, .env*
+alwaysApply: false
+---
+
+# Zero-Trust Security Boundaries
+
+## BYOKVault Isolation
+- Store the user's API key in an isolated Zustand slice named `BYOKVault`.
+- Persist the key in memory only during the active session.
+- The key must never touch `localStorage`, `sessionStorage`, cookies, the URL, or any persistent browser storage.
+- The UI provides the key; the UI never reads it back for display after entry.
+
+## No Backend Proxy
+- Route all Gemini API calls through `GameService` using native `fetch()`.
+- Never create Express routes, Next.js API handlers, serverless functions, or proxy servers.
+- The architecture is strictly a static SPA on GitHub Pages.
+
+## Secret Hygiene
+- Secrets are provided at runtime by the user only.
+- Never commit `.env` files, keys, or credentials to Git.
+- Never hardcode an API key or placeholder key in source code.
+
+## Persistence Scope
+- `localStorage` stores only immutable `FinalResult` objects after game completion.
+- `localStorage` never stores the API key, active `GameState`, `ErrorState`, or `BYOKVault` contents.
+- FinalResult objects are write-once and validated before persistence.
+
+## Validation Gatekeeper
+- Every LLM JSON response passes through `ValidationLayer` (Zod) before state hydration.
+- On validation failure, transition immediately to `ErrorState`. No raw LLM output reaches Zustand.
