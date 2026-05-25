@@ -1,0 +1,30 @@
+---
+description: Project identity and universal standards for The Bench
+globs: 
+alwaysApply: true
+---
+
+# The Bench — Universal Project Standards
+
+## Project Identity
+The Bench is a single-page React application (judge simulation game) deployed to GitHub Pages. It orchestrates a non-deterministic LLM (Gemini BYOK) into a deterministic state machine. Zero backend. Zero server-side secrets.
+
+## Immutable Tech Stack
+- **Build:** Vite with React + TypeScript (strict mode enabled).
+- **State:** Zustand is the sole global state manager. No Redux, no Context API for global state.
+- **Validation:** Zod parses every external payload before state hydration.
+- **API:** Gemini JSON Mode via native `fetch()`, routed exclusively through a `GameService` abstraction.
+- **Hosting:** Static GitHub Pages SPA. No serverless functions. No backend proxy.
+
+## Global Architectural Mandates
+- The UI layer triggers actions; it never calls `fetch()` or touches the LLM directly.
+- Every LLM JSON response passes through a `ValidationLayer` (Zod). On failure, transition to `ErrorState`.
+- The `ErrorState` is a first-class state node with explicit retry and recovery paths.
+- The user's API key lives in an isolated Zustand slice (`BYOKVault`). Persist it in memory only. It must never touch `localStorage`, `sessionStorage`, cookies, or the URL.
+- `localStorage` stores only immutable `FinalResult` objects (post-game). It never stores active game state or the API key.
+
+## Commit & Verification Discipline
+- Use Conventional Commits: `type: subject` (e.g., `feat:`, `fix:`, `chore:`, `docs:`).
+- Keep commits atomic. One concern per commit.
+- Before declaring a task complete, run `npm run lint` and `npm run build`. The app must build cleanly for static GitHub Pages deployment.
+- Ask before adding any dependency outside the default stack (Vite, React, TS, Zustand, Zod).
