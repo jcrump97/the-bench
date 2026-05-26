@@ -40,12 +40,38 @@ export const SentenceSchema = z.discriminatedUnion("type", [
   })
 ]);
 
+export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL']);
+export const WitnessRoleEnum = z.enum(['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR']);
+export const BiasIndicatorEnum = z.enum(['PROSECUTION', 'DEFENSE', 'NEUTRAL']);
+export const StatuteElementSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().describe("The specific legal requirement or element of the crime that must be proven."),
+  isProven: z.boolean().default(false)
+}).strict();
 export const ChargeSchema = z.object({
-  statuteId: z.string(), // e.g., "CA Penal Code § 459"
-  name: z.string(),      // e.g., "Burglary in the Second Degree"
-  class: z.enum(['INFRACTION', 'MISDEMEANOR', 'FELONY']),
-  counts: z.number().int().positive().default(1),
-});
+  id: z.string().uuid(),
+  name: z.string(),
+  classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
+  elements: z.array(StatuteElementSchema).min(1)
+}).strict();
+export const WitnessSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().describe("Full fictional name. Do not include race or protected demographics."),
+  role: WitnessRoleEnum,
+  bias: BiasIndicatorEnum,
+  statement: z.string().describe("A summary of their expected testimony."),
+  credibilityScore: z.number().min(1).max(10)
+}).strict();
+export const EvidenceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(3),
+  type: EvidenceTypeEnum,
+  description: z.string().describe("A purely factual, objective description of the item."),
+  relevanceScore: z.number().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
+  objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting. Used by the player to determine if they should attempt admission."),
+  targetElementId: z.string().uuid().nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
+  isAdmitted: z.boolean().default(false).describe("Always initialized to false. Mutated by player action during the trial phase.")
+}).strict();
 
 // ==========================================
 // 3. DEMOGRAPHICS & CHARACTER ENTITIES
@@ -95,7 +121,7 @@ export const EnvironmentSchema = z.object({
   description: z.string(), 
 });
 
-export const CasePayloadSchema = z.object({
+export const CaseSchema = z.object({
   caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)"),
   defendant: CharacterSchema,
   environment: EnvironmentSchema,
@@ -103,16 +129,15 @@ export const CasePayloadSchema = z.object({
   charges: z.array(ChargeSchema).min(1),
   statuteContexts: z.array(z.string()).min(1),
   
-  // TODO: Define WitnessSchema
-  witnesses: z.array(z.any()).default([]), 
-  // TODO: Define EvidenceSchema
-  evidence: z.array(z.any()).default([]),  
+  witnesses: z.array(WitnessSchema).min(2),
+  evidence: z.array(EvidenceSchema).min(3),
   
   mandatoryMinimums: z.array(SentenceSchema), 
   maximumPenalties: z.array(SentenceSchema), 
   
   summary: z.string(),
-});
+}).strict();
+export const CasePayloadSchema = CaseSchema;
 
 // ==========================================
 // 5. STATE MACHINE SCHEMA
