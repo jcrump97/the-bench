@@ -122,7 +122,8 @@ export const GamePhaseSchema = z.enum([
   'ACT_1_INTAKE', 
   'ACT_2_MOTIONS', 
   'ACT_3_VERDICT', 
-  'END_STATE'
+  'END_STATE',
+  'ERROR_STATE'
 ]);
 
 // ==========================================

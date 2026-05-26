@@ -20,17 +20,34 @@ const INITIAL_STATE: Pick<GameState, 'currentPhase' | 'activeCase'> = {
   activeCase: null,
 };
 
+function logValidationFailure(action: string, issues: unknown): void {
+  console.error(
+    `[GameStore] Validation rejected in ${action}:`,
+    JSON.stringify(issues),
+  );
+}
+
 export const useGameStore = create<GameState>((set) => ({
   ...INITIAL_STATE,
 
   setPhase: (phase) => {
-    const validated = GamePhaseSchema.parse(phase);
-    set({ currentPhase: validated });
+    const result = GamePhaseSchema.safeParse(phase);
+    if (!result.success) {
+      logValidationFailure('setPhase', result.error.issues);
+      set({ currentPhase: 'ERROR_STATE', activeCase: null });
+      return;
+    }
+    set({ currentPhase: result.data });
   },
 
   setActiveCase: (caseData) => {
-    const validated = CasePayloadSchema.parse(caseData);
-    set({ activeCase: validated });
+    const result = CasePayloadSchema.safeParse(caseData);
+    if (!result.success) {
+      logValidationFailure('setActiveCase', result.error.issues);
+      set({ currentPhase: 'ERROR_STATE', activeCase: null });
+      return;
+    }
+    set({ activeCase: result.data });
   },
 
   resetGameState: () => set({ ...INITIAL_STATE }),
