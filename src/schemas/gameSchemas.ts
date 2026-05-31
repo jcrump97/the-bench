@@ -53,14 +53,14 @@ export const WitnessSchema = z.object({
   name: z.string().describe("Full fictional name. Do not include race or protected demographics."),
   role: WitnessRoleEnum,
   bias: BiasIndicatorEnum,
-  statement: z.string().describe("A summary of their expected testimony."),
+  statement: z.string().max(1000).describe("A summary of their expected testimony."),
   credibilityScore: z.number().min(1).max(10)
 }).strict();
 export const EvidenceSchema = z.object({
   id: z.string().uuid(),
-  name: z.string().min(3),
+  name: z.string().min(3).max(100),
   type: EvidenceTypeEnum,
-  description: z.string().describe("A purely factual, objective description of the item."),
+  description: z.string().max(600).describe("A purely factual, objective description of the item."),
   relevanceScore: z.number().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
   objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting. Used by the player to determine if they should attempt admission."),
   targetElementId: z.string().uuid().nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
@@ -82,8 +82,8 @@ export const SubstanceAbuseSchema = z.object({
 });
 
 export const CharacterSchema = z.object({
-  firstName: z.string(),
-  lastName: z.string(),
+  firstName: z.string().max(50),
+  lastName: z.string().max(50),
   age: z.number().int().min(18).max(120),
 
   demographics: z.object({
@@ -112,7 +112,7 @@ export const EnvironmentSchema = z.object({
   locationType: z.enum(['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL']),
   timeOfDay: z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']),
   weather: z.enum(['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A']),
-  description: z.string(),
+  description: z.string().max(500),
 });
 
 export const CaseSchema = z.object({
@@ -129,7 +129,7 @@ export const CaseSchema = z.object({
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema),
 
-  summary: z.string(),
+  summary: z.string().max(1500),
 }).strict();
 export const CasePayloadSchema = CaseSchema;
 
