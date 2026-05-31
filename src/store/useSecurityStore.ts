@@ -25,17 +25,11 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   // Wipe the vault completely
   clearVault: () => set({ vault: null }),
   
-  // Helper for UI routing guards
+  // Helper for UI routing guards. Any vault that survived BYOKSchema.safeParse is authenticated.
   isAuthenticated: () => {
-    const currentVault = get().vault;
-    if (!currentVault) return false;
-    
-    // The Demo Bypass
-    if (currentVault.isDemo === true) return true;
-    
-    // The Live LLM Flow
-    return currentVault.isDemo === false
-      && currentVault.apiKey.length >= 30
-      && currentVault.apiKey.startsWith('AIza');
+    const vault = get().vault;
+    if (!vault) return false;
+    if (vault.isDemo === true) return true;
+    return vault.isDemo === false; // apiKey format already enforced by BYOKSchema in setVault()
   }
 }));
