@@ -10,7 +10,7 @@ This is my first portfolio project as I transition from the Service Desk to AI S
 
 ## Tech Stack
 
-- Vite + React 18 + TypeScript (strict)
+- Vite + React 19 + TypeScript (strict)
 - Zustand (state management)
 - Zod (validation gatekeeper)
 - Tailwind CSS (presentation layer only)
@@ -103,7 +103,7 @@ flowchart LR
 
 ## Status
 
-Scaffolding in progress. The Vite + Zustand foundation is being laid now.
+Foundation complete. Schemas, state machine, and security vault are implemented and hardened. UI development is next.
 
 ## License
 
