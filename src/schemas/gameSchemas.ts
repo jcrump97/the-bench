@@ -10,7 +10,7 @@ export const BYOKSchema = z.discriminatedUnion("isDemo", [
   }),
   z.object({
     isDemo: z.literal(true),
-    apiKey: z.string().optional(), 
+    apiKey: z.string().optional(),
   })
 ]);
 
@@ -27,17 +27,11 @@ export const ProbationConditionEnum = z.enum([
 ]);
 
 export const SentenceSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.enum(['PRISON', 'JAIL', 'FINE', 'COMMUNITY_SERVICE']),
-    unit: z.enum(['YEARS', 'MONTHS', 'DAYS', 'HOURS', 'DOLLARS']),
-    amount: z.number().int().positive(),
-  }),
-  z.object({
-    type: z.literal('PROBATION'),
-    unit: z.enum(['YEARS', 'MONTHS']),
-    amount: z.number().int().positive(),
-    conditions: z.array(ProbationConditionEnum).min(1),
-  })
+  z.object({ type: z.literal('PRISON'),            unit: z.enum(['YEARS', 'MONTHS', 'DAYS']), amount: z.number().int().positive() }),
+  z.object({ type: z.literal('JAIL'),              unit: z.enum(['YEARS', 'MONTHS', 'DAYS']), amount: z.number().int().positive() }),
+  z.object({ type: z.literal('FINE'),              unit: z.literal('DOLLARS'),               amount: z.number().int().positive() }),
+  z.object({ type: z.literal('COMMUNITY_SERVICE'), unit: z.literal('HOURS'),                 amount: z.number().int().positive() }),
+  z.object({ type: z.literal('PROBATION'),         unit: z.enum(['YEARS', 'MONTHS']),        amount: z.number().int().positive(), conditions: z.array(ProbationConditionEnum).min(1) }),
 ]);
 
 export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL']);
@@ -79,11 +73,11 @@ export const EvidenceSchema = z.object({
 export const PastConvictionSchema = z.object({
   chargeName: z.string(),
   year: z.number().int().min(1900).max(new Date().getFullYear()),
-  sentences: z.array(SentenceSchema), 
+  sentences: z.array(SentenceSchema),
 });
 
 export const SubstanceAbuseSchema = z.object({
-  substance: z.string(), 
+  substance: z.string(),
   status: z.enum(['ACTIVE', 'IN_RECOVERY', 'NONE_REPORTED']),
 });
 
@@ -91,7 +85,7 @@ export const CharacterSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   age: z.number().int().min(18).max(120),
-  
+
   demographics: z.object({
     relationshipStatus: z.enum(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED']),
     children: z.number().int().min(0).max(30),
@@ -101,7 +95,7 @@ export const CharacterSchema = z.object({
   }),
 
   pastConvictions: z.array(PastConvictionSchema),
-  
+
   oceanTraits: z.object({
     openness: z.number().min(1).max(10),
     conscientiousness: z.number().min(1).max(10),
@@ -118,23 +112,23 @@ export const EnvironmentSchema = z.object({
   locationType: z.enum(['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL']),
   timeOfDay: z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']),
   weather: z.enum(['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A']),
-  description: z.string(), 
+  description: z.string(),
 });
 
 export const CaseSchema = z.object({
   caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)"),
   defendant: CharacterSchema,
   environment: EnvironmentSchema,
-  
+
   charges: z.array(ChargeSchema).min(1),
   statuteContexts: z.array(z.string()).min(1),
-  
+
   witnesses: z.array(WitnessSchema).min(2),
   evidence: z.array(EvidenceSchema).min(3),
-  
-  mandatoryMinimums: z.array(SentenceSchema), 
-  maximumPenalties: z.array(SentenceSchema), 
-  
+
+  mandatoryMinimums: z.array(SentenceSchema),
+  maximumPenalties: z.array(SentenceSchema),
+
   summary: z.string(),
 }).strict();
 export const CasePayloadSchema = CaseSchema;
@@ -143,10 +137,10 @@ export const CasePayloadSchema = CaseSchema;
 // 5. STATE MACHINE SCHEMA
 // ==========================================
 export const GamePhaseSchema = z.enum([
-  'WELCOME', 
-  'ACT_1_INTAKE', 
-  'ACT_2_MOTIONS', 
-  'ACT_3_VERDICT', 
+  'WELCOME',
+  'ACT_1_INTAKE',
+  'ACT_2_MOTIONS',
+  'ACT_3_VERDICT',
   'END_STATE',
   'ERROR_STATE'
 ]);
