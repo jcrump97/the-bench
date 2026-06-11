@@ -289,7 +289,7 @@ const finalResultBase = {
   defendantName:       z.string().max(101),
   completedAt:         z.string().datetime(),
   prosecutionStrength: ProsecutionStrengthSchema,
-  defenseRisk:         DefenseRiskSchema,
+  defenseRisk:         DefenseRiskSchema.nullable(),
   imposedSentence:     z.array(SentenceSchema),
   aftermathNarrative:  z.string().max(4000),
 };
