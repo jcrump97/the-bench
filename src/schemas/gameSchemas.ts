@@ -26,7 +26,7 @@ export const ProbationConditionEnum = z.enum([
   'COMMUNITY_SERVICE'
 ]);
 
-const SENTENCE_UNIT_MAX: Record<string, number> = {
+const SENTENCE_UNIT_MAX: Record<'YEARS' | 'MONTHS' | 'DAYS' | 'DOLLARS' | 'HOURS', number> = {
   YEARS: 100,
   MONTHS: 1200,
   DAYS: 36500,
@@ -42,7 +42,7 @@ export const SentenceSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal('PROBATION'),         unit: z.enum(['YEARS', 'MONTHS']),        amount: z.number().int().positive(), conditions: z.array(ProbationConditionEnum).min(1) }),
 ]).superRefine((v, ctx) => {
   const max = SENTENCE_UNIT_MAX[v.unit];
-  if (max !== undefined && v.amount > max) {
+  if (v.amount > max) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: `Amount ${v.amount} exceeds maximum ${max} for unit ${v.unit}`,
@@ -140,6 +140,7 @@ const offerTerms = {
   dismissedChargeIds:   z.array(z.string().min(1).max(40)),
   proposedSentence:     z.array(SentenceSchema).min(1),
   prosecutionRationale: z.string().min(1).max(1000),
+  defenseRationale:     z.string().min(1).max(1000),
 };
 
 // 3-state: prosecution declined / defense rejected / pending judicial review
@@ -148,16 +149,8 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
     status: z.literal('NO_OFFER'),
     prosecutionRationale: z.string().min(1).max(1000),
   }),
-  z.strictObject({
-    status: z.literal('REJECTED_BY_DEFENSE'),
-    ...offerTerms,
-    defenseRationale: z.string().min(1).max(1000),
-  }),
-  z.strictObject({
-    status: z.literal('PENDING_JUDICIAL_REVIEW'),
-    ...offerTerms,
-    defenseRationale: z.string().min(1).max(1000),
-  }),
+  z.strictObject({ status: z.literal('REJECTED_BY_DEFENSE'),    ...offerTerms }),
+  z.strictObject({ status: z.literal('PENDING_JUDICIAL_REVIEW'), ...offerTerms }),
 ]);
 
 export const CaseSchema = z.strictObject({
