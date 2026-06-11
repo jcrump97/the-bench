@@ -158,10 +158,11 @@ export function buildPleaPosture(
 ): PleaPosture {
   // Prosecution declines to offer on weak cases (no deal better than conviction)
   if (!OFFER_THRESHOLD_BAND.includes(prosecutionStrength.band)) {
-    return PleaPostureSchema.parse({
-      status: 'NO_OFFER',
-      prosecutionRationale,
-    });
+    const noOfferResult = PleaPostureSchema.safeParse({ status: 'NO_OFFER', prosecutionRationale });
+    if (!noOfferResult.success) {
+      throw new Error('PleaPosture NO_OFFER assembly failed internal validation');
+    }
+    return noOfferResult.data;
   }
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
@@ -175,7 +176,7 @@ export function buildPleaPosture(
     ? 'PENDING_JUDICIAL_REVIEW'
     : 'REJECTED_BY_DEFENSE';
 
-  return PleaPostureSchema.parse({
+  const offerResult = PleaPostureSchema.safeParse({
     status,
     pleadsToChargeIds,
     dismissedChargeIds: [],
@@ -183,6 +184,10 @@ export function buildPleaPosture(
     prosecutionRationale,
     defenseRationale,
   });
+  if (!offerResult.success) {
+    throw new Error('PleaPosture offer assembly failed internal validation');
+  }
+  return offerResult.data;
 }
 
 function discountSentences(sentences: Sentence[], discount: number): Sentence[] {
