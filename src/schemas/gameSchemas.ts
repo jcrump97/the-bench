@@ -155,7 +155,48 @@ export const CaseSchema = z.strictObject({
 export const CasePayloadSchema = CaseSchema;
 
 // ==========================================
-// 5. STATE MACHINE SCHEMA
+// 5. PLAYER DECISIONS
+// ==========================================
+export const PleaDecisionSchema = z.enum(['ACCEPT', 'REJECT']);
+
+export const MotionRulingSchema = z.strictObject({
+  evidenceId: z.string().min(1).max(40),
+  ruling: z.enum(['ADMITTED', 'EXCLUDED']),
+});
+
+export const ChargeVerdictSchema = z.strictObject({
+  chargeId:       z.string().min(1).max(40),
+  chargeName:     z.string().max(200),
+  classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
+  verdict:        z.enum(['GUILTY', 'NOT_GUILTY']),
+});
+
+export const VerdictSchema = z.array(ChargeVerdictSchema).min(1);
+
+// ==========================================
+// 6. CASE ASSESSMENTS (derived, snapshotted)
+// ==========================================
+
+// Prosecution's view: "Can I prove this?" — drives plea offer decision and Act 3 range
+export const ProsecutionStrengthSchema = z.strictObject({
+  score:            z.number().min(0).max(100),
+  band:             z.enum(['WEAK', 'MODERATE', 'STRONG']),
+  evidenceStrength: z.number().min(0).max(100),
+  witnessStrength:  z.number().min(0).max(100),
+  elementCoverage:  z.number().min(0).max(1),
+});
+
+// Defense's view: "Should the defendant gamble at trial?" — deliberatley different inputs
+export const DefenseRiskSchema = z.strictObject({
+  acceptanceLikelihood: z.number().min(0).max(100),
+  posture:              z.enum(['ACCEPT', 'REJECT']),
+  riskTolerance:        z.number().min(0).max(100),
+  priorExposure:        z.number().min(0).max(100),
+  offerGenerosity:      z.number().min(0).max(100),
+});
+
+// ==========================================
+// 7. STATE MACHINE SCHEMA
 // ==========================================
 export const GamePhaseSchema = z.enum([
   'WELCOME',
@@ -169,8 +210,14 @@ export const GamePhaseSchema = z.enum([
 // ==========================================
 // TYPE EXPORTS
 // ==========================================
-export type SecurityPayload = z.infer<typeof BYOKSchema>;
-export type CasePayload = z.infer<typeof CasePayloadSchema>;
-export type GamePhase = z.infer<typeof GamePhaseSchema>;
-export type Environment = z.infer<typeof EnvironmentSchema>;
-export type Charge = z.infer<typeof ChargeSchema>;
+export type SecurityPayload     = z.infer<typeof BYOKSchema>;
+export type CasePayload         = z.infer<typeof CasePayloadSchema>;
+export type GamePhase           = z.infer<typeof GamePhaseSchema>;
+export type Environment         = z.infer<typeof EnvironmentSchema>;
+export type Charge              = z.infer<typeof ChargeSchema>;
+export type PleaDecision        = z.infer<typeof PleaDecisionSchema>;
+export type MotionRuling        = z.infer<typeof MotionRulingSchema>;
+export type ChargeVerdict       = z.infer<typeof ChargeVerdictSchema>;
+export type Verdict             = z.infer<typeof VerdictSchema>;
+export type ProsecutionStrength = z.infer<typeof ProsecutionStrengthSchema>;
+export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
