@@ -50,6 +50,15 @@ const INITIAL_STATE: Pick<
 
 const ERROR_PHASE: GamePhase = 'ERROR_STATE';
 
+const ERROR_RESET: Pick<GameState, 'currentPhase' | 'activeCase' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'> = {
+  currentPhase:    ERROR_PHASE,
+  activeCase:      null,
+  pleaDecision:    null,
+  motionRulings:   [],
+  verdict:         null,
+  imposedSentence: [],
+};
+
 const ALLOWED_PHASE_TRANSITIONS: Record<GamePhase, ReadonlySet<GamePhase>> = {
   WELCOME:       new Set(['ACT_1_INTAKE', 'ERROR_STATE']),
   ACT_1_INTAKE:  new Set(['ACT_2_MOTIONS', 'ACT_3_VERDICT', 'ERROR_STATE']),
@@ -82,20 +91,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     const phaseResult = GamePhaseSchema.safeParse(newPhase);
     if (!phaseResult.success) {
       logValidationFailure(phaseResult.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
 
     if (!allowedTransitions.has(phaseResult.data)) {
       logSecurityWarning();
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
 
     // Guard: entering ACT_1_INTAKE requires an active case already loaded
     if (phaseResult.data === 'ACT_1_INTAKE' && activeCase === null) {
       logSecurityWarning();
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
 
@@ -106,14 +115,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     const currentPhase = get().currentPhase;
     if (!CASE_REHYDRATION_ALLOWED_PHASES.has(currentPhase)) {
       logSecurityWarning();
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
 
     const result = CasePayloadSchema.safeParse(caseData);
     if (!result.success) {
       logValidationFailure(result.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
     set({ activeCase: result.data });
@@ -123,7 +132,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const result = PleaDecisionSchema.safeParse(decision);
     if (!result.success) {
       logValidationFailure(result.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
     set({ pleaDecision: result.data });
@@ -133,7 +142,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const result = MotionRulingSchema.safeParse(ruling);
     if (!result.success) {
       logValidationFailure(result.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
     const existing = get().motionRulings;
@@ -145,7 +154,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const result = VerdictSchema.safeParse(verdict);
     if (!result.success) {
       logValidationFailure(result.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
     set({ verdict: result.data });
@@ -155,7 +164,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const result = z.array(SentenceSchema).safeParse(sentences);
     if (!result.success) {
       logValidationFailure(result.error);
-      set({ currentPhase: ERROR_PHASE, activeCase: null });
+      set(ERROR_RESET);
       return;
     }
     set({ imposedSentence: result.data });
