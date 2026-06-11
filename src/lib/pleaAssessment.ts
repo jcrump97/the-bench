@@ -148,12 +148,17 @@ const SENTENCE_DISCOUNT: Partial<Record<ProsecutionStrength['band'], number>> = 
   STRONG:   0.05,
 };
 
+export type PleaPostureResult = {
+  posture: PleaPosture;
+  defenseRisk: DefenseRisk | null;
+};
+
 export function buildPleaPosture(
   caseData: CasePayload,
   prosecutionStrength: ProsecutionStrength,
   prosecutionRationale: string,
   defenseRationale?: string
-): PleaPosture {
+): PleaPostureResult {
   const discount = SENTENCE_DISCOUNT[prosecutionStrength.band];
   // Prosecution declines to offer when no discount entry exists for this band
   if (discount === undefined) {
@@ -161,7 +166,7 @@ export function buildPleaPosture(
     if (!noOfferResult.success) {
       throw new Error('PleaPosture NO_OFFER assembly failed internal validation');
     }
-    return noOfferResult.data;
+    return { posture: noOfferResult.data, defenseRisk: null };
   }
 
   if (!defenseRationale) {
@@ -189,7 +194,7 @@ export function buildPleaPosture(
   if (!offerResult.success) {
     throw new Error('PleaPosture offer assembly failed internal validation');
   }
-  return offerResult.data;
+  return { posture: offerResult.data, defenseRisk };
 }
 
 function discountSentences(sentences: Sentence[], discount: number): Sentence[] {
