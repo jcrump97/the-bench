@@ -280,7 +280,37 @@ export const DefenseRiskSchema = z.strictObject({
 });
 
 // ==========================================
-// 7. STATE MACHINE SCHEMA
+// 7. FINAL RESULT (persisted to localStorage)
+// ==========================================
+
+const finalResultBase = {
+  schemaVersion:       z.literal(1),
+  caseId:              z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/),
+  defendantName:       z.string().max(101),
+  completedAt:         z.string().datetime(),
+  prosecutionStrength: ProsecutionStrengthSchema,
+  defenseRisk:         DefenseRiskSchema,
+  imposedSentence:     z.array(SentenceSchema),
+  aftermathNarrative:  z.string().max(4000),
+};
+
+export const FinalResultSchema = z.discriminatedUnion('resolutionPath', [
+  z.strictObject({
+    resolutionPath: z.literal('PLEA'),
+    pleaDecision:   z.literal('ACCEPT'),
+    ...finalResultBase,
+  }),
+  z.strictObject({
+    resolutionPath: z.literal('TRIAL'),
+    pleaOutcome:    z.enum(['NO_OFFER_MADE', 'REJECTED_BY_DEFENSE', 'JUDGE_FORCED_TRIAL']),
+    motionRulings:  z.array(MotionRulingSchema),
+    verdict:        VerdictSchema,
+    ...finalResultBase,
+  }),
+]);
+
+// ==========================================
+// 8. STATE MACHINE SCHEMA
 // ==========================================
 export const GamePhaseSchema = z.enum([
   'WELCOME',
@@ -306,3 +336,4 @@ export type ChargeVerdict       = z.infer<typeof ChargeVerdictSchema>;
 export type Verdict             = z.infer<typeof VerdictSchema>;
 export type ProsecutionStrength = z.infer<typeof ProsecutionStrengthSchema>;
 export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
+export type FinalResult         = z.infer<typeof FinalResultSchema>;
