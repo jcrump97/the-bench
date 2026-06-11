@@ -143,9 +143,7 @@ export function assessDefense(
 
 // ─── Posture builder: combines both assessments into the 3-state schema ───────
 
-const OFFER_THRESHOLD_BAND: ProsecutionStrength['band'][] = ['MODERATE', 'STRONG'];
-const SENTENCE_DISCOUNT: Record<ProsecutionStrength['band'], number> = {
-  WEAK:     0.40,
+const SENTENCE_DISCOUNT: Partial<Record<ProsecutionStrength['band'], number>> = {
   MODERATE: 0.20,
   STRONG:   0.05,
 };
@@ -156,8 +154,9 @@ export function buildPleaPosture(
   prosecutionRationale: string,
   defenseRationale: string
 ): PleaPosture {
-  // Prosecution declines to offer on weak cases (no deal better than conviction)
-  if (!OFFER_THRESHOLD_BAND.includes(prosecutionStrength.band)) {
+  const discount = SENTENCE_DISCOUNT[prosecutionStrength.band];
+  // Prosecution declines to offer when no discount entry exists for this band
+  if (discount === undefined) {
     const noOfferResult = PleaPostureSchema.safeParse({ status: 'NO_OFFER', prosecutionRationale });
     if (!noOfferResult.success) {
       throw new Error('PleaPosture NO_OFFER assembly failed internal validation');
@@ -167,7 +166,6 @@ export function buildPleaPosture(
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
   const pleadsToChargeIds = caseData.charges.map(c => c.id);
-  const discount = SENTENCE_DISCOUNT[prosecutionStrength.band];
   const proposedSentence = discountSentences(caseData.maximumPenalties, discount);
 
   const defenseRisk = assessDefense(caseData, proposedSentence);
