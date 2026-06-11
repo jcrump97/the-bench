@@ -135,6 +135,31 @@ export const EnvironmentSchema = z.strictObject({
   description: z.string().max(500),
 });
 
+const offerTerms = {
+  pleadsToChargeIds:    z.array(z.string().min(1).max(40)).min(1),
+  dismissedChargeIds:   z.array(z.string().min(1).max(40)),
+  proposedSentence:     z.array(SentenceSchema).min(1),
+  prosecutionRationale: z.string().min(1).max(1000),
+};
+
+// 3-state: prosecution declined / defense rejected / pending judicial review
+export const PleaPostureSchema = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('NO_OFFER'),
+    prosecutionRationale: z.string().min(1).max(1000),
+  }),
+  z.strictObject({
+    status: z.literal('REJECTED_BY_DEFENSE'),
+    ...offerTerms,
+    defenseRationale: z.string().min(1).max(1000),
+  }),
+  z.strictObject({
+    status: z.literal('PENDING_JUDICIAL_REVIEW'),
+    ...offerTerms,
+    defenseRationale: z.string().min(1).max(1000),
+  }),
+]);
+
 export const CaseSchema = z.strictObject({
   caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)"),
   defendant: CharacterSchema,
@@ -149,7 +174,66 @@ export const CaseSchema = z.strictObject({
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema),
 
+  pleaPosture: PleaPostureSchema,
   summary: z.string().max(1500),
+}).superRefine((v, ctx) => {
+  const elementIds = new Set<string>();
+  const chargeIds = new Set<string>();
+  const evidenceIds = new Set<string>();
+  const witnessIds = new Set<string>();
+
+  // Collect and check uniqueness of entity IDs
+  for (const charge of v.charges) {
+    if (chargeIds.has(charge.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate charge id: ${charge.id}` });
+    }
+    chargeIds.add(charge.id);
+    for (const el of charge.elements) {
+      if (elementIds.has(el.id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate element id: ${el.id}` });
+      }
+      elementIds.add(el.id);
+    }
+  }
+  for (const ev of v.evidence) {
+    if (evidenceIds.has(ev.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate evidence id: ${ev.id}` });
+    }
+    evidenceIds.add(ev.id);
+    if (ev.targetElementId !== null && !elementIds.has(ev.targetElementId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Evidence ${ev.id} references unknown element: ${ev.targetElementId}` });
+    }
+  }
+  for (const w of v.witnesses) {
+    if (witnessIds.has(w.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate witness id: ${w.id}` });
+    }
+    witnessIds.add(w.id);
+  }
+
+  // Plea partition: pleadsToChargeIds ∪ dismissedChargeIds must be a disjoint partition of chargeIds
+  if (v.pleaPosture.status !== 'NO_OFFER') {
+    const plead = new Set(v.pleaPosture.pleadsToChargeIds);
+    const dismissed = new Set(v.pleaPosture.dismissedChargeIds);
+    for (const id of plead) {
+      if (!chargeIds.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `pleadsToChargeIds references unknown charge: ${id}` });
+      }
+      if (dismissed.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Charge ${id} appears in both pleadsToChargeIds and dismissedChargeIds` });
+      }
+    }
+    for (const id of dismissed) {
+      if (!chargeIds.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `dismissedChargeIds references unknown charge: ${id}` });
+      }
+    }
+    for (const id of chargeIds) {
+      if (!plead.has(id) && !dismissed.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Charge ${id} is not accounted for in plea partition` });
+      }
+    }
+  }
 });
 
 export const CasePayloadSchema = CaseSchema;
@@ -215,6 +299,7 @@ export type CasePayload         = z.infer<typeof CasePayloadSchema>;
 export type GamePhase           = z.infer<typeof GamePhaseSchema>;
 export type Environment         = z.infer<typeof EnvironmentSchema>;
 export type Charge              = z.infer<typeof ChargeSchema>;
+export type PleaPosture         = z.infer<typeof PleaPostureSchema>;
 export type PleaDecision        = z.infer<typeof PleaDecisionSchema>;
 export type MotionRuling        = z.infer<typeof MotionRulingSchema>;
 export type ChargeVerdict       = z.infer<typeof ChargeVerdictSchema>;
