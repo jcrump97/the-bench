@@ -82,6 +82,30 @@ StatuteSelection → EnvironmentGen → CharacterGen → EvidenceGen → CasePay
 
 Each stage feeds its output as context into the next call. The pipeline produces a single validated `CasePayload` that hydrates the game state at Act 1 entry.
 
+## Open Design Decisions (resolve before the named milestone)
+
+### Before scaffolding GameService
+
+**`CaseSchema.pleaPosture` vs. `buildPleaPosture` — pick one source of truth.**
+`CaseSchema` currently requires a fully-formed `pleaPosture` field, meaning the LLM is expected to generate the complete plea structure (proposed sentence, charge IDs, status, rationale strings). `buildPleaPosture` in `src/lib/pleaAssessment.ts` independently computes the same structure from the case data. These two will disagree on structural decisions (status, proposed sentence amounts) and there is no designated winner.
+
+Recommended resolution: strip `pleaPosture` from `CaseSchema`. Create a separate, minimal LLM response schema that captures only the narrative strings the LLM can meaningfully contribute (`prosecutionRationale`, `defenseRationale`). All structural decisions remain in `buildPleaPosture`. This is consistent with the core mandate: LLM provides color, deterministic pipeline provides structure.
+
+**`buildPleaPosture` — replace optional `defenseRationale` with a discriminated input type.**
+The current signature `defenseRationale?: string` enforces the "required when offering" constraint with a runtime throw. When GameService is written, TypeScript will allow callers to omit it for MODERATE/STRONG cases without a compile error. Replace with a discriminated union input so the constraint is enforced at every call site:
+```typescript
+type PleaPostureInput =
+  | { band: 'WEAK';                prosecutionRationale: string }
+  | { band: 'MODERATE' | 'STRONG'; prosecutionRationale: string; defenseRationale: string };
+```
+
+### Before designing Act 3 sentencing logic
+
+**`sentencingModifierFromRulings` — clarify the zero return contract.**
+The function returns `0` in two distinct states: (a) all evidence excluded by the player, and (b) called with an empty `motionRulings` array. The Act 3 sentencing range consumer needs to distinguish a prosecution shut-out from an uninitialised call. Before Act 3 is designed, either document a hard precondition (`motionRulings.length > 0`), return a richer type, or handle both cases explicitly in the consumer.
+
+---
+
 ## Key Constraints
 
 - **No backend.** Static SPA on GitHub Pages. No Express, Next.js API routes, serverless functions, or proxy servers.
