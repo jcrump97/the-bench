@@ -152,7 +152,7 @@ export function buildPleaPosture(
   caseData: CasePayload,
   prosecutionStrength: ProsecutionStrength,
   prosecutionRationale: string,
-  defenseRationale: string
+  defenseRationale?: string
 ): PleaPosture {
   const discount = SENTENCE_DISCOUNT[prosecutionStrength.band];
   // Prosecution declines to offer when no discount entry exists for this band
@@ -162,6 +162,10 @@ export function buildPleaPosture(
       throw new Error('PleaPosture NO_OFFER assembly failed internal validation');
     }
     return noOfferResult.data;
+  }
+
+  if (!defenseRationale) {
+    throw new Error('defenseRationale is required when prosecution makes an offer');
   }
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
