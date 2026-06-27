@@ -1,5 +1,6 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { buildPleaPosture, type PleaPostureResult } from '../pleaAssessment';
+import { buildPleaPosture, sentencingModifierFromRulings, type PleaPostureResult } from '../pleaAssessment';
+import type { MotionRuling } from '../../schemas/gameSchemas';
 import { validCase } from './fixtures';
 
 describe('buildPleaPosture — PleaPostureInput type contract (2C)', () => {
@@ -61,5 +62,40 @@ describe('buildPleaPosture — behaviour (2C)', () => {
       // 0.05 discount → round(10 * 0.95) = round(9.5) = 10
       expect(posture.proposedSentence).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 10 }]);
     }
+  });
+});
+
+describe('sentencingModifierFromRulings — precondition + contract (3C)', () => {
+  // Fixture evidence relevanceScores: e1=5, e2=3, e3=2 (sum 10).
+  it('throws on an empty motionRulings array (off-path call)', () => {
+    expect(() => sentencingModifierFromRulings(validCase, [])).toThrow(/at least one motion ruling/);
+  });
+
+  it('returns 0 when every piece of evidence was excluded (prosecution shut-out)', () => {
+    const rulings: MotionRuling[] = [
+      { evidenceId: 'e1', ruling: 'EXCLUDED' },
+      { evidenceId: 'e2', ruling: 'EXCLUDED' },
+      { evidenceId: 'e3', ruling: 'EXCLUDED' },
+    ];
+    expect(sentencingModifierFromRulings(validCase, rulings)).toBe(0);
+  });
+
+  it('returns the admitted-relevance ratio for a mixed ruling set', () => {
+    const rulings: MotionRuling[] = [
+      { evidenceId: 'e1', ruling: 'ADMITTED' }, // 5
+      { evidenceId: 'e2', ruling: 'ADMITTED' }, // 3
+      { evidenceId: 'e3', ruling: 'EXCLUDED' }, // 0
+    ];
+    // (5 + 3) / 10 = 0.8
+    expect(sentencingModifierFromRulings(validCase, rulings)).toBeCloseTo(0.8);
+  });
+
+  it('returns 1.0 when all evidence is admitted', () => {
+    const rulings: MotionRuling[] = [
+      { evidenceId: 'e1', ruling: 'ADMITTED' },
+      { evidenceId: 'e2', ruling: 'ADMITTED' },
+      { evidenceId: 'e3', ruling: 'ADMITTED' },
+    ];
+    expect(sentencingModifierFromRulings(validCase, rulings)).toBe(1);
   });
 });

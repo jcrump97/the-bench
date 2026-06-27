@@ -232,11 +232,20 @@ export function sentencingModifierFromRulings(
   caseData: CasePayload,
   motionRulings: MotionRuling[]
 ): number {
+  // Precondition: the state machine guarantees ACT_2_MOTIONS precedes
+  // ACT_3_VERDICT on the trial path, so motionRulings is non-empty here. An
+  // empty array is an off-path call (programming error), NOT "all excluded".
+  if (motionRulings.length === 0) {
+    throw new Error('sentencingModifierFromRulings requires at least one motion ruling (Act 2 must precede Act 3 on the trial path)');
+  }
+
   const admittedIds = new Set(
     motionRulings.filter(r => r.ruling === 'ADMITTED').map(r => r.evidenceId)
   );
   const admittedEvidence = caseData.evidence.filter(e => admittedIds.has(e.id));
 
+  // 0 now has exactly one meaning: the player excluded every piece of
+  // evidence — a prosecution shut-out, not an uninitialised call.
   if (admittedEvidence.length === 0) return 0;
 
   // Positive modifier: sum of relevance scores of admitted evidence, normalized to 0-1
