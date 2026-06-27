@@ -153,6 +153,16 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('PENDING_JUDICIAL_REVIEW'), ...offerTerms }),
 ]);
 
+// The LLM's only plea contribution: narrative color, not structure. All plea
+// structure (status, proposed sentence, charge partition) is computed
+// deterministically by buildPleaPosture. defenseRationale is optional here
+// because WEAK/NO_OFFER cases never use it; the "required-when-offering"
+// constraint is enforced by buildPleaPosture's discriminated PleaPostureInput.
+export const PleaNarrativeSchema = z.strictObject({
+  prosecutionRationale: z.string().min(1).max(1000),
+  defenseRationale:     z.string().min(1).max(1000).optional(),
+});
+
 export const CaseSchema = z.strictObject({
   caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)"),
   defendant: CharacterSchema,
@@ -167,7 +177,6 @@ export const CaseSchema = z.strictObject({
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema),
 
-  pleaPosture: PleaPostureSchema,
   summary: z.string().max(1500),
 }).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
@@ -202,30 +211,6 @@ export const CaseSchema = z.strictObject({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate witness id: ${w.id}` });
     }
     witnessIds.add(w.id);
-  }
-
-  // Plea partition: pleadsToChargeIds ∪ dismissedChargeIds must be a disjoint partition of chargeIds
-  if (v.pleaPosture.status !== 'NO_OFFER') {
-    const plead = new Set(v.pleaPosture.pleadsToChargeIds);
-    const dismissed = new Set(v.pleaPosture.dismissedChargeIds);
-    for (const id of plead) {
-      if (!chargeIds.has(id)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `pleadsToChargeIds references unknown charge: ${id}` });
-      }
-      if (dismissed.has(id)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Charge ${id} appears in both pleadsToChargeIds and dismissedChargeIds` });
-      }
-    }
-    for (const id of dismissed) {
-      if (!chargeIds.has(id)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `dismissedChargeIds references unknown charge: ${id}` });
-      }
-    }
-    for (const id of chargeIds) {
-      if (!plead.has(id) && !dismissed.has(id)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Charge ${id} is not accounted for in plea partition` });
-      }
-    }
   }
 });
 
@@ -323,6 +308,7 @@ export type GamePhase           = z.infer<typeof GamePhaseSchema>;
 export type Environment         = z.infer<typeof EnvironmentSchema>;
 export type Charge              = z.infer<typeof ChargeSchema>;
 export type PleaPosture         = z.infer<typeof PleaPostureSchema>;
+export type PleaNarrative       = z.infer<typeof PleaNarrativeSchema>;
 export type PleaDecision        = z.infer<typeof PleaDecisionSchema>;
 export type MotionRuling        = z.infer<typeof MotionRulingSchema>;
 export type ChargeVerdict       = z.infer<typeof ChargeVerdictSchema>;
