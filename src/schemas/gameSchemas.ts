@@ -175,7 +175,7 @@ export const CaseSchema = z.strictObject({
   evidence: z.array(EvidenceSchema).min(3),
 
   mandatoryMinimums: z.array(SentenceSchema),
-  maximumPenalties: z.array(SentenceSchema),
+  maximumPenalties: z.array(SentenceSchema).min(1),
 
   summary: z.string().max(1500),
 }).superRefine((v, ctx) => {

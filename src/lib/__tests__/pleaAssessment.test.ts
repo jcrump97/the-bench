@@ -58,6 +58,7 @@ describe('buildPleaPosture — behaviour (2C)', () => {
       prosecutionRationale: 'Airtight.',
       defenseRationale: 'Mitigate the exposure.',
     });
+    expect(posture.status).not.toBe('NO_OFFER');
     if (posture.status !== 'NO_OFFER') {
       // 0.05 discount → round(10 * 0.95) = round(9.5) = 10
       expect(posture.proposedSentence).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 10 }]);
