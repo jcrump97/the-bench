@@ -69,7 +69,7 @@ Single source of truth for all Zod schemas and their inferred TypeScript types. 
 2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), `ChargeSchema`, `StatuteElementSchema`
 3. **Character entities** — `CharacterSchema` with OCEAN personality traits
 4. **Evidence & witnesses** — `EvidenceSchema`, `WitnessSchema`
-5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema`
+5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`); `PleaNarrativeSchema` carries the LLM's plea rationale strings
 6. **State machine** — `GamePhaseSchema`
 
 ### Generation Pipeline (designed — implementation begins with Act 1)
@@ -80,29 +80,19 @@ Case generation flows through four sequential LLM calls via GameService, each sc
 StatuteSelection → EnvironmentGen → CharacterGen → EvidenceGen → CasePayload (→ ACT_1_INTAKE)
 ```
 
-Each stage feeds its output as context into the next call. The pipeline produces a single validated `CasePayload` that hydrates the game state at Act 1 entry.
+Each stage feeds its output as context into the next call. The pipeline produces a single validated `CasePayload` that hydrates the game state at Act 1 entry. The LLM's plea contribution is narrative-only, supplied via `PleaNarrativeSchema` (separate from `CaseSchema`); plea structure is computed deterministically by `buildPleaPosture`.
 
-## Open Design Decisions (resolve before the named milestone)
+## Resolved Design Decisions
 
-### Before scaffolding GameService
+The three decisions that previously gated GameService and Act 3 are resolved. All three uphold the core mandate — **LLM provides color, deterministic pipeline provides structure** — and the principle of making illegal states inexpressible.
 
-**`CaseSchema.pleaPosture` vs. `buildPleaPosture` — pick one source of truth.**
-`CaseSchema` currently requires a fully-formed `pleaPosture` field, meaning the LLM is expected to generate the complete plea structure (proposed sentence, charge IDs, status, rationale strings). `buildPleaPosture` in `src/lib/pleaAssessment.ts` independently computes the same structure from the case data. These two will disagree on structural decisions (status, proposed sentence amounts) and there is no designated winner.
+**Plea posture source of truth — resolved (`b637258`).** `pleaPosture` is removed from `CaseSchema`; the LLM no longer generates plea structure. Its only plea contribution is `PleaNarrativeSchema` (`prosecutionRationale`, optional `defenseRationale`). All structure (status, proposed sentence, charge partition) is computed by `buildPleaPosture` in `src/lib/pleaAssessment.ts`, which is the sole source of truth.
 
-Recommended resolution: strip `pleaPosture` from `CaseSchema`. Create a separate, minimal LLM response schema that captures only the narrative strings the LLM can meaningfully contribute (`prosecutionRationale`, `defenseRationale`). All structural decisions remain in `buildPleaPosture`. This is consistent with the core mandate: LLM provides color, deterministic pipeline provides structure.
+**`buildPleaPosture` input contract — resolved (`82aff10`).** The optional `defenseRationale?: string` (a runtime throw) is replaced by a discriminated `PleaPostureInput` union keyed on `band`. A WEAK input cannot carry a `defenseRationale`; a MODERATE/STRONG input cannot omit it — enforced at compile time. The offer-gate moved to the `band` discriminant and `SENTENCE_DISCOUNT` is now a closed `Record<'MODERATE'|'STRONG', number>`, so adding a future band is a compile error rather than a silent bogus offer.
 
-**`buildPleaPosture` — replace optional `defenseRationale` with a discriminated input type.**
-The current signature `defenseRationale?: string` enforces the "required when offering" constraint with a runtime throw. When GameService is written, TypeScript will allow callers to omit it for MODERATE/STRONG cases without a compile error. Replace with a discriminated union input so the constraint is enforced at every call site:
-```typescript
-type PleaPostureInput =
-  | { band: 'WEAK';                prosecutionRationale: string }
-  | { band: 'MODERATE' | 'STRONG'; prosecutionRationale: string; defenseRationale: string };
-```
+**`sentencingModifierFromRulings` zero contract — resolved (`6e6f328`).** Calling with an empty `motionRulings` array now throws (the state machine guarantees Act 2 precedes Act 3 on the trial path, so the array is non-empty here). With the off-path case removed, a `0` return has exactly one meaning: the player excluded all evidence — a prosecution shut-out.
 
-### Before designing Act 3 sentencing logic
-
-**`sentencingModifierFromRulings` — clarify the zero return contract.**
-The function returns `0` in two distinct states: (a) all evidence excluded by the player, and (b) called with an empty `motionRulings` array. The Act 3 sentencing range consumer needs to distinguish a prosecution shut-out from an uninitialised call. Before Act 3 is designed, either document a hard precondition (`motionRulings.length > 0`), return a richer type, or handle both cases explicitly in the consumer.
+Test coverage for all three lives in `src/lib/__tests__/` and `src/schemas/__tests__/` (Vitest); the `PleaPostureInput` contract is additionally gated by `@ts-expect-error` checks enforced at `npm run build`.
 
 ---
 
