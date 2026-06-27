@@ -143,35 +143,52 @@ export function assessDefense(
 
 // ─── Posture builder: combines both assessments into the 3-state schema ───────
 
-const SENTENCE_DISCOUNT: Partial<Record<ProsecutionStrength['band'], number>> = {
+// Closed over the offering bands only. The offer-gate lives in the band
+// discriminant of PleaPostureInput (band === 'WEAK' → NO_OFFER), so a future
+// band added to ProsecutionStrength becomes a compile error here that forces
+// an explicit decision rather than silently producing a bogus offer.
+const SENTENCE_DISCOUNT: Record<'MODERATE' | 'STRONG', number> = {
   MODERATE: 0.20,
   STRONG:   0.05,
 };
+
+// Discriminated input: the "defenseRationale required when offering" constraint
+// is enforced at compile time, not by a runtime throw. WEAK cases (NO_OFFER)
+// cannot carry a defenseRationale; MODERATE/STRONG cases cannot omit it.
+export type PleaPostureInput =
+  | { band: 'WEAK';                prosecutionRationale: string }
+  | { band: 'MODERATE' | 'STRONG'; prosecutionRationale: string; defenseRationale: string };
 
 export type PleaPostureResult = {
   posture: PleaPosture;
   defenseRisk: DefenseRisk | null;
 };
 
+// GameService derives the input band from assessProsecution(caseData).band, so
+// the input band always matches the computed strength:
+//   const strength = assessProsecution(caseData);
+//   const input = strength.band === 'WEAK'
+//     ? { band: 'WEAK', prosecutionRationale }
+//     : { band: strength.band, prosecutionRationale, defenseRationale };
 export function buildPleaPosture(
   caseData: CasePayload,
-  prosecutionStrength: ProsecutionStrength,
-  prosecutionRationale: string,
-  defenseRationale?: string
+  input: PleaPostureInput
 ): PleaPostureResult {
-  const discount = SENTENCE_DISCOUNT[prosecutionStrength.band];
-  // Prosecution declines to offer when no discount entry exists for this band
-  if (discount === undefined) {
-    const noOfferResult = PleaPostureSchema.safeParse({ status: 'NO_OFFER', prosecutionRationale });
+  // Prosecution declines to offer on a weak case.
+  if (input.band === 'WEAK') {
+    const noOfferResult = PleaPostureSchema.safeParse({
+      status: 'NO_OFFER',
+      prosecutionRationale: input.prosecutionRationale,
+    });
     if (!noOfferResult.success) {
       throw new Error('PleaPosture NO_OFFER assembly failed internal validation');
     }
     return { posture: noOfferResult.data, defenseRisk: null };
   }
 
-  if (!defenseRationale) {
-    throw new Error('defenseRationale is required when prosecution makes an offer');
-  }
+  // input is narrowed to MODERATE | STRONG: defenseRationale is a guaranteed
+  // string and the discount lookup is a guaranteed number.
+  const discount = SENTENCE_DISCOUNT[input.band];
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
   const pleadsToChargeIds = caseData.charges.map(c => c.id);
@@ -188,8 +205,8 @@ export function buildPleaPosture(
     pleadsToChargeIds,
     dismissedChargeIds: [],
     proposedSentence,
-    prosecutionRationale,
-    defenseRationale,
+    prosecutionRationale: input.prosecutionRationale,
+    defenseRationale: input.defenseRationale,
   });
   if (!offerResult.success) {
     throw new Error('PleaPosture offer assembly failed internal validation');
