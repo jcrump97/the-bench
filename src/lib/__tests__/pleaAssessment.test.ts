@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { buildPleaPosture, sentencingModifierFromRulings, type PleaPostureResult } from '../pleaAssessment';
+import { buildPleaPosture, sentencingModifierFromRulings, assessProsecution, assessDefense, type PleaPostureResult } from '../pleaAssessment';
 import type { MotionRuling } from '../../schemas/gameSchemas';
 import { validCase } from './fixtures';
 
@@ -98,5 +98,27 @@ describe('sentencingModifierFromRulings — precondition + contract (3C)', () =>
       { evidenceId: 'e3', ruling: 'ADMITTED' },
     ];
     expect(sentencingModifierFromRulings(validCase, rulings)).toBe(1);
+  });
+});
+
+describe('scoring math — direct regression', () => {
+  it('assessProsecution(validCase) returns traced numeric outputs', () => {
+    const result = assessProsecution(validCase);
+    expect(result.score).toBe(41);
+    expect(result.band).toBe('MODERATE');
+    expect(result.evidenceStrength).toBe(26);
+    expect(result.witnessStrength).toBe(55);
+    expect(result.elementCoverage).toBe(0.5);
+  });
+
+  it('assessDefense(validCase, moderateOffer) returns traced numeric outputs', () => {
+    // MODERATE band: 20% discount on 10 YEARS PRISON → proposed 8 years
+    const moderateOffer = [{ type: 'PRISON' as const, unit: 'YEARS' as const, amount: 8 }];
+    const result = assessDefense(validCase, moderateOffer);
+    expect(result.acceptanceLikelihood).toBe(20);
+    expect(result.posture).toBe('REJECT');
+    expect(result.riskTolerance).toBe(50);
+    expect(result.priorExposure).toBe(0);
+    expect(result.offerGenerosity).toBe(20);
   });
 });
