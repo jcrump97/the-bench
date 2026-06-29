@@ -239,6 +239,12 @@ export function sentencingModifierFromRulings(
     throw new Error('sentencingModifierFromRulings requires at least one motion ruling (Act 2 must precede Act 3 on the trial path)');
   }
 
+  const validEvidenceIds = new Set(caseData.evidence.map(e => e.id));
+  const unknownIds = [...new Set(motionRulings.filter(r => !validEvidenceIds.has(r.evidenceId)).map(r => r.evidenceId))];
+  if (unknownIds.length > 0) {
+    throw new Error(`sentencingModifierFromRulings encountered unknown evidenceId(s): ${unknownIds.join(', ')}`);
+  }
+
   const admittedIds = new Set(
     motionRulings.filter(r => r.ruling === 'ADMITTED').map(r => r.evidenceId)
   );

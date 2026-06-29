@@ -99,6 +99,23 @@ describe('sentencingModifierFromRulings — precondition + contract (3C)', () =>
     ];
     expect(sentencingModifierFromRulings(validCase, rulings)).toBe(1);
   });
+
+  it('throws when a ruling references an unknown evidenceId', () => {
+    const rulings: MotionRuling[] = [
+      { evidenceId: 'e1', ruling: 'ADMITTED' },
+      { evidenceId: 'e99', ruling: 'EXCLUDED' },
+    ];
+    expect(() => sentencingModifierFromRulings(validCase, rulings)).toThrow(/unknown evidenceId/i);
+  });
+
+  it('throws when multiple rulings reference unknown evidenceIds', () => {
+    const rulings: MotionRuling[] = [
+      { evidenceId: 'e1', ruling: 'ADMITTED' },
+      { evidenceId: 'e99', ruling: 'EXCLUDED' },
+      { evidenceId: 'e100', ruling: 'EXCLUDED' },
+    ];
+    expect(() => sentencingModifierFromRulings(validCase, rulings)).toThrow(/e99, e100/);
+  });
 });
 
 describe('scoring math — direct regression', () => {
