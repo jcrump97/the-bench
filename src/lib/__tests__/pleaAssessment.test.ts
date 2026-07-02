@@ -1,7 +1,54 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { buildPleaPosture, sentencingModifierFromRulings, assessProsecution, assessDefense, type PleaPostureResult } from '../pleaAssessment';
-import type { MotionRuling } from '../../schemas/gameSchemas';
+import { buildPleaPosture, sentencingModifierFromRulings, assessProsecution, assessDefense, computePleaPostureForCase, type PleaPostureResult } from '../pleaAssessment';
+import { CasePayloadSchema, type MotionRuling } from '../../schemas/gameSchemas';
 import { validCase } from './fixtures';
+
+// Deliberately scores WEAK (evidenceStrength/witnessStrength/elementCoverage
+// all near zero) to exercise computePleaPostureForCase's NO_OFFER branch.
+const weakCase = CasePayloadSchema.parse({
+  caseId: '24-CR-00002',
+  defendant: {
+    firstName: 'Riley',
+    lastName: 'Moss',
+    age: 29,
+    demographics: {
+      relationshipStatus: 'SINGLE',
+      children: 0,
+      employmentStatus: 'UNEMPLOYED',
+      educationLevel: 'HIGH_SCHOOL',
+      substanceAbuseHistory: [],
+    },
+    pastConvictions: [],
+    oceanTraits: { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 },
+  },
+  environment: {
+    locationType: 'PUBLIC_SPACE',
+    timeOfDay: 'NIGHT',
+    weather: 'CLEAR',
+    description: 'A public sidewalk.',
+  },
+  charges: [
+    {
+      id: 'wc1',
+      name: 'Petty theft',
+      classification: 'MISDEMEANOR',
+      elements: [{ id: 'wel1', description: 'Taking of property of another.' }],
+    },
+  ],
+  statuteContexts: ['Cal. Penal Code § 484 — petty theft.'],
+  witnesses: [
+    { id: 'ww1', name: 'Jamie Lowe', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Vouches for the defendant.', credibilityScore: 1 },
+    { id: 'ww2', name: 'Casey Vu', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Disputes the account.', credibilityScore: 1 },
+  ],
+  evidence: [
+    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
+    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
+    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
+  ],
+  mandatoryMinimums: [],
+  maximumPenalties: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+  summary: 'Alleged petty theft with minimal supporting evidence.',
+});
 
 describe('buildPleaPosture — PleaPostureInput type contract (2C)', () => {
   it('rejects invalid call shapes at compile time', () => {
@@ -137,5 +184,49 @@ describe('scoring math — direct regression', () => {
     expect(result.riskTolerance).toBe(50);
     expect(result.priorExposure).toBe(0);
     expect(result.offerGenerosity).toBe(20);
+  });
+});
+
+describe('computePleaPostureForCase — wires assessProsecution into buildPleaPosture', () => {
+  it('WEAK band: produces NO_OFFER from prosecutionRationale alone', () => {
+    expect(assessProsecution(weakCase).band).toBe('WEAK');
+
+    const { posture, defenseRisk } = computePleaPostureForCase(weakCase, {
+      prosecutionRationale: 'Not enough here to charge.',
+    });
+    expect(posture.status).toBe('NO_OFFER');
+    expect(defenseRisk).toBeNull();
+    if (posture.status === 'NO_OFFER') {
+      expect(posture.prosecutionRationale).toBe('Not enough here to charge.');
+    }
+  });
+
+  it('WEAK band: a superfluous defenseRationale in the narrative is simply ignored', () => {
+    const { posture } = computePleaPostureForCase(weakCase, {
+      prosecutionRationale: 'Not enough here to charge.',
+      defenseRationale: 'Irrelevant — never offered.',
+    });
+    expect(posture.status).toBe('NO_OFFER');
+  });
+
+  it('MODERATE/STRONG band: throws if the narrative omits defenseRationale', () => {
+    expect(assessProsecution(validCase).band).toBe('MODERATE');
+    expect(() =>
+      computePleaPostureForCase(validCase, { prosecutionRationale: 'Provable but contestable.' })
+    ).toThrow(/requires a defenseRationale/);
+  });
+
+  it('MODERATE/STRONG band: matches buildPleaPosture called directly with the same inputs', () => {
+    const narrative = {
+      prosecutionRationale: 'Provable but contestable.',
+      defenseRationale: 'A deal beats the downside.',
+    };
+    const viaCompute = computePleaPostureForCase(validCase, narrative);
+    const viaDirect = buildPleaPosture(validCase, {
+      band: 'MODERATE',
+      prosecutionRationale: narrative.prosecutionRationale,
+      defenseRationale: narrative.defenseRationale,
+    });
+    expect(viaCompute).toEqual(viaDirect);
   });
 });

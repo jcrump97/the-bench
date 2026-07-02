@@ -6,6 +6,7 @@ import {
   type ProsecutionStrength,
   type DefenseRisk,
   type PleaPosture,
+  type PleaNarrative,
   type MotionRuling,
   type SentenceSchema,
 } from '../schemas/gameSchemas';
@@ -212,6 +213,33 @@ export function buildPleaPosture(
     throw new Error('PleaPosture offer assembly failed internal validation');
   }
   return { posture: offerResult.data, defenseRisk };
+}
+
+// ─── Wires assessProsecution's band into buildPleaPosture's discriminated ────
+// input, exactly as the comment on buildPleaPosture above describes GameService
+// doing it. Building it now means the future GameService reuses it unchanged.
+export function computePleaPostureForCase(
+  caseData: CasePayload,
+  narrative: PleaNarrative
+): PleaPostureResult {
+  const strength = assessProsecution(caseData);
+
+  if (strength.band === 'WEAK') {
+    return buildPleaPosture(caseData, {
+      band: 'WEAK',
+      prosecutionRationale: narrative.prosecutionRationale,
+    });
+  }
+
+  if (narrative.defenseRationale === undefined) {
+    throw new Error('computePleaPostureForCase: MODERATE/STRONG band requires a defenseRationale');
+  }
+
+  return buildPleaPosture(caseData, {
+    band: strength.band,
+    prosecutionRationale: narrative.prosecutionRationale,
+    defenseRationale: narrative.defenseRationale,
+  });
 }
 
 function discountSentences(sentences: Sentence[], discount: number): Sentence[] {
