@@ -6,11 +6,13 @@ import {
   MotionRulingSchema,
   VerdictSchema,
   SentenceSchema,
+  PleaNarrativeSchema,
   type GamePhase,
   type CasePayload,
   type PleaDecision,
   type MotionRuling,
   type Verdict,
+  type PleaNarrative,
 } from '../schemas/gameSchemas';
 import { z } from 'zod';
 
@@ -19,6 +21,10 @@ type Sentence = z.infer<typeof SentenceSchema>;
 interface GameState {
   currentPhase: GamePhase;
   activeCase: CasePayload | null;
+  // The LLM's/demo case's narrative-only plea input. Upstream input data
+  // (like activeCase), not a derived value — the computed PleaPosture stays
+  // a pure derivation and is never stored here.
+  activePleaNarrative: PleaNarrative | null;
 
   // Player decisions — null until the player acts in each act
   pleaDecision:    PleaDecision | null;
@@ -26,22 +32,24 @@ interface GameState {
   verdict:         Verdict | null;
   imposedSentence: Sentence[];
 
-  setPhase:          (newPhase: unknown) => void;
-  setActiveCase:     (caseData: unknown) => void;
-  setPleaDecision:   (decision: unknown) => void;
-  addMotionRuling:   (ruling: unknown) => void;
-  setVerdict:        (verdict: unknown) => void;
-  setImposedSentence:(sentences: unknown) => void;
+  setPhase:              (newPhase: unknown) => void;
+  setActiveCase:         (caseData: unknown) => void;
+  setActivePleaNarrative:(narrative: unknown) => void;
+  setPleaDecision:       (decision: unknown) => void;
+  addMotionRuling:       (ruling: unknown) => void;
+  setVerdict:            (verdict: unknown) => void;
+  setImposedSentence:    (sentences: unknown) => void;
   // Sanctioned escape hatch from END_STATE; bypasses transition matrix by design.
   resetGameState:    () => void;
 }
 
 const INITIAL_STATE: Pick<
   GameState,
-  'currentPhase' | 'activeCase' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'
+  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'
 > = {
   currentPhase:    'WELCOME',
   activeCase:      null,
+  activePleaNarrative: null,
   pleaDecision:    null,
   motionRulings:   [],
   verdict:         null,
@@ -50,9 +58,10 @@ const INITIAL_STATE: Pick<
 
 const ERROR_PHASE: GamePhase = 'ERROR_STATE';
 
-const ERROR_RESET: Pick<GameState, 'currentPhase' | 'activeCase' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'> = {
+const ERROR_RESET: Pick<GameState, 'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'> = {
   currentPhase:    ERROR_PHASE,
   activeCase:      null,
+  activePleaNarrative: null,
   pleaDecision:    null,
   motionRulings:   [],
   verdict:         null,
@@ -126,6 +135,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
     set({ activeCase: result.data });
+  },
+
+  setActivePleaNarrative: (narrative) => {
+    const currentPhase = get().currentPhase;
+    if (!CASE_REHYDRATION_ALLOWED_PHASES.has(currentPhase)) {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
+    const result = PleaNarrativeSchema.safeParse(narrative);
+    if (!result.success) {
+      logValidationFailure(result.error);
+      set(ERROR_RESET);
+      return;
+    }
+    set({ activePleaNarrative: result.data });
   },
 
   setPleaDecision: (decision) => {
