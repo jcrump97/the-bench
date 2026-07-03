@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { TopBar } from './TopBar';
 import { PanelBackdrop } from './PanelBackdrop';
+import { CaseFilePanel } from '../panels/CaseFilePanel';
+import { EvidenceTestimonyPanel } from '../panels/EvidenceTestimonyPanel';
 import { ModalRoot } from '../modals/ModalRoot';
 
 // Panels behave differently per viewport with the same open/closed boolean:
@@ -36,8 +38,7 @@ export function GameShell() {
         <PanelBackdrop />
 
         <PanelDrawer side="left" open={casePanelOpen}>
-          {/* CaseFilePanel lands here (Phase 3, item 14) */}
-          <p className="p-4 text-(--text-muted)">Case file</p>
+          <CaseFilePanel />
         </PanelDrawer>
 
         <main className="flex min-w-0 flex-1 flex-col md:min-h-0">
@@ -52,8 +53,7 @@ export function GameShell() {
         </main>
 
         <PanelDrawer side="right" open={evidencePanelOpen}>
-          {/* EvidenceTestimonyPanel lands here (Phase 3, item 15) */}
-          <p className="p-4 text-(--text-muted)">Evidence &amp; testimony</p>
+          <EvidenceTestimonyPanel />
         </PanelDrawer>
       </div>
 
