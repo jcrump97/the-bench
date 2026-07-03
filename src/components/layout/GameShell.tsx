@@ -1,19 +1,62 @@
-import { useGameStore } from '../../store/useGameStore';
+import type { ReactNode } from 'react';
+import { useUIStore } from '../../store/useUIStore';
+import { TopBar } from './TopBar';
+import { PanelBackdrop } from './PanelBackdrop';
 import { ModalRoot } from '../modals/ModalRoot';
 
-// Minimal stub: Phase 3 fleshes this out into the full responsive layout
-// (TopBar, panels, Ledger, ActionBar). Kept just complete enough that the
-// demo case can enter ACT_1_INTAKE without hitting a dead end.
-export function GameShell() {
-  const currentPhase = useGameStore((state) => state.currentPhase);
-  const activeCase = useGameStore((state) => state.activeCase);
+// Panels behave differently per viewport with the same open/closed boolean:
+// mobile (< md) they are fixed drawers sliding off-canvas; desktop (md:) they
+// are static columns that collapse to zero width. Behavior is pure CSS.
+function PanelDrawer({ side, open, children }: { side: 'left' | 'right'; open: boolean; children: ReactNode }) {
+  const mobilePosition =
+    side === 'left'
+      ? `left-0 ${open ? 'translate-x-0' : '-translate-x-full'}`
+      : `right-0 ${open ? 'translate-x-0' : 'translate-x-full'}`;
+  const desktopWidth = open ? 'md:w-80' : 'md:w-0';
+  const border = side === 'left' ? 'md:border-r' : 'md:border-l';
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-2 bg-(--bg) px-4 text-center">
-      <h1 className="text-xl font-medium text-(--text-h)">
-        {activeCase ? `People v. ${activeCase.defendant.lastName}` : 'The Bench'}
-      </h1>
-      <p className="text-(--text-muted)">{currentPhase}</p>
+    <aside
+      className={`fixed inset-y-0 z-40 w-[85vw] max-w-xs transform bg-(--bg-panel) transition-transform ${mobilePosition} md:static md:z-auto md:translate-x-0 md:transition-none ${desktopWidth} md:max-w-none md:overflow-hidden ${border} md:border-(--border)`}
+    >
+      <div className="h-full w-[85vw] max-w-xs overflow-y-auto md:w-80 md:max-w-none">{children}</div>
+    </aside>
+  );
+}
+
+export function GameShell() {
+  const casePanelOpen = useUIStore((state) => state.casePanelOpen);
+  const evidencePanelOpen = useUIStore((state) => state.evidencePanelOpen);
+
+  return (
+    <div className="flex h-dvh flex-col bg-(--bg)">
+      <TopBar />
+
+      <div className="relative flex min-h-0 flex-1 md:grid md:grid-cols-[auto_1fr_auto]">
+        <PanelBackdrop />
+
+        <PanelDrawer side="left" open={casePanelOpen}>
+          {/* CaseFilePanel lands here (Phase 3, item 14) */}
+          <p className="p-4 text-(--text-muted)">Case file</p>
+        </PanelDrawer>
+
+        <main className="flex min-w-0 flex-1 flex-col md:min-h-0">
+          {/* Ledger lands here (Phase 3, item 17) */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <p className="text-(--text-muted)">Court record</p>
+          </div>
+          {/* ActionBar lands here (Phase 3, item 17) */}
+          <div className="shrink-0 border-t border-(--border) bg-(--bg-panel) p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <p className="text-(--text-muted)">Actions</p>
+          </div>
+        </main>
+
+        <PanelDrawer side="right" open={evidencePanelOpen}>
+          {/* EvidenceTestimonyPanel lands here (Phase 3, item 15) */}
+          <p className="p-4 text-(--text-muted)">Evidence &amp; testimony</p>
+        </PanelDrawer>
+      </div>
+
       <ModalRoot />
     </div>
   );
