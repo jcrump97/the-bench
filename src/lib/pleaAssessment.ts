@@ -2,17 +2,15 @@ import {
   ProsecutionStrengthSchema,
   DefenseRiskSchema,
   PleaPostureSchema,
+  sentenceDayEquivalent,
   type CasePayload,
   type ProsecutionStrength,
   type DefenseRisk,
   type PleaPosture,
   type PleaNarrative,
   type MotionRuling,
-  type SentenceSchema,
+  type Sentence,
 } from '../schemas/gameSchemas';
-import { z } from 'zod';
-
-type Sentence = z.infer<typeof SentenceSchema>;
 
 // ─── Prosecution: "Can I prove this?" ─────────────────────────────────────────
 
@@ -193,7 +191,7 @@ export function buildPleaPosture(
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
   const pleadsToChargeIds = caseData.charges.map(c => c.id);
-  const proposedSentence = discountSentences(caseData.maximumPenalties, discount);
+  const proposedSentence = discountSentences(caseData.maximumPenalties, discount, caseData.mandatoryMinimums);
 
   const defenseRisk = assessDefense(caseData, proposedSentence);
 
@@ -242,15 +240,19 @@ export function computePleaPostureForCase(
   });
 }
 
-function discountSentences(sentences: Sentence[], discount: number): Sentence[] {
+function discountSentences(sentences: Sentence[], discount: number, minimums: Sentence[]): Sentence[] {
   return sentences.map(s => {
-    if (s.type === 'PRISON' || s.type === 'JAIL') {
-      return { ...s, amount: Math.max(1, Math.round(s.amount * (1 - discount))) };
+    if (s.type !== 'PRISON' && s.type !== 'JAIL' && s.type !== 'FINE') return s;
+
+    const discounted = { ...s, amount: Math.max(1, Math.round(s.amount * (1 - discount))) };
+
+    // The DA cannot legally offer below the statutory floor — the floor
+    // becomes the offer rather than a unit-converted approximation of it.
+    const floor = minimums.find(m => m.type === s.type);
+    if (floor && sentenceDayEquivalent(discounted)! < sentenceDayEquivalent(floor)!) {
+      return floor;
     }
-    if (s.type === 'FINE') {
-      return { ...s, amount: Math.max(1, Math.round(s.amount * (1 - discount))) };
-    }
-    return s;
+    return discounted;
   });
 }
 

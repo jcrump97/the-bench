@@ -111,6 +111,26 @@ describe('buildPleaPosture — behaviour (2C)', () => {
       expect(posture.proposedSentence).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 10 }]);
     }
   });
+
+  it('clamps a discount that would undercut the mandatory minimum floor', () => {
+    // maximumPenalties = 5 YEARS PRISON, mandatoryMinimums = 5 YEARS PRISON.
+    // Naive MODERATE (20%) discount computes round(5 * 0.8) = 4, below the
+    // floor — the DA cannot legally offer that, so the floor becomes the offer.
+    const floorCase = CasePayloadSchema.parse({
+      ...validCase,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+    });
+    const { posture } = buildPleaPosture(floorCase, {
+      band: 'MODERATE',
+      prosecutionRationale: 'Provable but contestable.',
+      defenseRationale: 'A deal beats the downside.',
+    });
+    expect(posture.status).not.toBe('NO_OFFER');
+    if (posture.status !== 'NO_OFFER') {
+      expect(posture.proposedSentence).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 5 }]);
+    }
+  });
 });
 
 describe('sentencingModifierFromRulings — precondition + contract (3C)', () => {

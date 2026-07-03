@@ -56,4 +56,28 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
     };
     expect(CasePayloadSchema.safeParse(danglingRef).success).toBe(false);
   });
+
+  it('rejects a mandatoryMinimums entry with no matching-type maximumPenalties entry', () => {
+    const noMatchingMax = {
+      ...rawValidCase,
+      mandatoryMinimums: [{ type: 'FINE', unit: 'DOLLARS', amount: 500 }],
+    };
+    expect(CasePayloadSchema.safeParse(noMatchingMax).success).toBe(false);
+  });
+
+  it('rejects a mandatoryMinimums entry that exceeds its matching maximumPenalties entry', () => {
+    const minExceedsMax = {
+      ...rawValidCase,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 11 }],
+    };
+    expect(CasePayloadSchema.safeParse(minExceedsMax).success).toBe(false);
+  });
+
+  it('accepts a mandatoryMinimums entry equal to its matching maximumPenalties entry', () => {
+    const minEqualsMax = {
+      ...rawValidCase,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
+    };
+    expect(CasePayloadSchema.safeParse(minEqualsMax).success).toBe(true);
+  });
 });

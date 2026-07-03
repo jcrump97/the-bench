@@ -50,6 +50,19 @@ export const SentenceSchema = z.discriminatedUnion("type", [
   }
 });
 
+// Day-normalized amount for sentence types that carry floor/ceiling semantics
+// (PRISON/JAIL time, FINE dollars). PROBATION/COMMUNITY_SERVICE return null —
+// they have no "minimum floor" meaning in this domain.
+export function sentenceDayEquivalent(s: z.infer<typeof SentenceSchema>): number | null {
+  if (s.type === 'PRISON' || s.type === 'JAIL') {
+    if (s.unit === 'DAYS') return s.amount;
+    if (s.unit === 'MONTHS') return s.amount * (365 / 12);
+    return s.amount * 365;
+  }
+  if (s.type === 'FINE') return s.amount;
+  return null;
+}
+
 export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL']);
 export const WitnessRoleEnum = z.enum(['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR']);
 export const BiasIndicatorEnum = z.enum(['PROSECUTION', 'DEFENSE', 'NEUTRAL']);
@@ -212,6 +225,22 @@ export const CaseSchema = z.strictObject({
     }
     witnessIds.add(w.id);
   }
+
+  // Every mandatory minimum must be backed by a same-type maximum penalty at
+  // least as large, so a plea discount always has a real ceiling to floor against.
+  for (const min of v.mandatoryMinimums) {
+    const minDays = sentenceDayEquivalent(min);
+    if (minDays === null) continue;
+    const matchingMax = v.maximumPenalties.find(max => max.type === min.type);
+    if (!matchingMax) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums has a ${min.type} entry with no matching-type maximumPenalties entry` });
+      continue;
+    }
+    const maxDays = sentenceDayEquivalent(matchingMax);
+    if (maxDays !== null && maxDays < minDays) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums ${min.type} entry exceeds its matching maximumPenalties entry` });
+    }
+  }
 });
 
 export const CasePayloadSchema = CaseSchema;
@@ -303,6 +332,7 @@ export const GamePhaseSchema = z.enum([
 // TYPE EXPORTS
 // ==========================================
 export type SecurityPayload     = z.infer<typeof BYOKSchema>;
+export type Sentence            = z.infer<typeof SentenceSchema>;
 export type CasePayload         = z.infer<typeof CasePayloadSchema>;
 export type GamePhase           = z.infer<typeof GamePhaseSchema>;
 export type Environment         = z.infer<typeof EnvironmentSchema>;
