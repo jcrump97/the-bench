@@ -1,9 +1,7 @@
+import { AppShell } from './components/layout/AppShell';
+
 function App() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <p className="text-(--text-muted)">The Bench</p>
-    </div>
-  );
+  return <AppShell />;
 }
 
 export default App;
