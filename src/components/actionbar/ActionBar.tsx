@@ -3,9 +3,9 @@ import { PleaOfferForm } from './PleaOfferForm';
 import { MotionRulingForm } from './MotionRulingForm';
 import { PleaSentencingForm } from './PleaSentencingForm';
 import { TrialVerdictForm } from './TrialVerdictForm';
+import { ResultActions } from './ResultActions';
 
-// Phase-aware switch. Remaining stub lands in Phase 4:
-// END_STATE → ResultActions.
+// Phase-aware switch: one form per game phase.
 export function ActionBar() {
   const currentPhase = useGameStore((state) => state.currentPhase);
   const pleaDecision = useGameStore((state) => state.pleaDecision);
@@ -20,7 +20,7 @@ export function ActionBar() {
     case 'ACT_3_VERDICT':
       return pleaDecision === 'ACCEPT' ? <PleaSentencingForm /> : <TrialVerdictForm />;
     case 'END_STATE':
-      return <p className="text-(--text-muted)">Result actions coming in Phase 4.</p>;
+      return <ResultActions />;
     default:
       return null;
   }
