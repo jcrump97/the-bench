@@ -15,8 +15,13 @@ import { deriveSentencingExposure } from './sentencingExposure';
 
 // ─── Prosecution: "Can I prove this?" ─────────────────────────────────────────
 
-const OBJECTION_RISK_DISCOUNT: Record<string, number> = { LOW: 1.0, MEDIUM: 0.7, HIGH: 0.4 };
-const BIAS_WEIGHT: Record<string, number> = { PROSECUTION: 1.0, NEUTRAL: 0.5, DEFENSE: 0.2 };
+// Closed Records keyed off the schema types (pattern: SENTENCE_DISCOUNT) —
+// a new enum variant upstream becomes a compile error here, never a silent
+// fallback weight.
+const OBJECTION_RISK_DISCOUNT: Record<CasePayload['evidence'][number]['objectionRisk'], number> =
+  { LOW: 1.0, MEDIUM: 0.7, HIGH: 0.4 };
+const BIAS_WEIGHT: Record<CasePayload['witnesses'][number]['bias'], number> =
+  { PROSECUTION: 1.0, NEUTRAL: 0.5, DEFENSE: 0.2 };
 
 export function assessProsecution(caseData: CasePayload): ProsecutionStrength {
   const { charges, evidence, witnesses } = caseData;
@@ -35,7 +40,7 @@ export function assessProsecution(caseData: CasePayload): ProsecutionStrength {
   // Evidence strength: relevanceScore discounted by objectionRisk, normalized to 0-100
   const evidenceStrength = evidence.length > 0
     ? evidence.reduce((sum, e) => {
-        const discount = OBJECTION_RISK_DISCOUNT[e.objectionRisk] ?? 1.0;
+        const discount = OBJECTION_RISK_DISCOUNT[e.objectionRisk];
         return sum + e.relevanceScore * discount;
       }, 0) / evidence.length * 10
     : 0;
@@ -43,7 +48,7 @@ export function assessProsecution(caseData: CasePayload): ProsecutionStrength {
   // Witness strength: credibilityScore weighted by prosecution-bias, normalized to 0-100
   const witnessStrength = witnesses.length > 0
     ? witnesses.reduce((sum, w) => {
-        const weight = BIAS_WEIGHT[w.bias] ?? 0.5;
+        const weight = BIAS_WEIGHT[w.bias];
         return sum + w.credibilityScore * weight;
       }, 0) / witnesses.length * 10
     : 0;

@@ -76,7 +76,7 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       must be engineered for vivid, morally textured cases, not schema-filler.
       **Design principle: the game must feel alive — the player is a judge
       weighing people, not a form-processor.**
-- [ ] Deferred tech-debt item: close `OBJECTION_RISK_DISCOUNT` and
-      `BIAS_WEIGHT` in `src/lib/pleaAssessment.ts` to enum-keyed Records
-      (pattern: `SENTENCE_DISCOUNT`), so new enum variants are compile errors
-      rather than silent default weights.
+- [x] Deferred tech-debt item — done: `OBJECTION_RISK_DISCOUNT` and
+      `BIAS_WEIGHT` are closed Records keyed off the schema types
+      (`CasePayload` indexed access), and the silent `??` fallback weights
+      are removed.
