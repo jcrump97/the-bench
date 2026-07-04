@@ -34,10 +34,11 @@ flowchart LR
         DEMO[DemoCase Hardcoded JSON]
     end
 
-    subgraph StateStore["State Store (Zustand)"]
+    subgraph StateStore["State Store (Zustand — three isolated slices)"]
         GAME[GameState]
         ERR[ErrorState]
         VAULT[BYOKVault]
+        UIS[UIStore View State]
     end
 
     subgraph Persistence["Persistence"]
@@ -62,6 +63,7 @@ flowchart LR
     VL -->|"Persist Immutable Object"| LS
     ERR -->|"Recovery UI"| UI
     UI -->|"Retry Action"| GS
+    UI <-->|"Panels / Modals (unvalidated view state)"| UIS
 ```
 
 ### Game State Machine and Generation Pipeline
@@ -80,6 +82,12 @@ flowchart LR
         EVID[EvidenceGen]
     end
 
+    subgraph Deterministic["Deterministic Derivations (no LLM)"]
+        PLEA["computePleaPostureForCase (plea structure)"]
+        EXPO["deriveSentencingExposure (per-charge ranges → case exposure)"]
+        MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
+    end
+
     subgraph GamePhases["Game Phases"]
         WEL[Welcome]
         A1["Act1 Intake and Plea"]
@@ -93,17 +101,22 @@ flowchart LR
     STAT -->|"Tier Law Context"| ENV
     ENV -->|"Physical Context"| CHAR
     CHAR -->|"OCEAN + Background"| EVID
-    EVID -->|"Complete Case Payload"| A1
+    EVID -->|"Complete Case Payload + Plea Narrative (color only)"| PLEA
+    PLEA -->|"Offer / No-Offer / Rejected"| A1
     A1 -->|"Trial Forced"| A2
     A1 -->|"Plea Deal Accepted"| A3
-    A2 -->|"Admissibility Decided"| A3
-    A3 -->|"Penalty Modifiers Applied"| END
+    A2 -->|"Rulings"| MOD
+    MOD -->|"Admitted-Evidence Weight"| A3
+    EXPO -->|"Statutory Floor and Ceiling"| A3
+    A3 -->|"Sentence Entered"| END
     END -->|"Trigger Final Snapshot"| GS
 ```
 
+The LLM provides color; deterministic code provides structure. Plea structure, case-level sentencing exposure (aggregated from per-charge statutory ranges), and the Act 2 → Act 3 penalty modifier are all pure functions of validated data — the LLM's only plea contribution is narrative rationale strings.
+
 ## Status
 
-Foundation complete. Schemas, state machine, and security vault are implemented and hardened. UI development is next.
+Foundation and first UI layer complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, courtroom ledger with speaker attribution, phase-aware action bar) are implemented. The hardcoded demo case — People v. Marcus Webb — is playable end-to-end on both the accepted-plea and forced-trial paths. Next up: GameService and the four-stage LLM generation pipeline (the BYOK path), then ResultGenerator with localStorage persistence.
 
 ## License
 

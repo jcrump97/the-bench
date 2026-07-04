@@ -33,11 +33,12 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       `COURT`/`PRESS`); the plea offer and response read as the attorneys'
       own presentations, court entries are the player's rulings, and
       `LedgerEntryRow` displays the attribution.
-- [ ] **README update & review — do LAST, after all other items.** Review
-      README.md against the current codebase and update it, particularly the
-      Mermaid architecture charts (per-charge sentencing ranges +
-      `deriveSentencingExposure`, three Zustand slices, implemented UI layer).
-      **Keep the original written introduction untouched.**
+- [x] **README update & review** — done. Both Mermaid charts updated (UIStore
+      as third slice; deterministic-derivations subgraph showing
+      `computePleaPostureForCase`, `deriveSentencingExposure`, and
+      `sentencingModifierFromRulings` feeding the acts) and the Status section
+      reflects the playable demo + next steps. The original written
+      introduction ("Why This Exists") is untouched.
 
 ## Deferred MVP items (from plan §7)
 
