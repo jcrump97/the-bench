@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { sentencingModifierFromRulings } from '../../lib/pleaAssessment';
 import { SentencePicker } from './SentencePicker';
 import { buildSentences } from '../../lib/sentenceBounds';
+import { deriveSentencingExposure } from '../../lib/sentencingExposure';
 
 type ChargeCall = 'GUILTY' | 'NOT_GUILTY';
 
@@ -27,12 +28,13 @@ export function TrialVerdictForm() {
   const setImposedSentence = useGameStore((state) => state.setImposedSentence);
   const setPhase = useGameStore((state) => state.setPhase);
 
+  const exposure = activeCase ? deriveSentencingExposure(activeCase.charges) : null;
   const [calls, setCalls] = useState<Record<string, ChargeCall>>({});
   const [amounts, setAmounts] = useState<number[]>(() =>
-    activeCase ? activeCase.maximumPenalties.map((max) => max.amount) : []
+    exposure ? exposure.maximumPenalties.map((max) => max.amount) : []
   );
 
-  if (!activeCase) return null;
+  if (!activeCase || !exposure) return null;
 
   const allCalled = activeCase.charges.every((charge) => calls[charge.id] !== undefined);
   const anyGuilty = activeCase.charges.some((charge) => calls[charge.id] === 'GUILTY');
@@ -48,7 +50,7 @@ export function TrialVerdictForm() {
         verdict: calls[charge.id],
       }))
     );
-    setImposedSentence(anyGuilty ? buildSentences(activeCase.maximumPenalties, amounts) : []);
+    setImposedSentence(anyGuilty ? buildSentences(exposure.maximumPenalties, amounts) : []);
     setPhase('END_STATE');
   };
 
@@ -94,8 +96,8 @@ export function TrialVerdictForm() {
 
       {anyGuilty && (
         <SentencePicker
-          maximums={activeCase.maximumPenalties}
-          minimums={activeCase.mandatoryMinimums}
+          maximums={exposure.maximumPenalties}
+          minimums={exposure.mandatoryMinimums}
           amounts={amounts}
           onAmountChange={(index, amount) =>
             setAmounts((prev) => prev.map((a, i) => (i === index ? amount : a)))

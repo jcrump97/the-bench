@@ -151,8 +151,6 @@ const rawDemoCase = {
       targetElementId: 'elem-taking',
     },
   ],
-  mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
-  maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
   summary: 'Marcus Webb, a former bookkeeper, is charged with grand theft after allegedly diverting $14,200 from his employer\'s client trust account into a personal account over four months.',
 };
 

@@ -11,6 +11,7 @@ import {
   type MotionRuling,
   type Sentence,
 } from '../schemas/gameSchemas';
+import { deriveSentencingExposure } from './sentencingExposure';
 
 // ─── Prosecution: "Can I prove this?" ─────────────────────────────────────────
 
@@ -114,7 +115,8 @@ export function assessDefense(
 ): DefenseRisk {
   const riskTolerance = deriveRiskTolerance(caseData);
   const priorExposure = derivePriorExposure(caseData);
-  const offerGenerosity = deriveOfferGenerosity(proposedSentence, caseData.maximumPenalties);
+  const { maximumPenalties } = deriveSentencingExposure(caseData.charges);
+  const offerGenerosity = deriveOfferGenerosity(proposedSentence, maximumPenalties);
 
   // Higher generosity and higher prior exposure push toward ACCEPT
   // Higher risk tolerance pushes toward REJECT
@@ -191,7 +193,8 @@ export function buildPleaPosture(
 
   // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
   const pleadsToChargeIds = caseData.charges.map(c => c.id);
-  const proposedSentence = discountSentences(caseData.maximumPenalties, discount, caseData.mandatoryMinimums);
+  const exposure = deriveSentencingExposure(caseData.charges);
+  const proposedSentence = discountSentences(exposure.maximumPenalties, discount, exposure.mandatoryMinimums);
 
   const defenseRisk = assessDefense(caseData, proposedSentence);
 

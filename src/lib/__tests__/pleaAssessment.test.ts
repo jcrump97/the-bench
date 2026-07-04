@@ -1,7 +1,7 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import { buildPleaPosture, sentencingModifierFromRulings, assessProsecution, assessDefense, computePleaPostureForCase, type PleaPostureResult } from '../pleaAssessment';
 import { CasePayloadSchema, type MotionRuling } from '../../schemas/gameSchemas';
-import { validCase } from './fixtures';
+import { rawValidCase, validCase } from './fixtures';
 
 // Deliberately scores WEAK (evidenceStrength/witnessStrength/elementCoverage
 // all near zero) to exercise computePleaPostureForCase's NO_OFFER branch.
@@ -47,8 +47,6 @@ const weakCase = CasePayloadSchema.parse({
     { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
     { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
   ],
-  mandatoryMinimums: [],
-  maximumPenalties: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
   summary: 'Alleged petty theft with minimal supporting evidence.',
 });
 
@@ -115,13 +113,16 @@ describe('buildPleaPosture — behaviour (2C)', () => {
   });
 
   it('clamps a discount that would undercut the mandatory minimum floor', () => {
-    // maximumPenalties = 5 YEARS PRISON, mandatoryMinimums = 5 YEARS PRISON.
+    // Charge maximumPenalties = 5 YEARS PRISON, mandatoryMinimums = 5 YEARS PRISON.
     // Naive MODERATE (20%) discount computes round(5 * 0.8) = 4, below the
     // floor — the DA cannot legally offer that, so the floor becomes the offer.
     const floorCase = CasePayloadSchema.parse({
       ...validCase,
-      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
-      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+      charges: [{
+        ...rawValidCase.charges[0],
+        mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+        maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+      }],
     });
     const { posture } = buildPleaPosture(floorCase, {
       band: 'MODERATE',

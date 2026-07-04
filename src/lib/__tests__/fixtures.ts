@@ -2,7 +2,7 @@ import { CasePayloadSchema, type CasePayload } from '../../schemas/gameSchemas';
 
 // A minimal, valid CasePayload (no pleaPosture — that field was removed in 1D).
 // Numbers are chosen for clean assertions downstream:
-//   - maximumPenalties: 10 YEARS PRISON  → MODERATE (0.20) discount = 8 years
+//   - charge maximumPenalties: 10 YEARS PRISON  → MODERATE (0.20) discount = 8 years
 //   - evidence relevanceScores 5/3/2 (sum 10) → admitted-ratio tests yield 0.5, 0.8, 1.0
 export const rawValidCase = {
   caseId: '24-CR-00001',
@@ -93,8 +93,6 @@ export const rawValidCase = {
       targetElementId: null,
     },
   ],
-  mandatoryMinimums: [],
-  maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
   summary: 'Defendant allegedly broke into a closed electronics store.',
 };
 

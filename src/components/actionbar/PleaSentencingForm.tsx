@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { usePleaPosture } from '../../hooks/usePleaPosture';
 import { SentencePicker } from './SentencePicker';
 import { buildSentences, floorAmountFor } from '../../lib/sentenceBounds';
+import { deriveSentencingExposure } from '../../lib/sentencingExposure';
 import type { Sentence } from '../../schemas/gameSchemas';
 
 // ACT_3_VERDICT on the accepted-plea path: guilt is established by the plea,
@@ -15,23 +16,24 @@ export function PleaSentencingForm() {
   const setPhase = useGameStore((state) => state.setPhase);
   const postureResult = usePleaPosture();
 
+  const exposure = activeCase ? deriveSentencingExposure(activeCase.charges) : null;
   const [amounts, setAmounts] = useState<number[]>(() => {
-    if (!activeCase) return [];
+    if (!exposure) return [];
     const proposed: Sentence[] =
       postureResult && postureResult.posture.status !== 'NO_OFFER'
         ? postureResult.posture.proposedSentence
         : [];
-    return activeCase.maximumPenalties.map((max) => {
+    return exposure.maximumPenalties.map((max) => {
       const match = proposed.find((s) => s.type === max.type && s.unit === max.unit);
       const seed = match ? match.amount : max.amount;
-      return Math.min(max.amount, Math.max(floorAmountFor(max, activeCase.mandatoryMinimums), seed));
+      return Math.min(max.amount, Math.max(floorAmountFor(max, exposure.mandatoryMinimums), seed));
     });
   });
 
-  if (!activeCase) return null;
+  if (!activeCase || !exposure) return null;
 
   const handleImpose = () => {
-    setImposedSentence(buildSentences(activeCase.maximumPenalties, amounts));
+    setImposedSentence(buildSentences(exposure.maximumPenalties, amounts));
     setPhase('END_STATE');
   };
 
@@ -39,8 +41,8 @@ export function PleaSentencingForm() {
     <div className="space-y-3">
       <h2 className="font-medium text-(--text-h)">Sentencing — Plea Accepted</h2>
       <SentencePicker
-        maximums={activeCase.maximumPenalties}
-        minimums={activeCase.mandatoryMinimums}
+        maximums={exposure.maximumPenalties}
+        minimums={exposure.mandatoryMinimums}
         amounts={amounts}
         onAmountChange={(index, amount) =>
           setAmounts((prev) => prev.map((a, i) => (i === index ? amount : a)))

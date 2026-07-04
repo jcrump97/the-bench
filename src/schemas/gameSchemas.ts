@@ -215,9 +215,6 @@ export const CaseSchema = z.strictObject({
   witnesses: z.array(WitnessSchema).min(2),
   evidence: z.array(EvidenceSchema).min(3),
 
-  mandatoryMinimums: z.array(SentenceSchema),
-  maximumPenalties: z.array(SentenceSchema).min(1),
-
   summary: z.string().max(1500),
 }).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
@@ -253,8 +250,6 @@ export const CaseSchema = z.strictObject({
     }
     witnessIds.add(w.id);
   }
-
-  addMinimumCeilingIssues(v.mandatoryMinimums, v.maximumPenalties, ctx);
 });
 
 export const CasePayloadSchema = CaseSchema;
