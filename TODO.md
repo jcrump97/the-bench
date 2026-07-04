@@ -9,13 +9,12 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
 
 ## Remaining plan items (Phase 5 — polish & docs)
 
-- [ ] **OceanTraitsMeter** — replace the plain labeled values in
-      `DefendantDossierModal` with a 5-bar micro-viz component
-      (`src/components/common/OceanTraitsMeter.tsx`). Consult the `dataviz`
-      skill before designing it.
-- [ ] **CLAUDE.md docs** — document `useUIStore` as a third isolated Zustand
-      slice (view-state only, deliberately unvalidated) and the
-      `activePleaNarrative` addition to `useGameStore`.
+- [x] **OceanTraitsMeter** — done: five meter-style bars (accent fill,
+      same-ramp track, `role="meter"`, direct-labeled values) in
+      `src/components/common/OceanTraitsMeter.tsx`.
+- [x] **CLAUDE.md docs** — done: `useUIStore` documented as the third isolated
+      slice; `activePleaNarrative` documented under the state machine; stale
+      `App.tsx` scaffold note refreshed.
 - [ ] **Polish pass** (`fix:` commit) — responsive/focus-visible/touch-target
       sweep. Known item from verification: the "Play Demo Case" button label
       (dark `--bg` text on `--accent`) reads low-contrast; check it against
@@ -25,6 +24,11 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       source of truth; case-level exposure is derived deterministically by
       `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), and the
       modal now shows each charge's lawful range via `SentenceList`.
+- [ ] **README update & review — do LAST, after all other items.** Review
+      README.md against the current codebase and update it, particularly the
+      Mermaid architecture charts (per-charge sentencing ranges +
+      `deriveSentencingExposure`, three Zustand slices, implemented UI layer).
+      **Keep the original written introduction untouched.**
 
 ## Deferred MVP items (from plan §7)
 
