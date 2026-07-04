@@ -38,7 +38,7 @@ This is a public portfolio project documenting a career transition into AI Syste
 | **ResultGenerator** | Standalone module — assembles the `FinalResult` object from end-of-game state | Sends unvalidated result to ValidationLayer; never writes to localStorage directly |
 | **DemoCase** | Hardcoded JSON payload for offline/keyless play | Bypasses GameService and LLM entirely; feeds directly into ValidationLayer |
 | **ValidationLayer** | Zod parses every LLM response and every `FinalResult` before state hydration | Three outputs: validated data → GameState, any failure → ErrorState, immutable FinalResult → localStorage |
-| **Zustand stores** | Source of truth for game and security state | Two isolated slices (see below) |
+| **Zustand stores** | Source of truth for game, security, and view state | Three isolated slices (see below) |
 | **localStorage** | Persists only immutable `FinalResult` objects post-game | Never stores active state or the API key |
 
 ### State Machine (`useGameStore`)
@@ -55,6 +55,8 @@ All phases → ERROR_STATE → WELCOME (reset)
 
 The transition matrix is defined in `ALLOWED_PHASE_TRANSITIONS` at `src/store/useGameStore.ts:25`. Every call to `setPhase()` is validated against it and then run through `GamePhaseSchema.safeParse()` before mutating state.
 
+Alongside `activeCase`, the store holds `activePleaNarrative` — the LLM's (or demo case's) narrative-only plea input. It is upstream input data, not a derived value: the computed `PleaPosture` stays a pure derivation and is never stored. `setActivePleaNarrative` mirrors case hydration — phase-gated to `WELCOME` and `PleaNarrativeSchema.safeParse`d, with any violation forcing `ERROR_STATE`.
+
 ### Security Store (`useSecurityStore` — BYOKVault)
 
 Isolated Zustand slice holding the user's Gemini API key **in memory only**. Key invariants:
@@ -62,11 +64,15 @@ Isolated Zustand slice holding the user's Gemini API key **in memory only**. Key
 - `isAuthenticated()` returns true if any vault passed `BYOKSchema.safeParse()`, or if `isDemo === true`.
 - `setVault()` runs `BYOKSchema.safeParse()` and silently nulls the vault on failure.
 
+### UI Store (`useUIStore`)
+
+Third isolated Zustand slice holding **view state only**: the two side-panel open/closed flags and the active detail modal (`ActiveModal` discriminated union). Deliberately unvalidated — nothing in it crosses a trust boundary or is persisted, and it never holds case data, only entity IDs that point into `useGameStore`'s already-validated `activeCase`.
+
 ### Schemas (`src/schemas/gameSchemas.ts`)
 
 Single source of truth for all Zod schemas and their inferred TypeScript types. Schema sections:
 1. **Security** — `BYOKSchema` (discriminated union: live key vs. demo mode)
-2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), `ChargeSchema`, `StatuteElementSchema`
+2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), `ChargeSchema` (carries per-charge `mandatoryMinimums`/`maximumPenalties` — the source of truth for sentencing ranges; case-level exposure is derived deterministically by `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), `StatuteElementSchema`
 3. **Character entities** — `CharacterSchema` with OCEAN personality traits
 4. **Evidence & witnesses** — `EvidenceSchema`, `WitnessSchema`
 5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`); `PleaNarrativeSchema` carries the LLM's plea rationale strings
@@ -102,5 +108,5 @@ Test coverage for all three lives in `src/lib/__tests__/` and `src/schemas/__tes
 - **No Redux or Context for global state.** Zustand only.
 - **No new dependencies without explicit approval.** The stack is locked: Vite, React 19, TypeScript strict, Zustand, Zod, Tailwind CSS v4, lucide-react.
 - **Commits use Conventional Commits:** `feat:`, `fix:`, `chore:`, `docs:` — one concern per commit.
-- **`App.tsx` is currently a Vite scaffold placeholder** — actual game UI has not been built yet.
+- `App.tsx` renders `AppShell`, the phase router. The full demo-case gameplay loop (WELCOME → END_STATE, both plea and trial branches) is implemented; the BYOK/LLM path is stubbed until GameService exists.
 - Vite base path is `/the-bench/` (required for GitHub Pages routing).
