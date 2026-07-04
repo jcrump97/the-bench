@@ -1,19 +1,9 @@
-import { Fragment } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
+import { OceanTraitsMeter } from '../common/OceanTraitsMeter';
 import { SentenceList } from '../common/SentenceList';
 import { enumLabel } from '../../lib/format';
-
-// Plain labeled values for now; Phase 5 swaps this block for a real
-// OceanTraitsMeter component without otherwise touching the modal.
-const OCEAN_LABELS = {
-  openness: 'Openness',
-  conscientiousness: 'Conscientiousness',
-  extraversion: 'Extraversion',
-  agreeableness: 'Agreeableness',
-  neuroticism: 'Neuroticism',
-} as const;
 
 export function DefendantDossierModal() {
   const activeCase = useGameStore((state) => state.activeCase);
@@ -67,14 +57,7 @@ export function DefendantDossierModal() {
       )}
 
       <h3 className="mt-5 text-sm font-medium text-(--text-h)">Personality (OCEAN)</h3>
-      <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-        {(Object.keys(OCEAN_LABELS) as Array<keyof typeof OCEAN_LABELS>).map((trait) => (
-          <Fragment key={trait}>
-            <dt className="text-(--text-muted)">{OCEAN_LABELS[trait]}</dt>
-            <dd className="text-(--text)">{defendant.oceanTraits[trait]} / 10</dd>
-          </Fragment>
-        ))}
-      </dl>
+      <OceanTraitsMeter traits={defendant.oceanTraits} />
     </Modal>
   );
 }
