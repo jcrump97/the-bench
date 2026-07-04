@@ -27,6 +27,12 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       source of truth; case-level exposure is derived deterministically by
       `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), and the
       modal now shows each charge's lawful range via `SentenceList`.
+- [x] **Ledger speaker attribution** — done (user note 2026-07-03: the ledger
+      should be narrated by the parties, not an omniscient voice). Every
+      `LedgerEntry` now carries a `speaker` (`CLERK`/`PROSECUTION`/`DEFENSE`/
+      `COURT`/`PRESS`); the plea offer and response read as the attorneys'
+      own presentations, court entries are the player's rulings, and
+      `LedgerEntryRow` displays the attribution.
 - [ ] **README update & review — do LAST, after all other items.** Review
       README.md against the current codebase and update it, particularly the
       Mermaid architecture charts (per-charge sentencing ranges +

@@ -23,10 +23,17 @@ export type LedgerEntryKind =
   | 'SENTENCE_IMPOSED'
   | 'AFTERMATH';
 
+// Who is speaking. The ledger is a courtroom record assembled from the
+// parties' own presentations — the attorneys narrate the case, the court
+// speaks only through its rulings, the press reports the aftermath. No entry
+// is voiced by an omniscient narrator.
+export type LedgerSpeaker = 'CLERK' | 'PROSECUTION' | 'DEFENSE' | 'COURT' | 'PRESS';
+
 export interface LedgerEntry {
   id: string;
   kind: LedgerEntryKind;
   phase: GamePhase;
+  speaker: LedgerSpeaker;
   // Monotonic sequence index, NOT a wall-clock timestamp — buildLedger is a
   // pure, deterministic projection and must never call Date.now().
   order: number;
@@ -83,7 +90,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
     id: 'case-opened',
     kind: 'CASE_OPENED',
     phase: 'ACT_1_INTAKE',
-    heading: 'Case Opened',
+    speaker: 'CLERK',
+    heading: 'Case Called',
     body: caseData.summary,
   });
 
@@ -93,7 +101,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         id: 'plea-offer',
         kind: 'PLEA_OFFER',
         phase: 'ACT_1_INTAKE',
-        heading: 'No Plea Offer',
+        speaker: 'PROSECUTION',
+        heading: 'The People Decline to Offer a Plea',
         body: pleaPosture.prosecutionRationale,
       });
     } else {
@@ -101,7 +110,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         id: 'plea-offer',
         kind: 'PLEA_OFFER',
         phase: 'ACT_1_INTAKE',
-        heading: 'Plea Offer',
+        speaker: 'PROSECUTION',
+        heading: "The People's Offer",
         body: describeOffer(caseData, pleaPosture),
       });
 
@@ -109,7 +119,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         id: 'plea-defense-response',
         kind: 'PLEA_DEFENSE_RESPONSE',
         phase: 'ACT_1_INTAKE',
-        heading: pleaPosture.status === 'PENDING_JUDICIAL_REVIEW' ? 'Defense Agrees to Offer' : 'Defense Rejects Offer',
+        speaker: 'DEFENSE',
+        heading: pleaPosture.status === 'PENDING_JUDICIAL_REVIEW' ? 'Defense Accepts the Offer' : 'Defense Rejects the Offer',
         body: pleaPosture.defenseRationale,
       });
     }
@@ -120,6 +131,7 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
       id: 'plea-decision',
       kind: 'PLEA_DECISION',
       phase: 'ACT_1_INTAKE',
+      speaker: 'COURT',
       heading: pleaDecision === 'ACCEPT' ? 'Judge Accepts the Plea' : 'Judge Rejects the Plea — Trial Ordered',
       body: pleaDecision === 'ACCEPT'
         ? 'The court accepts the negotiated plea and proceeds directly to sentencing.'
@@ -133,7 +145,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
       id: `motion-${ruling.evidenceId}`,
       kind: 'MOTION_RULING',
       phase: 'ACT_2_MOTIONS',
-      heading: 'Evidentiary Ruling',
+      speaker: 'COURT',
+      heading: 'Ruling of the Court',
       body: `${evidenceName}: ${enumLabel(ruling.ruling)}`,
     });
   }
@@ -144,7 +157,8 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         id: `verdict-${chargeVerdict.chargeId}`,
         kind: 'VERDICT',
         phase: 'ACT_3_VERDICT',
-        heading: 'Verdict',
+        speaker: 'COURT',
+        heading: 'Verdict of the Court',
         body: `${chargeVerdict.chargeName} (${enumLabel(chargeVerdict.classification)}): ${enumLabel(chargeVerdict.verdict)}`,
       });
     }
@@ -156,6 +170,7 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         id: `sentence-${index}`,
         kind: 'SENTENCE_IMPOSED',
         phase: 'ACT_3_VERDICT',
+        speaker: 'COURT',
         heading: 'Sentence Imposed',
         body: formatSentence(sentence),
       });
@@ -167,6 +182,7 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
       id: 'aftermath',
       kind: 'AFTERMATH',
       phase: 'END_STATE',
+      speaker: 'PRESS',
       heading: 'Aftermath',
       body: aftermathNarrative,
     });

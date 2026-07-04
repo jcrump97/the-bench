@@ -68,6 +68,24 @@ describe('buildLedger — entry presence and ordering', () => {
     expect(entries[1]?.body).toContain('8 years in prison');
   });
 
+  it('attributes every entry to a courtroom speaker, never an omniscient narrator', () => {
+    const entries = buildLedger({
+      ...baseInput,
+      pleaPosture: pendingPosture,
+      pleaDecision: 'ACCEPT',
+      imposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 5 }],
+      aftermathNarrative: 'Coverage was minimal.',
+    });
+    expect(entries.map((e) => e.speaker)).toEqual([
+      'CLERK',        // case called
+      'PROSECUTION',  // the offer is the DA's presentation
+      'DEFENSE',      // the response is defense counsel's
+      'COURT',        // the ruling is the player's
+      'COURT',        // sentence
+      'PRESS',        // aftermath
+    ]);
+  });
+
   it('mid-Act-2: REJECTED_BY_DEFENSE plus partial motion rulings, in array order', () => {
     const motionRulings: MotionRuling[] = [
       { evidenceId: 'e2', ruling: 'EXCLUDED' },
