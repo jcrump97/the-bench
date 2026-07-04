@@ -1,6 +1,48 @@
 import { describe, it, expect } from 'vitest';
-import { CasePayloadSchema, PleaNarrativeSchema } from '../gameSchemas';
+import { CasePayloadSchema, ChargeSchema, PleaNarrativeSchema } from '../gameSchemas';
 import { rawValidCase } from '../../lib/__tests__/fixtures';
+
+describe('ChargeSchema per-charge sentencing range', () => {
+  const rawCharge = rawValidCase.charges[0];
+
+  it('accepts a charge whose minimum is within its maximum', () => {
+    const result = ChargeSchema.safeParse({
+      ...rawCharge,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 2 }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a charge missing maximumPenalties entirely', () => {
+    const withoutMax: Record<string, unknown> = { ...rawCharge };
+    delete withoutMax.maximumPenalties;
+    expect(ChargeSchema.safeParse(withoutMax).success).toBe(false);
+  });
+
+  it('rejects a mandatoryMinimums entry with no matching-type maximumPenalties entry', () => {
+    const result = ChargeSchema.safeParse({
+      ...rawCharge,
+      mandatoryMinimums: [{ type: 'FINE', unit: 'DOLLARS', amount: 500 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a mandatoryMinimums entry that exceeds its matching maximumPenalties entry', () => {
+    const result = ChargeSchema.safeParse({
+      ...rawCharge,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 11 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a mandatoryMinimums entry equal to its matching maximumPenalties entry', () => {
+    const result = ChargeSchema.safeParse({
+      ...rawCharge,
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
+    });
+    expect(result.success).toBe(true);
+  });
+});
 
 describe('PleaNarrativeSchema (1D)', () => {
   it('accepts prosecutionRationale alone (defenseRationale optional)', () => {

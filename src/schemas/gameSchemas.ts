@@ -73,12 +73,40 @@ export const StatuteElementSchema = z.strictObject({
   isProven: z.boolean().optional().transform((): boolean => false),
 });
 
+// Every mandatory minimum must be backed by a same-type maximum penalty at
+// least as large, so a plea discount always has a real ceiling to floor against.
+function addMinimumCeilingIssues(
+  mandatoryMinimums: z.infer<typeof SentenceSchema>[],
+  maximumPenalties: z.infer<typeof SentenceSchema>[],
+  ctx: z.RefinementCtx
+): void {
+  for (const min of mandatoryMinimums) {
+    const minDays = sentenceDayEquivalent(min);
+    if (minDays === null) continue;
+    const matchingMax = maximumPenalties.find(max => max.type === min.type);
+    if (!matchingMax) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums has a ${min.type} entry with no matching-type maximumPenalties entry` });
+      continue;
+    }
+    const maxDays = sentenceDayEquivalent(matchingMax);
+    if (maxDays !== null && maxDays < minDays) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums ${min.type} entry exceeds its matching maximumPenalties entry` });
+    }
+  }
+}
+
+// Charges carry their own statutory range; case-level exposure is derived
+// deterministically from these in src/lib/sentencingExposure.ts.
 export const ChargeSchema = z.strictObject({
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(200),
   classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
   elements: z.array(StatuteElementSchema).min(1),
-});
+  mandatoryMinimums: z.array(SentenceSchema),
+  maximumPenalties: z.array(SentenceSchema).min(1),
+}).superRefine((charge, ctx) =>
+  addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx)
+);
 
 export const WitnessSchema = z.strictObject({
   id: z.string().min(1).max(40),
@@ -226,21 +254,7 @@ export const CaseSchema = z.strictObject({
     witnessIds.add(w.id);
   }
 
-  // Every mandatory minimum must be backed by a same-type maximum penalty at
-  // least as large, so a plea discount always has a real ceiling to floor against.
-  for (const min of v.mandatoryMinimums) {
-    const minDays = sentenceDayEquivalent(min);
-    if (minDays === null) continue;
-    const matchingMax = v.maximumPenalties.find(max => max.type === min.type);
-    if (!matchingMax) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums has a ${min.type} entry with no matching-type maximumPenalties entry` });
-      continue;
-    }
-    const maxDays = sentenceDayEquivalent(matchingMax);
-    if (maxDays !== null && maxDays < minDays) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums ${min.type} entry exceeds its matching maximumPenalties entry` });
-    }
-  }
+  addMinimumCeilingIssues(v.mandatoryMinimums, v.maximumPenalties, ctx);
 });
 
 export const CasePayloadSchema = CaseSchema;

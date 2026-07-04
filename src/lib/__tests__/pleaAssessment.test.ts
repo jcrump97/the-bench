@@ -33,6 +33,8 @@ const weakCase = CasePayloadSchema.parse({
       name: 'Petty theft',
       classification: 'MISDEMEANOR',
       elements: [{ id: 'wel1', description: 'Taking of property of another.' }],
+      mandatoryMinimums: [],
+      maximumPenalties: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
     },
   ],
   statuteContexts: ['Cal. Penal Code § 484 — petty theft.'],

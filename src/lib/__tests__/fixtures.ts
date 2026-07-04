@@ -41,6 +41,8 @@ export const rawValidCase = {
         { id: 'el1', description: 'Entry into a locked commercial structure.' },
         { id: 'el2', description: 'Intent to commit theft therein.' },
       ],
+      mandatoryMinimums: [],
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
     },
   ],
   statuteContexts: ['Cal. Penal Code § 459 — burglary.'],

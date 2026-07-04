@@ -3,7 +3,7 @@ import { sentenceDayEquivalent, type Sentence } from '../schemas/gameSchemas';
 // Bounds for the Act 3 sentence picker: each maximumPenalties entry fixes the
 // type/unit (and probation conditions); the player only chooses the amount,
 // clamped between the mandatory-minimum floor and the statutory ceiling.
-const UNIT_DAYS: Record<Sentence['unit'], number> = {
+export const UNIT_DAYS: Record<Sentence['unit'], number> = {
   YEARS: 365,
   MONTHS: 365 / 12,
   DAYS: 1,

@@ -80,6 +80,8 @@ const rawDemoCase = {
         { id: 'elem-value', description: 'The value of the property taken exceeded $950.' },
         { id: 'elem-intent', description: 'Defendant intended to permanently deprive the owner of the property.' },
       ],
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
     },
   ],
   statuteContexts: [
