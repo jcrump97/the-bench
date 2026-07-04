@@ -20,12 +20,11 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       sweep. Known item from verification: the "Play Demo Case" button label
       (dark `--bg` text on `--accent`) reads low-contrast; check it against
       WCAG AA and consider a darker text token or lighter accent.
-- [ ] **Sentencing guidelines in ChargeDetailModal** — the modal shows only
-      classification + elements, but `ChargeSchema` already carries
-      `mandatoryMinimums` and `maximumPenalties`. Surface both (via the
-      existing `SentenceList` common component) so the judge can see the
-      lawful sentencing range for a charge before ruling. Pure UI work —
-      no schema or data changes needed.
+- [x] **Sentencing guidelines in ChargeDetailModal** — done. Ranges moved to
+      per-charge (`ChargeSchema.mandatoryMinimums`/`maximumPenalties` are the
+      source of truth; case-level exposure is derived deterministically by
+      `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), and the
+      modal now shows each charge's lawful range via `SentenceList`.
 
 ## Deferred MVP items (from plan §7)
 

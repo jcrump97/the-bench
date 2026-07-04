@@ -2,6 +2,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
+import { SentenceList } from '../common/SentenceList';
 import { enumLabel } from '../../lib/format';
 import type { CasePayload, MotionRuling } from '../../schemas/gameSchemas';
 
@@ -43,6 +44,16 @@ export function ChargeDetailModal({ chargeId }: ChargeDetailModalProps) {
           </li>
         ))}
       </ul>
+
+      <h3 className="mt-5 text-sm font-medium text-(--text-h)">Sentencing Range</h3>
+      <h4 className="mt-2 text-sm text-(--text-muted)">Mandatory Minimums</h4>
+      {charge.mandatoryMinimums.length === 0 ? (
+        <p className="text-(--text)">None</p>
+      ) : (
+        <SentenceList sentences={charge.mandatoryMinimums} />
+      )}
+      <h4 className="mt-3 text-sm text-(--text-muted)">Maximum Penalties</h4>
+      <SentenceList sentences={charge.maximumPenalties} />
     </Modal>
   );
 }
