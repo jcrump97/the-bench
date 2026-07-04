@@ -15,7 +15,13 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
 - [x] **CLAUDE.md docs** — done: `useUIStore` documented as the third isolated
       slice; `activePleaNarrative` documented under the state machine; stale
       `App.tsx` scaffold note refreshed.
-- [x] **Polish pass** — done. Measured contrast: the "Play Demo Case" button
+- [x] **Polish pass** — done. Headless playthrough later found the REAL cause
+      of the "low-contrast button label" report: the element resets in
+      `index.css` were unlayered, so they beat every Tailwind utility —
+      `button { color: inherit }` was defeating `text-(--bg)` on accent
+      buttons (~1.5:1 rendered). Resets now live in `@layer base`; utilities
+      win; verified in-browser at 6.77:1.
+      Original token math: the "Play Demo Case" pair
       (`--bg` on `--accent`) is 6.77:1 — passes WCAG AA, no change needed.
       Real finding: `--text-muted` was 3.15:1 on `--bg-elevated`; bumped
       `#6b7280` → `#8790a0` (≥4.5:1 on all three surfaces). Also added the

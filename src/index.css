@@ -49,40 +49,46 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* Element defaults live in @layer base so Tailwind utilities (@layer
+   utilities) can override them. Unlayered rules would silently win over
+   every utility regardless of specificity — e.g. button { color: inherit }
+   was defeating text-(--bg) on accent buttons. */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
 
-h1,
-h2,
-h3 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-  margin: 0;
-}
+  h1,
+  h2,
+  h3 {
+    font-family: var(--heading);
+    font-weight: 500;
+    color: var(--text-h);
+    margin: 0;
+  }
 
-p {
-  margin: 0;
-}
+  p {
+    margin: 0;
+  }
 
-code {
-  font-family: var(--mono);
-}
+  code {
+    font-family: var(--mono);
+  }
 
-button {
-  font: inherit;
-  color: inherit;
-}
+  button {
+    font: inherit;
+    color: inherit;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
 }
