@@ -59,7 +59,7 @@ export function CaseFilePanel() {
         <button
           type="button"
           onClick={() => openModal({ type: 'EVENT' })}
-          className="mt-1 w-full rounded-md px-2 py-2 text-left hover:bg-(--bg-elevated)"
+          className="mt-1 min-h-11 w-full rounded-md px-2 py-2 text-left hover:bg-(--bg-elevated)"
         >
           <span className="text-sm text-(--text-muted)">
             {enumLabel(activeCase.environment.locationType)} &middot; {enumLabel(activeCase.environment.timeOfDay)}

@@ -68,7 +68,7 @@ export function WelcomeScreen() {
               value={apiKeyInput}
               onChange={(event) => setApiKeyInput(event.target.value)}
               placeholder="Gemini API key"
-              className="min-h-11 w-full rounded-md border border-(--border) bg-(--bg-elevated) px-3 py-2 text-(--text) focus:border-(--focus-ring) focus:outline-none"
+              className="min-h-11 w-full rounded-md border border-(--border) bg-(--bg-elevated) px-3 py-2 text-(--text) focus:border-(--focus-ring)"
             />
             {submitted && !authenticated && (
               <p className="text-(--status-excluded)">

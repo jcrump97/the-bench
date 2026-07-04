@@ -8,7 +8,8 @@
   --border-strong: #3f4150;
   --text: #9ca3af;
   --text-h: #f3f4f6;
-  --text-muted: #6b7280;
+  /* ≥4.5:1 (WCAG AA normal text) on --bg, --bg-panel, and --bg-elevated */
+  --text-muted: #8790a0;
   --accent: #c084fc;
   --accent-bg: rgba(192, 132, 252, 0.15);
   --accent-border: rgba(192, 132, 252, 0.5);

@@ -31,7 +31,7 @@ export function SentencePicker({ maximums, minimums, amounts, onAmountChange }: 
                   onAmountChange(index, Math.min(max.amount, Math.max(floor, parsed)));
                 }
               }}
-              className="min-h-11 w-24 rounded-md border border-(--border) bg-(--bg-elevated) px-3 py-1 text-right text-(--text-h) focus:border-(--focus-ring) focus:outline-none"
+              className="min-h-11 w-24 rounded-md border border-(--border) bg-(--bg-elevated) px-3 py-1 text-right text-(--text-h) focus:border-(--focus-ring)"
             />
             <span className="text-sm text-(--text-muted)">
               {floor}–{max.amount}

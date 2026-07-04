@@ -15,10 +15,13 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
 - [x] **CLAUDE.md docs** — done: `useUIStore` documented as the third isolated
       slice; `activePleaNarrative` documented under the state machine; stale
       `App.tsx` scaffold note refreshed.
-- [ ] **Polish pass** (`fix:` commit) — responsive/focus-visible/touch-target
-      sweep. Known item from verification: the "Play Demo Case" button label
-      (dark `--bg` text on `--accent`) reads low-contrast; check it against
-      WCAG AA and consider a darker text token or lighter accent.
+- [x] **Polish pass** — done. Measured contrast: the "Play Demo Case" button
+      (`--bg` on `--accent`) is 6.77:1 — passes WCAG AA, no change needed.
+      Real finding: `--text-muted` was 3.15:1 on `--bg-elevated`; bumped
+      `#6b7280` → `#8790a0` (≥4.5:1 on all three surfaces). Also added the
+      missing `min-h-11` touch target on CaseFilePanel's Scene button and
+      removed `focus:outline-none` from the two inputs so the global keyboard
+      `:focus-visible` outline is no longer suppressed.
 - [x] **Sentencing guidelines in ChargeDetailModal** — done. Ranges moved to
       per-charge (`ChargeSchema.mandatoryMinimums`/`maximumPenalties` are the
       source of truth; case-level exposure is derived deterministically by
