@@ -20,6 +20,12 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       sweep. Known item from verification: the "Play Demo Case" button label
       (dark `--bg` text on `--accent`) reads low-contrast; check it against
       WCAG AA and consider a darker text token or lighter accent.
+- [ ] **Sentencing guidelines in ChargeDetailModal** — the modal shows only
+      classification + elements, but `ChargeSchema` already carries
+      `mandatoryMinimums` and `maximumPenalties`. Surface both (via the
+      existing `SentenceList` common component) so the judge can see the
+      lawful sentencing range for a charge before ruling. Pure UI work —
+      no schema or data changes needed.
 
 ## Deferred MVP items (from plan §7)
 
@@ -54,6 +60,19 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
 - [ ] `isProven` on `StatuteElement` is permanently `false` by schema contract;
       the Charge Detail modal's "Supported" indicator is a derived UI-only
       convenience, not a real proof-tracking system.
+- [ ] **Demo case narrative rewrite** — the current demo case (Marcus Webb,
+      embezzlement via trust-account transfers) is procedurally correct but
+      dramatically inert: every description reads like an audit memo, and
+      playing it feels like checking checkboxes. Rewrite the narrative layer
+      (case summary, environment, character backstories, evidence/witness
+      descriptions, plea rationales, aftermath) so the case has stakes,
+      texture, and a human story — sympathetic pressures on the defendant,
+      a victim with a face, evidence that raises real judgment calls rather
+      than obvious admits. Structure/IDs/scoring can stay; this is prose only.
+      This is also the bar for the future LLM generation pipeline: prompts
+      must be engineered for vivid, morally textured cases, not schema-filler.
+      **Design principle: the game must feel alive — the player is a judge
+      weighing people, not a form-processor.**
 - [ ] Deferred tech-debt item: close `OBJECTION_RISK_DISCOUNT` and
       `BIAS_WEIGHT` in `src/lib/pleaAssessment.ts` to enum-keyed Records
       (pattern: `SENTENCE_DISCOUNT`), so new enum variants are compile errors
