@@ -63,19 +63,15 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
 - [ ] `isProven` on `StatuteElement` is permanently `false` by schema contract;
       the Charge Detail modal's "Supported" indicator is a derived UI-only
       convenience, not a real proof-tracking system.
-- [ ] **Demo case narrative rewrite** — the current demo case (Marcus Webb,
-      embezzlement via trust-account transfers) is procedurally correct but
-      dramatically inert: every description reads like an audit memo, and
-      playing it feels like checking checkboxes. Rewrite the narrative layer
-      (case summary, environment, character backstories, evidence/witness
-      descriptions, plea rationales, aftermath) so the case has stakes,
-      texture, and a human story — sympathetic pressures on the defendant,
-      a victim with a face, evidence that raises real judgment calls rather
-      than obvious admits. Structure/IDs/scoring can stay; this is prose only.
-      This is also the bar for the future LLM generation pipeline: prompts
-      must be engineered for vivid, morally textured cases, not schema-filler.
-      **Design principle: the game must feel alive — the player is a judge
-      weighing people, not a form-processor.**
+- [x] **Demo case narrative rewrite** — done (prose only; IDs/scores/structure
+      and the pinned pipeline outcomes unchanged). The Webb case now has
+      stakes and moral friction: a second-chance employer, custody-deadline
+      timing, partial repayments, a thin-controls defense angle, victims with
+      faces (a widow's escrow, a landscaper's payroll), voiced plea
+      rationales, and an outcome-agnostic aftermath.
+      **Design principle (still governs the future LLM pipeline prompts): the
+      game must feel alive — the player is a judge weighing people, not a
+      form-processor.**
 - [x] Deferred tech-debt item — done: `OBJECTION_RISK_DISCOUNT` and
       `BIAS_WEIGHT` are closed Records keyed off the schema types
       (`CasePayload` indexed access), and the silent `??` fallback weights

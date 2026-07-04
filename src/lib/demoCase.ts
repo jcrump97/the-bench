@@ -12,6 +12,10 @@ import {
 // evidence (full element coverage), objection risk varies across items (so Act 2
 // motion rulings are meaningful), and the defendant's prior record drives the
 // defense toward accepting the plea (PENDING_JUDICIAL_REVIEW, not a trial-only demo).
+// The narrative layer is deliberately morally textured — partial repayments, thin
+// firm controls, a second-chance employer, custody pressure — so the judge is
+// weighing a person, not processing a form. This is the quality bar for the
+// future LLM generation pipeline's prompts.
 const rawDemoCase = {
   caseId: '24-CR-00847',
   defendant: {
@@ -68,7 +72,7 @@ const rawDemoCase = {
     locationType: 'COMMERCIAL',
     timeOfDay: 'AFTERNOON',
     weather: 'N/A',
-    description: 'The back office of a small accounting firm where the defendant worked as a bookkeeper with access to client trust accounts.',
+    description: 'The back office of Hollis & Associates, a three-person accounting firm in a strip mall off El Camino Real. Webb\'s desk sits between the filing cabinets and the coffee maker. For six years he was the first one in every morning — and the only employee with keys, the alarm code, and transfer authority over the client trust account.',
   },
   charges: [
     {
@@ -93,7 +97,7 @@ const rawDemoCase = {
       name: 'Detective Ray Alvarez',
       role: 'INVESTIGATOR',
       bias: 'PROSECUTION',
-      statement: 'Led the financial fraud investigation and traced the diverted transfers to a personal account controlled by the defendant.',
+      statement: 'Traced all eleven transfers endpoint to endpoint: every dollar lands in an account only Webb controlled, and the timing tracks his child-support deadlines, not the firm\'s business cycle. Will testify that when asked about the partial repayments, Webb said nothing and asked for a lawyer — and that in his experience, "people don\'t quietly repay money they don\'t know they took."',
       credibilityScore: 9,
     },
     {
@@ -101,7 +105,7 @@ const rawDemoCase = {
       name: 'Dana Whitfield',
       role: 'EXPERT',
       bias: 'NEUTRAL',
-      statement: 'Independent forensic accountant who reconciled the firm\'s trust account ledgers against bank records.',
+      statement: 'Independent forensic accountant. Will testify the math is not in dispute — $14,200 out, $3,100 quietly returned — and that the firm\'s controls were poor enough that the door was standing open. She is careful to say that cuts both ways: it made the taking easy, and it makes proving no one else could have done it harder.',
       credibilityScore: 8,
     },
     {
@@ -109,7 +113,7 @@ const rawDemoCase = {
       name: 'Renee Ortiz',
       role: 'CHARACTER',
       bias: 'DEFENSE',
-      statement: 'Former supervisor who describes the defendant as reliable and under significant financial strain at the time of the transfers.',
+      statement: 'Webb\'s supervisor for four years. Will testify that he was the one who caught and reported two billing errors in the firm\'s own favor; that Ray Hollis knew Webb\'s record when he hired him and called it the best decision he\'d made; and that in the months before the transfers, Webb was sleeping in his car between custody exchanges and would not ask anyone for help.',
       credibilityScore: 6,
     },
   ],
@@ -118,7 +122,7 @@ const rawDemoCase = {
       id: 'ev-bank-records',
       name: 'Trust account bank records',
       type: 'DOCUMENTARY',
-      description: 'Bank statements showing eleven transfers totaling $14,200 from the firm trust account to a personal account in the defendant\'s name.',
+      description: 'Statements showing eleven transfers totaling $14,200 from the client trust account to Webb\'s personal checking. Nine of the eleven land within seventy-two hours of a child-support due date. Three partial repayments totaling $3,100 flow back the other way before the transfers stop entirely.',
       relevanceScore: 9,
       objectionRisk: 'LOW',
       targetElementId: 'elem-value',
@@ -127,7 +131,7 @@ const rawDemoCase = {
       id: 'ev-email-chain',
       name: 'Internal email chain',
       type: 'DIGITAL',
-      description: 'Emails in which the defendant discusses covering the transfers before the firm\'s quarterly audit.',
+      description: 'Emails Webb sent to his own personal account: reminders, a running tally, "put back 800 of March," "audit is the 14th — needs to be whole by the 10th." The People read consciousness of guilt. The defense reads a man keeping careful score of what he intended to return.',
       relevanceScore: 8,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-intent',
@@ -136,7 +140,7 @@ const rawDemoCase = {
       id: 'ev-forensic-report',
       name: 'Forensic accounting report',
       type: 'FORENSIC',
-      description: 'A reconciliation report quantifying the total diverted funds against the trust account ledger.',
+      description: 'Independent reconciliation fixing the diversion at $14,200 net of repayments. A footnote the defense intends to enlarge: the firm\'s controls were thin enough that, in principle, any of the three employees could have initiated a transfer. The trust account held real money — a widow\'s home-sale escrow, a landscaping company\'s payroll reserve.',
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-value',
@@ -145,23 +149,23 @@ const rawDemoCase = {
       id: 'ev-surveillance',
       name: 'Keycard access log and office security footage',
       type: 'DIGITAL',
-      description: 'Access logs and video placing the defendant alone at the file server during two of the transfer windows.',
+      description: 'Keycard logs and hallway footage placing Webb alone in the office during two of the eleven transfer windows. Pulled by the landlord three weeks after the fact; the system had already overwritten part of the period, and no one can account for every master keycard. The People call it corroboration. The defense calls it a gap wearing a timestamp.',
       relevanceScore: 6,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-taking',
     },
   ],
-  summary: 'Marcus Webb, a former bookkeeper, is charged with grand theft after allegedly diverting $14,200 from his employer\'s client trust account into a personal account over four months.',
+  summary: 'Marcus Webb kept the books at Hollis & Associates for six years. Ray Hollis hired him knowing his record — two theft convictions and a possession charge — because Webb owned it in the interview, and for six years that faith looked justified. Then, over four months, $14,200 left the client trust account for Webb\'s personal checking in eleven transfers, most landing days before a child-support deadline. About $3,100 came back in small, irregular repayments before the transfers stopped. The trust account held real people\'s money: a widow\'s home-sale escrow, a landscaper\'s payroll reserve. Webb — divorced, two kids, eighteen months sober, sleeping in his car some weeks — has said nothing publicly. His emails say he meant to make it whole before the audit. The People say that is what every embezzler says.',
 };
 
 export const demoCasePayload: CasePayload = CasePayloadSchema.parse(rawDemoCase);
 
 const rawDemoPleaNarrative = {
-  prosecutionRationale: 'The bank records and forensic accounting report establish the diverted amount independent of witness testimony, and the email chain speaks directly to intent. The People are prepared to offer a reduced sentence in exchange for a plea, reserving the office access evidence — the weakest link — for trial only if the defendant rejects the deal.',
-  defenseRationale: 'The paper trail on the transfers themselves is clean and hard to contest. Our best angle at trial is suppressing the keycard and surveillance evidence as circumstantial and prejudicial, but that is not a strategy to bet a trial on given the client\'s prior record. Taking the offer caps the exposure.',
+  prosecutionRationale: 'The paper is unanswerable: the transfers, the destination account, the timing against his support deadlines, and his intent in his own words. I don\'t need the keycard footage — which is convenient, because it has problems. What I don\'t have is a villain. He paid a fifth of it back, and the firm\'s own expert will say the door was left standing open. That is why the offer exists: he pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
+  defenseRationale: 'I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. The offer puts a floor under his life. He hates it. I have told him to take it.',
 };
 
 export const demoPleaNarrative: PleaNarrative = PleaNarrativeSchema.parse(rawDemoPleaNarrative);
 
 export const demoAftermathNarrative: string =
-  'Coverage of the Webb case was brief but pointed: the local business journal ran a short piece on trust-account controls at small accounting firms, quoting a rival bookkeeper who called the sentence "fair, given he already had a record." Webb\'s former employer declined to comment beyond confirming new internal audit procedures. No victim impact statement was filed. The clerk\'s office reported no unusual courtroom attendance, and the case drew no further press once sentencing was entered.';
+  'The Peninsula Sentinel ran it under "Second Chances, Second Thoughts." Ray Hollis, 71, told the reporter he had hired Webb knowing his record — "a man who owns his past keeps a clean ledger," he had believed — and declined to say whether he would do it again. The widow whose escrow sat in the trust account was repaid in full before the case resolved; she told the paper she felt worse for Webb\'s children than for herself. The landscaping company moved its payroll to a firm in San Mateo anyway. On the Sentinel\'s comment page the argument ran for two days — half the county calling it what happens when you hand a felon the checkbook, the other half asking what exactly a man with a record, no job, and a support order is supposed to do. Webb\'s older son came to the final hearing in his school blazer and left without speaking to anyone. The State Board of Accountancy opened a routine inquiry into the firm\'s trust controls. By spring, Hollis & Associates had a new bookkeeper, a two-signature rule, and — still taped above the coffee maker — the laminated card Webb had put there himself: "Reconcile daily."';
