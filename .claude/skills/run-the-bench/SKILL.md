@@ -34,14 +34,22 @@ look at them — a blank frame means the app didn't render. Other knobs:
 `BASE_URL` (default `http://localhost:5173/the-bench/`), `PLAYWRIGHT_PREFIX`
 (default `/tmp/bench-playwright`).
 
-What it drives: WELCOME → Play Demo → Act 1 ledger + dossier modal
-(OceanTraitsMeter) + charge modal (sentencing range) → accepted-plea branch
-to END_STATE at 1280px, then the forced-trial branch (4 motion rulings,
-verdict, sentence) at 375px.
+What it drives: five runs across the four docket cases —
+1. **Webb** accepted plea at 1280px (ledger, dossier + charge modals,
+   plea-accepted ending)
+2. **Webb** forced trial at 375px (4 motion rulings, guilty verdict,
+   convicted ending)
+3. **Boone** (WEAK → no offer): trial-only path, acquittal ending
+4. **Reyes** (STRONG → offer rejected): rejected-offer terms, convicted ending
+5. **Vaughn** (multi-charge): per-charge split verdict, SPLIT ending
 
-**The assertions pin the demo case** (Marcus Webb, 1–3 year range, 4
-evidence items, ledger speaker order). If `src/lib/demoCase.ts` or the
-ledger/action-bar UI changes intentionally, update `driver.mjs` to match.
+Each ending is asserted by a phrase unique to that case's aftermath variant,
+which is what proves the outcome-conditioned branching end to end.
+
+**The assertions pin the demo docket** (names, 1–3 year Webb range, per-case
+evidence counts, ledger speaker order, aftermath variant phrases). If a case
+in `src/lib/demoCases/` or the ledger/action-bar/welcome UI changes
+intentionally, update `driver.mjs` to match.
 
 ## Run (human path)
 
