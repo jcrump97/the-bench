@@ -259,16 +259,22 @@ export const CasePayloadSchema = CaseSchema;
 // ==========================================
 export const PleaDecisionSchema = z.enum(['ACCEPT', 'REJECT']);
 
+// Shared with the dialogue script (section 9): dialogue options carry these
+// same closed choice sets, so a script can never invent an outcome the
+// decision schemas don't accept.
+export const EvidenceRulingSchema = z.enum(['ADMITTED', 'EXCLUDED']);
+export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
+
 export const MotionRulingSchema = z.strictObject({
   evidenceId: z.string().min(1).max(40),
-  ruling: z.enum(['ADMITTED', 'EXCLUDED']),
+  ruling: EvidenceRulingSchema,
 });
 
 export const ChargeVerdictSchema = z.strictObject({
   chargeId:       z.string().min(1).max(40),
   chargeName:     z.string().max(200),
   classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
-  verdict:        z.enum(['GUILTY', 'NOT_GUILTY']),
+  verdict:        VerdictValueSchema,
 });
 
 export const VerdictSchema = z.array(ChargeVerdictSchema).min(1);
@@ -343,6 +349,156 @@ export const GamePhaseSchema = z.enum([
 ]);
 
 // ==========================================
+// 9. DIALOGUE SCRIPT (narrative-only sidecar)
+// ==========================================
+// The courtroom-transcript redesign (TODO.md). A DialogueScript is authored
+// (demo docket) or LLM-generated narrative that crosses the trust boundary at
+// hydration, like PleaNarrativeSchema — it supplies only *lines*, never
+// structure. Governing invariant: a dialogue option is
+// { lineText, choice } where choice comes from the closed decision enums in
+// section 5. Beat *selection* is deterministic (reactionBeats is a closed
+// record keyed by choice); beat *content* is narrative. Sentencing has no
+// dialogue options by design — it stays a structured form and its
+// pronouncement is projected into the transcript deterministically.
+
+export const TranscriptSpeakerSchema = z.enum([
+  'CLERK',
+  'PROSECUTION',
+  'DEFENSE',
+  'COURT',
+  'WITNESS',
+  'DEFENDANT',
+  'PRESS',
+]);
+
+// characterId is non-null exactly when speaker === 'WITNESS' (it points into
+// CasePayload.witnesses so the UI can show the witness's name). The defendant
+// is singular per case and every other speaker is a role, not a person.
+export const TranscriptLineSchema = z.strictObject({
+  speaker: TranscriptSpeakerSchema,
+  characterId: z.string().min(1).max(40).nullable(),
+  text: z.string().min(1).max(1000),
+}).superRefine((line, ctx) => {
+  if (line.speaker === 'WITNESS' && line.characterId === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'WITNESS lines must carry a characterId' });
+  }
+  if (line.speaker !== 'WITNESS' && line.characterId !== null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${line.speaker} lines must not carry a characterId` });
+  }
+});
+
+// A beat: an uninterrupted scripted exchange played line-by-line between
+// player decisions. Beat ids must be unique across the whole script (checked
+// in DialogueScriptSchema) — they become stable ledger-entry/React keys.
+export const DialogueBeatSchema = z.strictObject({
+  id: z.string().min(1).max(40),
+  lines: z.array(TranscriptLineSchema).min(1).max(20),
+});
+
+// One selectable judge line. Multiple options may share a choice — variants
+// multiply voice, never the state space.
+function dialogueOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
+  return z.strictObject({
+    choice,
+    lineText: z.string().min(1).max(300),
+  });
+}
+
+// Every value in the closed choice set must be reachable through at least one
+// option — a decision the player cannot express is an illegal script.
+function addChoiceCoverageIssues(
+  options: readonly { choice: string }[],
+  allChoices: readonly string[],
+  ctx: z.RefinementCtx,
+): void {
+  for (const choice of allChoices) {
+    if (!options.some((o) => o.choice === choice)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `No dialogue option covers choice ${choice}` });
+    }
+  }
+}
+
+export const PleaDialogueSchema = z.strictObject({
+  kind: z.literal('PLEA'),
+  promptBeat: DialogueBeatSchema,
+  options: z.array(dialogueOption(PleaDecisionSchema)).min(2).max(8),
+  reactionBeats: z.strictObject({
+    ACCEPT: DialogueBeatSchema,
+    REJECT: DialogueBeatSchema,
+  }),
+}).superRefine((v, ctx) => addChoiceCoverageIssues(v.options, PleaDecisionSchema.options, ctx));
+
+export const MotionDialogueSchema = z.strictObject({
+  kind: z.literal('MOTION'),
+  evidenceId: z.string().min(1).max(40),
+  promptBeat: DialogueBeatSchema,
+  options: z.array(dialogueOption(EvidenceRulingSchema)).min(2).max(8),
+  reactionBeats: z.strictObject({
+    ADMITTED: DialogueBeatSchema,
+    EXCLUDED: DialogueBeatSchema,
+  }),
+}).superRefine((v, ctx) => addChoiceCoverageIssues(v.options, EvidenceRulingSchema.options, ctx));
+
+export const VerdictDialogueSchema = z.strictObject({
+  kind: z.literal('VERDICT'),
+  chargeId: z.string().min(1).max(40),
+  promptBeat: DialogueBeatSchema,
+  options: z.array(dialogueOption(VerdictValueSchema)).min(2).max(8),
+  reactionBeats: z.strictObject({
+    GUILTY: DialogueBeatSchema,
+    NOT_GUILTY: DialogueBeatSchema,
+  }),
+}).superRefine((v, ctx) => addChoiceCoverageIssues(v.options, VerdictValueSchema.options, ctx));
+
+// plea is null for NO_OFFER cases (the prosecution's declination is scripted
+// into openingBeat); there is no judicial plea decision to voice. Whether the
+// script's evidenceIds/chargeIds/witness characterIds resolve against the
+// active CasePayload is a hydration-time check, not intra-script validation.
+export const DialogueScriptSchema = z.strictObject({
+  openingBeat: DialogueBeatSchema,
+  plea: PleaDialogueSchema.nullable(),
+  motions: z.array(MotionDialogueSchema).min(1).max(20),
+  verdicts: z.array(VerdictDialogueSchema).min(1).max(10),
+}).superRefine((script, ctx) => {
+  const beatIds = new Set<string>();
+  const addBeat = (beat: z.infer<typeof DialogueBeatSchema>) => {
+    if (beatIds.has(beat.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate beat id: ${beat.id}` });
+    }
+    beatIds.add(beat.id);
+  };
+
+  addBeat(script.openingBeat);
+  if (script.plea !== null) {
+    addBeat(script.plea.promptBeat);
+    addBeat(script.plea.reactionBeats.ACCEPT);
+    addBeat(script.plea.reactionBeats.REJECT);
+  }
+
+  const evidenceIds = new Set<string>();
+  for (const motion of script.motions) {
+    if (evidenceIds.has(motion.evidenceId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate motion evidenceId: ${motion.evidenceId}` });
+    }
+    evidenceIds.add(motion.evidenceId);
+    addBeat(motion.promptBeat);
+    addBeat(motion.reactionBeats.ADMITTED);
+    addBeat(motion.reactionBeats.EXCLUDED);
+  }
+
+  const chargeIds = new Set<string>();
+  for (const verdict of script.verdicts) {
+    if (chargeIds.has(verdict.chargeId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate verdict chargeId: ${verdict.chargeId}` });
+    }
+    chargeIds.add(verdict.chargeId);
+    addBeat(verdict.promptBeat);
+    addBeat(verdict.reactionBeats.GUILTY);
+    addBeat(verdict.reactionBeats.NOT_GUILTY);
+  }
+});
+
+// ==========================================
 // TYPE EXPORTS
 // ==========================================
 export type SecurityPayload     = z.infer<typeof BYOKSchema>;
@@ -360,3 +516,12 @@ export type Verdict             = z.infer<typeof VerdictSchema>;
 export type ProsecutionStrength = z.infer<typeof ProsecutionStrengthSchema>;
 export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
 export type FinalResult         = z.infer<typeof FinalResultSchema>;
+export type EvidenceRuling      = z.infer<typeof EvidenceRulingSchema>;
+export type VerdictValue        = z.infer<typeof VerdictValueSchema>;
+export type TranscriptSpeaker   = z.infer<typeof TranscriptSpeakerSchema>;
+export type TranscriptLine      = z.infer<typeof TranscriptLineSchema>;
+export type DialogueBeat        = z.infer<typeof DialogueBeatSchema>;
+export type PleaDialogue        = z.infer<typeof PleaDialogueSchema>;
+export type MotionDialogue      = z.infer<typeof MotionDialogueSchema>;
+export type VerdictDialogue     = z.infer<typeof VerdictDialogueSchema>;
+export type DialogueScript      = z.infer<typeof DialogueScriptSchema>;
