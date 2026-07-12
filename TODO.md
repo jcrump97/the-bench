@@ -46,6 +46,129 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       reflects the playable demo + next steps. The original written
       introduction ("Why This Exists") is untouched.
 
+## Presentation & pacing (first-time-player review, 2026-07-12)
+
+Finding from a screenshot-by-screenshot playthrough: every phase renders its
+full state in one frame — no sequencing, no acknowledgment of the player's
+decisions, and the verdict/aftermath entries append **below the fold with no
+scroll**, so the ending is invisible unless the player scrolls. It reads as a
+case-review tool, not a courtroom. All fixes below are view-layer only
+(`useUIStore` + CSS): `buildLedger` stays a pure projection, no schema/store
+validation or phase-machine changes, no new dependencies.
+
+- [ ] **Auto-scroll + entrance animation for new ledger entries** — when
+      `entries.length` grows, `scrollIntoView` the newest entry with a
+      fade/slide-in (respect `prefers-reduced-motion`). Closest to a bug fix:
+      makes the verdict and aftermath visible at all.
+- [ ] **Sequential ledger reveal** — `revealedEntryCount` in `useUIStore`;
+      render `entries.slice(0, revealed)`, advance on click/tap (VN-style,
+      respects reading speed) with a "reveal all" skip. Action bar stays
+      disabled until the current phase's entries have been "heard." Reveal
+      whole entries, not typewriter text.
+- [ ] **Stage the finale as its own beat** — after sentencing, stagger the
+      verdict → sentence → press Aftermath entries (~600ms), with the
+      "Case closed / New Case" bar appearing only after the last one lands.
+- [ ] **Per-speaker visual voice in `LedgerEntryRow`** — accent left-border
+      keyed on `entry.speaker`, heavier headings for verdict/sentence `kind`s,
+      press Aftermath styled as a clipping. Pure CSS on fields that already
+      exist.
+- [ ] **Act title cards on phase transition** — brief interstitial overlay
+      ("Act 2 — Evidentiary Motions · The parties will be heard on
+      admissibility"), rendered as UI chrome, not a ledger entry, so the
+      ledger stays a pure court record.
+- [ ] **Act 2 as per-motion beats** (biggest scope — absorbed into the
+      "Courtroom transcript redesign" section below) — one contested evidence
+      item center-stage at a time (description from validated case data),
+      ruling echoes into the ledger before the next motion appears. Later:
+      short prosecution/defense arguments per motion as narrative-only LLM
+      color, same pattern as the plea rationale.
+- [ ] **Driver escape hatch** — the paced reveal breaks `driver.mjs`'s pinned
+      assertions; add an instant-reveal mode (e.g. `?instant=1` query param
+      read at `useUIStore` init) so headless runs stay fast and deterministic,
+      and update the driver alongside each item above.
+
+## Courtroom transcript redesign (dialogue ledger — design plan, 2026-07-12)
+
+**This section is the shared plan of record for this redesign — kept in
+TODO.md deliberately so Claude Code and opencode agents work from the same
+document.** It extends (and partially supersedes) the "Presentation &
+pacing" section above: sequential reveal is a prerequisite, and the Act 2
+per-motion-beats item is absorbed into this design.
+
+**Vision (user, 2026-07-12):** the ledger should read as a court
+transcript — dialogue between named parties, not summary paragraphs. The
+current demo cases narrate "the thought process of all parties"; instead,
+parties should *speak*. Player decision points become dialogue choices: the
+player picks the line the judge says from the bench (a mini ruling or
+procedural line), and that line enters the transcript. Multiple answer
+options per decision should be generatable.
+
+**Governing invariant (do not violate):** a dialogue option is
+`{ lineText: string, outcome: <closed structural enum> }`. The outcome set
+per decision point is fixed and deterministic (plea: ACCEPT/REJECT;
+motion: ADMIT/EXCLUDE; verdict: GUILTY/NOT_GUILTY per charge). Authored
+demo text or LLM generation supplies only `lineText` — never a new outcome.
+Same pattern as `buildPleaPosture`: LLM provides color, deterministic
+pipeline provides structure. Zod-validate generated options and reject any
+whose `outcome` isn't in the closed set for that decision point.
+
+- [ ] **1. Utterance-level transcript model** — subdivide today's paragraph
+      entries into dialogue lines. Extend `LedgerEntry` (or add a
+      `TranscriptLine` shape) with utterance granularity; `buildLedger`
+      stays a pure projection. The player's chosen judge-lines append as
+      `COURT` entries verbatim, so the transcript records what the judge
+      actually said.
+- [ ] **2. Dialogue scripts for the four demo cases** — rewrite Webb /
+      Boone / Reyes / Vaughn prose (summaries, plea rationales, motion
+      context, aftermath) as spoken exchanges. Content rides in a
+      narrative-only sidecar validated at hydration (pattern:
+      `PleaNarrativeSchema`) — e.g. a `DialogueScriptSchema` — so
+      `CaseSchema` structure is untouched. Biggest content lift.
+- [ ] **3. Judicial voice options at decision points** — replace form-style
+      controls (plea buttons, batch motion rows, verdict toggles) with
+      dialogue-choice buttons. Each structural outcome gets ≥1 authored
+      line; multiple phrasings per outcome are allowed (this is the
+      "generatable options" hook — demo cases author them, the future LLM
+      pipeline generates them within the schema). Open sub-question: does
+      the chosen *tone* (stern vs. measured phrasing of the same ruling)
+      feed the aftermath narrative as color?
+- [ ] **4. Beats: player lines that trigger scripted exchanges** — core
+      mechanic (upgraded from "optional flavor" per user, see resolutions
+      below). A chosen judge line — procedural ("The court will hear the
+      People") or a mini ruling — can unroll a multi-line scripted exchange
+      across speakers (including `WITNESS`/`DEFENDANT` testimony) before
+      the next decision point. Beat selection is deterministic (keyed off
+      the closed choice enum); beat content is authored/generated narrative
+      validated by the sidecar schema.
+- [ ] **5. Sentencing exception** — sentencing (per-charge sentence
+      selection from lawful ranges) stays a structured form; a dialogue
+      button can't express "2 years + $10,000 fine" honestly. The
+      *pronouncement* of the chosen sentence still enters the transcript as
+      a COURT line.
+- [ ] **6. Reveal + driver integration** — transcript advances line-by-line
+      (sequential reveal from the pacing section) and pauses at decision
+      points; `driver.mjs` gets the instant-reveal escape hatch and updated
+      assertions (utterance-level speaker order will change the pinned
+      expectations).
+
+**Resolved with the user (2026-07-12):**
+1. **Tone variants are pure voice.** Same outcome, same downstream state;
+   aftermath does not key on the chosen phrasing. (Tone-as-input can be
+   added later without breaking anything.)
+2. **Pilot on Webb first** (both branches), then port Boone/Reyes/Vaughn
+   once the transcript model and choice UI settle.
+3. **Beats, not single lines — testimony is in scope.** A player's chosen
+   line can trigger a *multi-step scripted exchange* (e.g. "The court will
+   hear from the witness" → counsel question → witness answer → objection
+   → back to the bench) before the next decision point. Immersion is the
+   goal. Implications: `LedgerSpeaker` gains `WITNESS`/`DEFENDANT`; the
+   dialogue script is a tree of beats keyed by structural choice —
+   `{ choice } → [scripted lines...] → next decision point` — where beat
+   *selection* is deterministic (keyed off the closed outcome/choice enum)
+   and beat *content* is authored (demo) or generated (LLM), validated by
+   the same sidecar schema. This is item 4 upgraded from "optional flavor"
+   to core mechanic.
+
 ## Deferred MVP items (from plan §7)
 
 - [ ] `GameService` + the 4-stage LLM generation pipeline
