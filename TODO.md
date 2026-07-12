@@ -1,8 +1,8 @@
 # TODO
 
 Status of the "First UI Layer" plan (side panels, popups, ledger, action bar).
-Phases 0–4 are **done and verified**: the demo case is fully playable end-to-end
-(WELCOME → Play Demo → Act 1 → [Act 2] → Act 3 → END_STATE) on both the
+Phases 0–4 are **done and verified**: the full demo docket is playable end-to-end
+(WELCOME → select a case → Act 1 → [Act 2] → Act 3 → END_STATE) on both the
 accepted-plea and forced-trial branches, at desktop (1280px) and mobile (375px)
 widths, with clean consoles. Verified via headless-Chromium playthroughs against
 `npm run dev` (Playwright installed in /tmp, not a project dependency).
@@ -41,7 +41,7 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       `LedgerEntryRow` displays the attribution.
 - [x] **README update & review** — done. Both Mermaid charts updated (UIStore
       as third slice; deterministic-derivations subgraph showing
-      `computePleaPostureForCase`, `deriveSentencingExposure`, and
+      `buildPleaPosture`, `deriveSentencingExposure`, and
       `sentencingModifierFromRulings` feeding the acts) and the Status section
       reflects the playable demo + next steps. The original written
       introduction ("Why This Exists") is untouched.
@@ -57,10 +57,11 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived
       entirely from existing state (`pleaDecision === 'ACCEPT'` → `PLEA`;
       otherwise `TRIAL` with `pleaOutcome` read off `pleaPosture.status`).
-- [ ] Aftermath narrative source — `useLedgerEntries` hardcodes
-      `demoAftermathNarrative` at END_STATE (demo is the only playable path
-      today). When GameService's Aftermath call exists, the narrative must come
-      from state instead.
+- [x] Aftermath narrative source — done: the demo docket uses authored
+      `aftermathVariants` keyed by outcome, surfaced through the `CaseSource`
+      seam (`demoCaseSource`). The BYOK path will call `generateAftermath()`
+      on the same `CaseSource` interface; both implementations produce an
+      already-validated narrative string before the store reaches `END_STATE`.
 - [ ] Tier 2 testing checkpoint — `@testing-library/react` + jsdom (per-file
       `@vitest-environment jsdom`), now that the shell is stable. Needs
       dependency approval.
@@ -68,10 +69,9 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       baselines, now that the gameplay loop is functionally complete. Needs
       dependency approval.
 - [ ] Loading/pipeline-progress UI for the real (non-demo) generation flow.
-- [ ] `PleaOfferForm`'s `NO_OFFER` and `REJECTED_BY_DEFENSE` branches are not
-      exercisable with the current demo case (it always scores MODERATE →
-      PENDING_JUDICIAL_REVIEW). Either add a second "weak case" dev fixture or
-      cover them with Tier 2 component tests against a mocked PleaPosture.
+- [x] `PleaOfferForm`'s `NO_OFFER` and `REJECTED_BY_DEFENSE` branches — now
+      exercisable via Boone (WEAK → no offer) and Reyes (STRONG → rejected)
+      in the demo docket. Covered by the `run-the-bench` headless playthrough.
 - [ ] Whether `sentencingModifierFromRulings` + defendant profile should
       algorithmically narrow the selectable sentencing range in
       `TrialVerdictForm`, versus being displayed as judge's context only

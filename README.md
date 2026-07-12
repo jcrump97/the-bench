@@ -51,7 +51,7 @@ flowchart LR
 
     UI -->|"Action Trigger"| GS
     UI -->|"User Key Input"| VAULT
-    UI -->|"Start Demo"| DEMO
+    UI -->|"Select Demo Case"| DEMO
     VAULT -->|"Transient Secure Injection"| GS
     GS -->|"POST Strict Schema"| LLM
     DEMO -->|"Hardcoded Payload"| VL
@@ -83,7 +83,7 @@ flowchart LR
     end
 
     subgraph Deterministic["Deterministic Derivations (no LLM)"]
-        PLEA["computePleaPostureForCase (plea structure)"]
+        PLEA["buildPleaPosture (plea structure)"]
         EXPO["deriveSentencingExposure (per-charge ranges → case exposure)"]
         MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
     end
@@ -116,7 +116,7 @@ The LLM provides color; deterministic code provides structure. Plea structure, c
 
 ## Status
 
-Foundation and first UI layer complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, courtroom ledger with speaker attribution, phase-aware action bar) are implemented. The hardcoded demo case — People v. Marcus Webb — is playable end-to-end on both the accepted-plea and forced-trial paths. Next up: GameService and the four-stage LLM generation pipeline (the BYOK path), then ResultGenerator with localStorage persistence.
+Foundation and first UI layer complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, courtroom ledger with speaker attribution, phase-aware action bar, OCEAN traits meter) are implemented. Four hardcoded demo cases — **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge) — are playable end-to-end on both accepted-plea and forced-trial paths. A docket picker on the welcome screen replaces the single "Play Demo" button. Next up: `GameService` and the four-stage LLM generation pipeline (the BYOK path), then `ResultGenerator` with localStorage persistence.
 
 ## License
 

@@ -15,7 +15,7 @@ npm run test:watch # Vitest in watch mode
 
 Before marking any task complete, run `npm run lint`, `npm test`, and `npm run build`. The app must build and type-check cleanly — it deploys to GitHub Pages as a static bundle. Note that `npm run build` enforces the `@ts-expect-error` type-negative gates but does not execute the Vitest suites; only `npm test` does.
 
-UI changes are verified with the committed `run-the-bench` skill (`.claude/skills/run-the-bench/`) — a headless Playwright playthrough of the demo case through both branches. Playwright is deliberately not a project dependency; the skill installs it in a throwaway prefix.
+UI changes are verified with the committed `run-the-bench` skill (`.claude/skills/run-the-bench/`) — a headless Playwright playthrough of the full demo docket (four cases, both branches, including per-charge verdicts). Playwright is deliberately not a project dependency; the skill installs it in a throwaway prefix.
 
 ## Vision
 
@@ -112,5 +112,5 @@ Test coverage for all three lives in `src/lib/__tests__/` and `src/schemas/__tes
 - **No Redux or Context for global state.** Zustand only.
 - **No new dependencies without explicit approval.** The stack is locked: Vite, React 19, TypeScript strict, Zustand, Zod, Tailwind CSS v4, lucide-react.
 - **Commits use Conventional Commits:** `feat:`, `fix:`, `chore:`, `docs:` — one concern per commit.
-- `App.tsx` renders `AppShell`, the phase router. The full demo-case gameplay loop (WELCOME → END_STATE, both plea and trial branches) is implemented; the BYOK/LLM path is stubbed until GameService exists.
+- `App.tsx` renders `AppShell`, the phase router. The full demo docket (four cases, both plea and trial branches, including per-charge verdicts for the multi-charge case) is implemented; the BYOK/LLM path is stubbed until GameService exists.
 - Vite base path is `/the-bench/` (required for GitHub Pages routing).
