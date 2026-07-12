@@ -2,6 +2,14 @@
 
 OpenCode-specific companion to [`CLAUDE.md`](./CLAUDE.md). Read `CLAUDE.md` first for architecture, vision, and layer rules.
 
+## Cross-Agent Coordination
+
+This repo is worked by both Claude Code and OpenCode; the repo itself is the only shared memory.
+
+- **`TODO.md` is the plan-of-record.** Plans, design decisions, and progress notes (with commit hashes) live there — never only in a chat session. Before starting work, read it; before ending a session with work in flight, note the stopping point and next step there.
+- **Keep this file in sync with `CLAUDE.md`.** When a change lands that touches CLAUDE.md, check AGENTS.md in the same commit.
+- **Commit messages are the handoff log.** Conventional Commits, one concern per commit — the last commit is often the only record of where the previous session stopped.
+
 ## Commands
 
 ```bash
@@ -63,7 +71,7 @@ npm run dev &
 node .claude/skills/run-the-bench/driver.mjs
 ```
 
-The driver asserts against the hardcoded demo case (`src/lib/demoCase.ts`) and screenshots every stage. If demo data or UI changes intentionally, update `driver.mjs` to match.
+The driver plays the full demo docket — five runs across the four cases in `src/lib/demoCases/` (Webb plea + trial, Boone, Reyes, Vaughn's split verdict) — asserting demo data and screenshotting every stage. If a demo case or the ledger/action-bar/welcome UI changes intentionally, update `driver.mjs` to match.
 
 ## Architecture Reminders
 
@@ -74,9 +82,11 @@ The driver asserts against the hardcoded demo case (`src/lib/demoCase.ts`) and s
 
 ## Where to Look
 
-- Schemas & types: `src/schemas/gameSchemas.ts`
+- Schemas & types: `src/schemas/gameSchemas.ts` (includes the dialogue-script sidecar, section 9)
 - State machine & phase rules: `src/store/useGameStore.ts`
-- Security vault: `src/store/useSecurityStore.ts`
-- Demo case: `src/lib/demoCase.ts`
-- Deterministic derivations (plea, sentencing, modifiers): `src/lib/pleaAssessment.ts`, `src/lib/sentencingExposure.ts`
-- App shell / phase router: `src/App.tsx`
+- Security vault: `src/store/useSecurityStore.ts`; view state: `src/store/useUIStore.ts`
+- Demo docket (four cases + registry): `src/lib/demoCases/`
+- Case source seam (demo vs. future LLM pipeline): `src/lib/caseSource.ts`
+- Deterministic derivations (plea, sentencing, modifiers): `src/lib/pleaAssessment.ts`, `src/lib/sentencingExposure.ts`, `src/lib/sentenceBounds.ts`
+- Ledger projection: `src/lib/buildLedger.ts`
+- App shell / phase router: `src/App.tsx` → `AppShell`
