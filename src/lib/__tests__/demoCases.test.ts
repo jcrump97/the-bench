@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling } from '../../schemas/gameSchemas';
-import { assessProsecution, buildPleaPosture, sentencingModifierFromRulings } from '../pleaAssessment';
+import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling, type Verdict } from '../../schemas/gameSchemas';
+import { assessProsecution, buildPleaPosture, computePleaPostureForCase, sentencingModifierFromRulings } from '../pleaAssessment';
 import { DEMO_CASES } from '../demoCases';
+import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
 import { webbCase } from '../demoCases/webb';
 
 // Pins every demo case's scoring math so a future schema or weighting change
@@ -26,12 +27,50 @@ describe('demo case registry', () => {
   );
 
   it.each(DEMO_CASES.map((b) => [b.id, b] as const))(
-    '%s aftermath stays within the FinalResult length bound',
+    '%s aftermath variants stay within the FinalResult length bound',
     (_id, bundle) => {
-      expect(bundle.aftermathNarrative.length).toBeGreaterThan(0);
-      expect(bundle.aftermathNarrative.length).toBeLessThanOrEqual(4000);
+      const variants = Object.values(bundle.aftermath).filter((v): v is string => v !== undefined);
+      expect(variants.length).toBeGreaterThanOrEqual(2);
+      for (const text of variants) {
+        expect(text.length).toBeGreaterThan(0);
+        expect(text.length).toBeLessThanOrEqual(4000);
+      }
     }
   );
+
+  it.each(DEMO_CASES.map((b) => [b.id, b] as const))(
+    '%s authors aftermath variants for exactly the reachable outcomes',
+    (_id, bundle) => {
+      const { posture } = computePleaPostureForCase(bundle.payload, bundle.pleaNarrative);
+      expect(bundle.aftermath.PLEA_ACCEPTED !== undefined).toBe(posture.status === 'PENDING_JUDICIAL_REVIEW');
+      expect(bundle.aftermath.SPLIT !== undefined).toBe(bundle.payload.charges.length > 1);
+    }
+  );
+});
+
+describe('classifyOutcome / selectAftermath', () => {
+  const guilty = (chargeId: string) => ({ chargeId, chargeName: 'X', classification: 'FELONY' as const, verdict: 'GUILTY' as const });
+  const notGuilty = (chargeId: string) => ({ chargeId, chargeName: 'X', classification: 'FELONY' as const, verdict: 'NOT_GUILTY' as const });
+
+  it('classifies an accepted plea regardless of verdict', () => {
+    expect(classifyOutcome('ACCEPT', null)).toBe('PLEA_ACCEPTED');
+  });
+
+  it('classifies all-guilty as CONVICTED, all-not-guilty as ACQUITTED, mixed as SPLIT', () => {
+    expect(classifyOutcome('REJECT', [guilty('a')])).toBe('CONVICTED');
+    expect(classifyOutcome(null, [notGuilty('a')])).toBe('ACQUITTED');
+    expect(classifyOutcome(null, [guilty('a'), notGuilty('b')])).toBe('SPLIT');
+  });
+
+  it('throws on the off-path call (no accepted plea and no verdict)', () => {
+    expect(() => classifyOutcome(null, null)).toThrow();
+    expect(() => classifyOutcome('REJECT', [] as unknown as Verdict)).toThrow();
+  });
+
+  it('selectAftermath returns the authored variant and throws for unreachable outcomes', () => {
+    expect(selectAftermath(webbCase, 'CONVICTED')).toBe(webbCase.aftermath.CONVICTED);
+    expect(() => selectAftermath(webbCase, 'SPLIT')).toThrow(/unreachable outcome SPLIT/);
+  });
 });
 
 describe('webbCase (People v. Marcus Webb)', () => {
