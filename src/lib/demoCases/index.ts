@@ -1,5 +1,6 @@
 import type { DemoCaseBundle } from './types';
 import { webbCase } from './webb';
+import { booneCase } from './boone';
 
 export type { DemoCaseBundle } from './types';
 
@@ -7,7 +8,10 @@ export type { DemoCaseBundle } from './types';
 // (isDemo === true in useSecurityStore). Bundles bypass GameService and the
 // LLM pipeline entirely and feed directly into the ValidationLayer.
 // Typed as a non-empty tuple so "no demo cases" is inexpressible.
-export const DEMO_CASES: readonly [DemoCaseBundle, ...DemoCaseBundle[]] = [webbCase];
+export const DEMO_CASES: readonly [DemoCaseBundle, ...DemoCaseBundle[]] = [
+  webbCase,   // MODERATE → offer pending judicial review (player chooses the branch)
+  booneCase,  // WEAK → no offer (trial-only)
+];
 
 {
   const ids = new Set<string>();

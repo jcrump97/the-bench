@@ -4,6 +4,7 @@ import { assessProsecution, buildPleaPosture, computePleaPostureForCase, sentenc
 import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
 import { webbCase } from '../demoCases/webb';
+import { booneCase } from '../demoCases/boone';
 
 // Pins every demo case's scoring math so a future schema or weighting change
 // that silently breaks demo playability (wrong band, wrong plea posture,
@@ -46,6 +47,31 @@ describe('demo case registry', () => {
       expect(bundle.aftermath.SPLIT !== undefined).toBe(bundle.payload.charges.length > 1);
     }
   );
+});
+
+describe('booneCase (People v. Curtis Boone)', () => {
+  it('assessProsecution bands the case WEAK with a coverage gap', () => {
+    const strength = assessProsecution(booneCase.payload);
+    expect(strength.band).toBe('WEAK');
+    expect(strength.score).toBe(33);
+    expect(strength.elementCoverage).toBe(0.5);
+  });
+
+  it('computePleaPostureForCase yields NO_OFFER with no defense assessment', () => {
+    const { posture, defenseRisk } = computePleaPostureForCase(booneCase.payload, booneCase.pleaNarrative);
+    expect(posture.status).toBe('NO_OFFER');
+    expect(defenseRisk).toBeNull();
+  });
+
+  it('carries no defenseRationale (the prosecution never made an offer to answer)', () => {
+    expect(booneCase.pleaNarrative.defenseRationale).toBeUndefined();
+  });
+
+  it('authors no PLEA_ACCEPTED aftermath (the plea branch is unreachable)', () => {
+    expect(booneCase.aftermath.PLEA_ACCEPTED).toBeUndefined();
+    expect(booneCase.aftermath.CONVICTED).toBeDefined();
+    expect(booneCase.aftermath.ACQUITTED).toBeDefined();
+  });
 });
 
 describe('classifyOutcome / selectAftermath', () => {
