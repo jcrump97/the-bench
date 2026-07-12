@@ -5,6 +5,7 @@ import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
 import { webbCase } from '../demoCases/webb';
 import { booneCase } from '../demoCases/boone';
+import { reyesCase } from '../demoCases/reyes';
 
 // Pins every demo case's scoring math so a future schema or weighting change
 // that silently breaks demo playability (wrong band, wrong plea posture,
@@ -71,6 +72,30 @@ describe('booneCase (People v. Curtis Boone)', () => {
     expect(booneCase.aftermath.PLEA_ACCEPTED).toBeUndefined();
     expect(booneCase.aftermath.CONVICTED).toBeDefined();
     expect(booneCase.aftermath.ACQUITTED).toBeDefined();
+  });
+});
+
+describe('reyesCase (People v. Dominic Reyes)', () => {
+  it('assessProsecution bands the case STRONG with full element coverage', () => {
+    const strength = assessProsecution(reyesCase.payload);
+    expect(strength.band).toBe('STRONG');
+    expect(strength.score).toBe(67);
+    expect(strength.elementCoverage).toBe(1);
+  });
+
+  it('computePleaPostureForCase yields REJECTED_BY_DEFENSE from the gambler profile', () => {
+    const { posture, defenseRisk } = computePleaPostureForCase(reyesCase.payload, reyesCase.pleaNarrative);
+    expect(posture.status).toBe('REJECTED_BY_DEFENSE');
+    expect(defenseRisk?.posture).toBe('REJECT');
+    // Zero priors and a near-max offer: nothing pushes toward ACCEPT.
+    expect(defenseRisk?.priorExposure).toBe(0);
+    expect(defenseRisk?.offerGenerosity).toBe(0);
+  });
+
+  it('authors no PLEA_ACCEPTED aftermath (the rejected offer never reaches the bench)', () => {
+    expect(reyesCase.aftermath.PLEA_ACCEPTED).toBeUndefined();
+    expect(reyesCase.aftermath.CONVICTED).toBeDefined();
+    expect(reyesCase.aftermath.ACQUITTED).toBeDefined();
   });
 });
 
