@@ -1,22 +1,16 @@
-import {
-  CasePayloadSchema,
-  PleaNarrativeSchema,
-  type CasePayload,
-  type PleaNarrative,
-} from '../schemas/gameSchemas';
+import { defineDemoCase } from './types';
 
-// Hardcoded case for offline/keyless play (isDemo === true in useSecurityStore).
-// Bypasses GameService and the LLM pipeline entirely; feeds directly into the
-// ValidationLayer. Chosen as People v. Marcus Webb — Grand Theft (PC § 487(a))
-// because the statute's three elements are individually provable by distinct
-// evidence (full element coverage), objection risk varies across items (so Act 2
+// People v. Marcus Webb — Grand Theft (PC § 487(a)). Chosen because the
+// statute's three elements are individually provable by distinct evidence
+// (full element coverage), objection risk varies across items (so Act 2
 // motion rulings are meaningful), and the defendant's prior record drives the
-// defense toward accepting the plea (PENDING_JUDICIAL_REVIEW, not a trial-only demo).
-// The narrative layer is deliberately morally textured — partial repayments, thin
-// firm controls, a second-chance employer, custody pressure — so the judge is
-// weighing a person, not processing a form. This is the quality bar for the
-// future LLM generation pipeline's prompts.
-const rawDemoCase = {
+// defense toward accepting the plea (PENDING_JUDICIAL_REVIEW — the docket's
+// player-chooses-the-branch case). The narrative layer is deliberately
+// morally textured — partial repayments, thin firm controls, a second-chance
+// employer, custody pressure — so the judge is weighing a person, not
+// processing a form. This is the quality bar for the future LLM generation
+// pipeline's prompts.
+const rawWebbPayload = {
   caseId: '24-CR-00847',
   defendant: {
     firstName: 'Marcus',
@@ -158,14 +152,18 @@ const rawDemoCase = {
   summary: 'Marcus Webb kept the books at Hollis & Associates for six years. Ray Hollis hired him knowing his record — two theft convictions and a possession charge — because Webb owned it in the interview, and for six years that faith looked justified. Then, over four months, $14,200 left the client trust account for Webb\'s personal checking in eleven transfers, most landing days before a child-support deadline. About $3,100 came back in small, irregular repayments before the transfers stopped. The trust account held real people\'s money: a widow\'s home-sale escrow, a landscaper\'s payroll reserve. Webb — divorced, two kids, eighteen months sober, sleeping in his car some weeks — has said nothing publicly. His emails say he meant to make it whole before the audit. The People say that is what every embezzler says.',
 };
 
-export const demoCasePayload: CasePayload = CasePayloadSchema.parse(rawDemoCase);
-
-const rawDemoPleaNarrative = {
+const rawWebbPleaNarrative = {
   prosecutionRationale: 'The paper is unanswerable: the transfers, the destination account, the timing against his support deadlines, and his intent in his own words. I don\'t need the keycard footage — which is convenient, because it has problems. What I don\'t have is a villain. He paid a fifth of it back, and the firm\'s own expert will say the door was left standing open. That is why the offer exists: he pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
   defenseRationale: 'I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. The offer puts a floor under his life. He hates it. I have told him to take it.',
 };
 
-export const demoPleaNarrative: PleaNarrative = PleaNarrativeSchema.parse(rawDemoPleaNarrative);
-
-export const demoAftermathNarrative: string =
+const webbAftermathNarrative =
   'The Peninsula Sentinel ran it under "Second Chances, Second Thoughts." Ray Hollis, 71, told the reporter he had hired Webb knowing his record — "a man who owns his past keeps a clean ledger," he had believed — and declined to say whether he would do it again. The widow whose escrow sat in the trust account was repaid in full before the case resolved; she told the paper she felt worse for Webb\'s children than for herself. The landscaping company moved its payroll to a firm in San Mateo anyway. On the Sentinel\'s comment page the argument ran for two days — half the county calling it what happens when you hand a felon the checkbook, the other half asking what exactly a man with a record, no job, and a support order is supposed to do. Webb\'s older son came to the final hearing in his school blazer and left without speaking to anyone. The State Board of Accountancy opened a routine inquiry into the firm\'s trust controls. By spring, Hollis & Associates had a new bookkeeper, a two-signature rule, and — still taped above the coffee maker — the laminated card Webb had put there himself: "Reconcile daily."';
+
+export const webbCase = defineDemoCase({
+  title: 'People v. Marcus Webb',
+  teaser: 'A bookkeeper hired on faith, $14,200 gone from the client trust account — and $3,100 quietly put back.',
+  payload: rawWebbPayload,
+  pleaNarrative: rawWebbPleaNarrative,
+  aftermathNarrative: webbAftermathNarrative,
+});

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
-import { demoCasePayload, demoPleaNarrative } from '../../lib/demoCase';
+import { DEMO_CASES } from '../../lib/demoCases';
 
 export function WelcomeScreen() {
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -16,8 +16,9 @@ export function WelcomeScreen() {
   const isAuthenticated = useSecurityStore((state) => state.isAuthenticated);
 
   const handlePlayDemo = () => {
-    setActiveCase(demoCasePayload);
-    setActivePleaNarrative(demoPleaNarrative);
+    const bundle = DEMO_CASES[0];
+    setActiveCase(bundle.payload);
+    setActivePleaNarrative(bundle.pleaNarrative);
     setPhase('ACT_1_INTAKE');
   };
 

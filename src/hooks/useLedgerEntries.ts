@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { usePleaPosture } from './usePleaPosture';
 import { buildLedger, type LedgerEntry } from '../lib/buildLedger';
-import { demoAftermathNarrative } from '../lib/demoCase';
+import { findDemoCaseById } from '../lib/demoCases';
 
 export function useLedgerEntries(): LedgerEntry[] {
   const currentPhase = useGameStore((state) => state.currentPhase);
@@ -14,9 +14,12 @@ export function useLedgerEntries(): LedgerEntry[] {
   const imposedSentence = useGameStore((state) => state.imposedSentence);
   const postureResult = usePleaPosture();
 
-  // Demo is the only playable path today, so END_STATE always reads the demo
-  // aftermath. GameService's Aftermath call replaces this on the BYOK path.
-  const aftermathNarrative = currentPhase === 'END_STATE' ? demoAftermathNarrative : null;
+  // Demo is the only playable path today, so END_STATE reads the active
+  // bundle's aftermath from the registry. GameService's Aftermath call
+  // replaces this on the BYOK path.
+  const aftermathNarrative = currentPhase === 'END_STATE' && activeCase !== null
+    ? findDemoCaseById(activeCase.caseId)?.aftermathNarrative ?? null
+    : null;
 
   return useMemo(() => {
     if (activeCase === null) return [];
