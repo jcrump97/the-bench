@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling, type Verdict } from '../../schemas/gameSchemas';
 import { assessProsecution, buildPleaPosture, computePleaPostureForCase, sentencingModifierFromRulings } from '../pleaAssessment';
+import { deriveSentencingExposure } from '../sentencingExposure';
 import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
 import { webbCase } from '../demoCases/webb';
 import { booneCase } from '../demoCases/boone';
 import { reyesCase } from '../demoCases/reyes';
+import { vaughnCase } from '../demoCases/vaughn';
 
 // Pins every demo case's scoring math so a future schema or weighting change
 // that silently breaks demo playability (wrong band, wrong plea posture,
@@ -96,6 +98,44 @@ describe('reyesCase (People v. Dominic Reyes)', () => {
     expect(reyesCase.aftermath.PLEA_ACCEPTED).toBeUndefined();
     expect(reyesCase.aftermath.CONVICTED).toBeDefined();
     expect(reyesCase.aftermath.ACQUITTED).toBeDefined();
+  });
+});
+
+describe('vaughnCase (People v. Teresa Vaughn)', () => {
+  it('assessProsecution bands the case MODERATE with full element coverage across both charges', () => {
+    const strength = assessProsecution(vaughnCase.payload);
+    expect(strength.band).toBe('MODERATE');
+    expect(strength.score).toBe(63);
+    expect(strength.elementCoverage).toBe(1);
+  });
+
+  it('computePleaPostureForCase yields PENDING_JUDICIAL_REVIEW from the anxious, prior-heavy profile', () => {
+    const { posture, defenseRisk } = computePleaPostureForCase(vaughnCase.payload, vaughnCase.pleaNarrative);
+    expect(posture.status).toBe('PENDING_JUDICIAL_REVIEW');
+    expect(defenseRisk?.posture).toBe('ACCEPT');
+    expect(defenseRisk?.priorExposure).toBe(70);
+    if (posture.status === 'PENDING_JUDICIAL_REVIEW') {
+      // The offer spans both charges: discounted prison + fine (felony) and jail (misdemeanor).
+      expect(posture.pleadsToChargeIds).toEqual(['charge-hit-run', 'charge-susp-license']);
+      expect(posture.proposedSentence.map((s) => s.type).sort()).toEqual(['FINE', 'JAIL', 'PRISON']);
+    }
+  });
+
+  it('derives cross-charge exposure (prison + fine + jail) and authors all four aftermath variants', () => {
+    const exposure = deriveSentencingExposure(vaughnCase.payload.charges);
+    expect(exposure.maximumPenalties.map((s) => s.type).sort()).toEqual(['FINE', 'JAIL', 'PRISON']);
+    expect(vaughnCase.aftermath.PLEA_ACCEPTED).toBeDefined();
+    expect(vaughnCase.aftermath.SPLIT).toBeDefined();
+  });
+
+  it('SPLIT is selected for a mixed per-charge verdict on this case', () => {
+    const mixed = vaughnCase.payload.charges.map((charge, i) => ({
+      chargeId: charge.id,
+      chargeName: charge.name,
+      classification: charge.classification,
+      verdict: i === 0 ? ('NOT_GUILTY' as const) : ('GUILTY' as const),
+    }));
+    expect(selectAftermath(vaughnCase, classifyOutcome('REJECT', mixed))).toBe(vaughnCase.aftermath.SPLIT);
   });
 });
 

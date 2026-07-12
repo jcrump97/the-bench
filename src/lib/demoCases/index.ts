@@ -2,6 +2,7 @@ import type { DemoCaseBundle } from './types';
 import { webbCase } from './webb';
 import { booneCase } from './boone';
 import { reyesCase } from './reyes';
+import { vaughnCase } from './vaughn';
 
 export type { DemoCaseBundle } from './types';
 
@@ -13,6 +14,7 @@ export const DEMO_CASES: readonly [DemoCaseBundle, ...DemoCaseBundle[]] = [
   webbCase,   // MODERATE → offer pending judicial review (player chooses the branch)
   booneCase,  // WEAK → no offer (trial-only)
   reyesCase,  // STRONG → offer rejected by the defense (trial-only, terms shown)
+  vaughnCase, // MODERATE, multi-charge → offer pending; per-charge verdicts, SPLIT reachable
 ];
 
 {
