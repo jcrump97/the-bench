@@ -9,9 +9,13 @@ npm run dev        # Start Vite dev server with HMR
 npm run build      # Type-check (tsc -b) then bundle for GitHub Pages
 npm run lint       # ESLint across the project
 npm run preview    # Serve the dist/ build locally
+npm test           # Run the Vitest suite once
+npm run test:watch # Vitest in watch mode
 ```
 
-Before marking any task complete, run `npm run lint` and `npm run build`. The app must build and type-check cleanly — it deploys to GitHub Pages as a static bundle.
+Before marking any task complete, run `npm run lint`, `npm test`, and `npm run build`. The app must build and type-check cleanly — it deploys to GitHub Pages as a static bundle. Note that `npm run build` enforces the `@ts-expect-error` type-negative gates but does not execute the Vitest suites; only `npm test` does.
+
+UI changes are verified with the committed `run-the-bench` skill (`.claude/skills/run-the-bench/`) — a headless Playwright playthrough of the demo case through both branches. Playwright is deliberately not a project dependency; the skill installs it in a throwaway prefix.
 
 ## Vision
 
@@ -35,7 +39,7 @@ This is a public portfolio project documenting a career transition into AI Syste
 |---|---|---|
 | **UI (React 19)** | Displays state, triggers actions | Never calls `fetch()` or reads the API key back |
 | **GameService** | Orchestrates all Gemini calls via native `fetch()`; triggers the generation pipeline and the Aftermath call | Only caller of the Gemini API |
-| **ResultGenerator** | Standalone module — assembles the `FinalResult` object from end-of-game state | Sends unvalidated result to ValidationLayer; never writes to localStorage directly |
+| **ResultGenerator** | Standalone module — assembles the `FinalResult` object from end-of-game state (not yet implemented — designed alongside GameService) | Sends unvalidated result to ValidationLayer; never writes to localStorage directly |
 | **DemoCase** | Hardcoded JSON payload for offline/keyless play | Bypasses GameService and LLM entirely; feeds directly into ValidationLayer |
 | **ValidationLayer** | Zod parses every LLM response and every `FinalResult` before state hydration | Three outputs: validated data → GameState, any failure → ErrorState, immutable FinalResult → localStorage |
 | **Zustand stores** | Source of truth for game, security, and view state | Three isolated slices (see below) |
@@ -53,7 +57,7 @@ ACT_3_VERDICT → END_STATE (Aftermath)
 All phases → ERROR_STATE → WELCOME (reset)
 ```
 
-The transition matrix is defined in `ALLOWED_PHASE_TRANSITIONS` at `src/store/useGameStore.ts:25`. Every call to `setPhase()` is validated against it and then run through `GamePhaseSchema.safeParse()` before mutating state.
+The transition matrix is defined in `ALLOWED_PHASE_TRANSITIONS` in `src/store/useGameStore.ts`. Every call to `setPhase()` is validated against it and then run through `GamePhaseSchema.safeParse()` before mutating state.
 
 Alongside `activeCase`, the store holds `activePleaNarrative` — the LLM's (or demo case's) narrative-only plea input. It is upstream input data, not a derived value: the computed `PleaPosture` stays a pure derivation and is never stored. `setActivePleaNarrative` mirrors case hydration — phase-gated to `WELCOME` and `PleaNarrativeSchema.safeParse`d, with any violation forcing `ERROR_STATE`.
 
