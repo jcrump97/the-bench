@@ -118,6 +118,11 @@ whose `outcome` isn't in the closed set for that decision point.
       stays a pure projection. The player's chosen judge-lines append as
       `COURT` entries verbatim, so the transcript records what the judge
       actually said.
+      **Progress (2026-07-12, commit `6dfcdd1`):** the sidecar schema exists —
+      `DialogueScriptSchema` + beat/line/decision-point schemas in section 9
+      of `src/schemas/gameSchemas.ts`, tested in
+      `src/schemas/__tests__/dialogueScript{,.types}.test.ts`. Next: Webb
+      script (item 2, pilot), then the transcript projection and choice UI.
 - [ ] **2. Dialogue scripts for the four demo cases** — rewrite Webb /
       Boone / Reyes / Vaughn prose (summaries, plea rationales, motion
       context, aftermath) as spoken exchanges. Content rides in a
