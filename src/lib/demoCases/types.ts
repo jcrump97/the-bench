@@ -7,6 +7,12 @@ import {
 
 // A complete offline case: everything the LLM pipeline will eventually
 // generate for one docket entry, hand-authored and validated at module load.
+//
+// [LLM-FILL] convention: every point in a demo bundle (or the runtime flow)
+// that the future GameService pipeline will fill is tagged with a grep-able
+// `[LLM-FILL: <stage>]` comment, where <stage> is one of the pipeline calls:
+// StatuteSelection, EnvironmentGen, CharacterGen, EvidenceGen, CasePayload
+// (final assembly), PleaNarrative, or Aftermath.
 export interface DemoCaseBundle {
   // Mirrors payload.caseId (enforced by defineDemoCase) so registry lookups
   // and store state key off the same identifier.

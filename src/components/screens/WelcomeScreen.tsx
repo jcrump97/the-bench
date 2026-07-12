@@ -15,6 +15,9 @@ export function WelcomeScreen() {
   const setVault = useSecurityStore((state) => state.setVault);
   const isAuthenticated = useSecurityStore((state) => state.isAuthenticated);
 
+  // [LLM-FILL: CasePayload + PleaNarrative] — on the BYOK path, GameService's
+  // four-stage generation pipeline produces the payload and plea narrative
+  // that hydrate the store here; the demo registry stands in for it today.
   const handlePlayDemo = () => {
     const bundle = DEMO_CASES[0];
     setActiveCase(bundle.payload);

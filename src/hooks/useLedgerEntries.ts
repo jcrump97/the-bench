@@ -14,9 +14,9 @@ export function useLedgerEntries(): LedgerEntry[] {
   const imposedSentence = useGameStore((state) => state.imposedSentence);
   const postureResult = usePleaPosture();
 
-  // Demo is the only playable path today, so END_STATE reads the active
-  // bundle's aftermath from the registry. GameService's Aftermath call
-  // replaces this on the BYOK path.
+  // [LLM-FILL: Aftermath] — GameService's post-sentencing Aftermath call
+  // replaces this on the BYOK path. Demo is the only playable path today, so
+  // END_STATE reads the active bundle's aftermath from the registry.
   const aftermathNarrative = currentPhase === 'END_STATE' && activeCase !== null
     ? findDemoCaseById(activeCase.caseId)?.aftermathNarrative ?? null
     : null;
