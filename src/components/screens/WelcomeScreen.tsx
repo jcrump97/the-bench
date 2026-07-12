@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
-import { DEMO_CASES } from '../../lib/demoCases';
+import { DEMO_CASES, type DemoCaseBundle } from '../../lib/demoCases';
 import { demoCaseSource } from '../../lib/caseSource';
 
 export function WelcomeScreen() {
@@ -20,8 +20,8 @@ export function WelcomeScreen() {
   // backed CaseSource produces the payload and plea narrative through this
   // same async seam; the demo source stands in for it today. The store's Zod
   // setters remain the validation boundary either way.
-  const handlePlayDemo = () => {
-    void demoCaseSource(DEMO_CASES[0])
+  const handlePlayDemo = (bundle: DemoCaseBundle) => {
+    void demoCaseSource(bundle)
       .generateCase()
       .then(({ payload, pleaNarrative }) => {
         setActiveCase(payload);
@@ -48,13 +48,29 @@ export function WelcomeScreen() {
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={handlePlayDemo}
-        className="min-h-11 rounded-md bg-(--accent) px-6 py-3 font-medium text-(--bg) hover:opacity-90"
-      >
-        Play Demo Case
-      </button>
+      <div className="w-full max-w-lg rounded-lg border border-(--border) bg-(--bg-panel) p-5 text-left">
+        <h2 className="text-sm font-medium text-(--text-h)">Today&apos;s Docket</h2>
+        <p className="mt-1 text-sm text-(--text-muted)">
+          {DEMO_CASES.length} cases await your ruling. No API key required — pick a file to take the bench.
+        </p>
+        <ul className="mt-3 space-y-2">
+          {DEMO_CASES.map((bundle) => (
+            <li key={bundle.id}>
+              <button
+                type="button"
+                onClick={() => handlePlayDemo(bundle)}
+                className="min-h-11 w-full rounded-md border border-(--border-strong) px-4 py-3 text-left hover:bg-(--bg-elevated)"
+              >
+                <span className="block text-xs text-(--text-muted)">
+                  No. {bundle.id} &middot; {bundle.payload.charges.map((charge) => charge.name).join(' · ')}
+                </span>
+                <span className="mt-0.5 block font-medium text-(--text-h)">{bundle.title}</span>
+                <span className="mt-0.5 block text-sm text-(--text)">{bundle.teaser}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <div className="w-full max-w-sm rounded-lg border border-(--border) bg-(--bg-panel) p-5 text-left">
         <h2 className="text-sm font-medium text-(--text-h)">Bring Your Own Key</h2>
