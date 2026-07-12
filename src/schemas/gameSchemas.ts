@@ -299,6 +299,11 @@ export const DefenseRiskSchema = z.strictObject({
 // 7. FINAL RESULT (persisted to localStorage)
 // ==========================================
 
+// The aftermath is LLM/demo-authored narrative that crosses a trust boundary
+// twice: hydrating game state after sentencing and persisting into
+// FinalResult. One schema guards both crossings.
+export const AftermathNarrativeSchema = z.string().min(1).max(4000);
+
 const finalResultBase = {
   schemaVersion:       z.literal(1),
   caseId:              z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/),
@@ -307,7 +312,7 @@ const finalResultBase = {
   prosecutionStrength: ProsecutionStrengthSchema,
   defenseRisk:         DefenseRiskSchema.nullable(),
   imposedSentence:     z.array(SentenceSchema),
-  aftermathNarrative:  z.string().max(4000),
+  aftermathNarrative:  AftermathNarrativeSchema,
 };
 
 export const FinalResultSchema = z.discriminatedUnion('resolutionPath', [

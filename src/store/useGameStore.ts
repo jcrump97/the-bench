@@ -7,6 +7,7 @@ import {
   VerdictSchema,
   SentenceSchema,
   PleaNarrativeSchema,
+  AftermathNarrativeSchema,
   type GamePhase,
   type CasePayload,
   type PleaDecision,
@@ -32,6 +33,11 @@ interface GameState {
   verdict:         Verdict | null;
   imposedSentence: Sentence[];
 
+  // [LLM-FILL: Aftermath] — narrative input like activeCase, written after
+  // sentencing by the CaseSource (demo registry today, GameService's
+  // Aftermath call on the BYOK path) and read at END_STATE.
+  aftermathNarrative: string | null;
+
   setPhase:              (newPhase: unknown) => void;
   setActiveCase:         (caseData: unknown) => void;
   setActivePleaNarrative:(narrative: unknown) => void;
@@ -39,13 +45,14 @@ interface GameState {
   addMotionRuling:       (ruling: unknown) => void;
   setVerdict:            (verdict: unknown) => void;
   setImposedSentence:    (sentences: unknown) => void;
+  setAftermathNarrative: (narrative: unknown) => void;
   // Sanctioned escape hatch from END_STATE; bypasses transition matrix by design.
   resetGameState:    () => void;
 }
 
 const INITIAL_STATE: Pick<
   GameState,
-  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'
+  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence' | 'aftermathNarrative'
 > = {
   currentPhase:    'WELCOME',
   activeCase:      null,
@@ -54,18 +61,14 @@ const INITIAL_STATE: Pick<
   motionRulings:   [],
   verdict:         null,
   imposedSentence: [],
+  aftermathNarrative: null,
 };
 
 const ERROR_PHASE: GamePhase = 'ERROR_STATE';
 
-const ERROR_RESET: Pick<GameState, 'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence'> = {
+const ERROR_RESET: typeof INITIAL_STATE = {
+  ...INITIAL_STATE,
   currentPhase:    ERROR_PHASE,
-  activeCase:      null,
-  activePleaNarrative: null,
-  pleaDecision:    null,
-  motionRulings:   [],
-  verdict:         null,
-  imposedSentence: [],
 };
 
 const ALLOWED_PHASE_TRANSITIONS: Record<GamePhase, ReadonlySet<GamePhase>> = {
@@ -194,6 +197,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
     set({ imposedSentence: result.data });
+  },
+
+  setAftermathNarrative: (narrative) => {
+    // The aftermath is generated after sentencing, immediately before the
+    // END_STATE transition — any other phase is an off-path write.
+    if (get().currentPhase !== 'ACT_3_VERDICT') {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
+    const result = AftermathNarrativeSchema.safeParse(narrative);
+    if (!result.success) {
+      logValidationFailure(result.error);
+      set(ERROR_RESET);
+      return;
+    }
+    set({ aftermathNarrative: result.data });
   },
 
   resetGameState: () => set({ ...INITIAL_STATE }),

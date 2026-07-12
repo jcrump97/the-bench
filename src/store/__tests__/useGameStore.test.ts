@@ -51,6 +51,42 @@ describe('useGameStore — activePleaNarrative', () => {
   });
 });
 
+describe('useGameStore — aftermathNarrative', () => {
+  function advanceToAct3(): void {
+    useGameStore.getState().setActiveCase(validCase);
+    useGameStore.getState().setPhase('ACT_1_INTAKE');
+    useGameStore.getState().setPleaDecision('ACCEPT');
+    useGameStore.getState().setPhase('ACT_3_VERDICT');
+  }
+
+  it('accepts a valid narrative while at ACT_3_VERDICT', () => {
+    advanceToAct3();
+    useGameStore.getState().setAftermathNarrative('The press had a field day.');
+    expect(useGameStore.getState().aftermathNarrative).toBe('The press had a field day.');
+    expect(useGameStore.getState().currentPhase).toBe('ACT_3_VERDICT');
+  });
+
+  it('force-resets to ERROR_STATE when written outside ACT_3_VERDICT', () => {
+    useGameStore.getState().setAftermathNarrative('Too early.');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().aftermathNarrative).toBeNull();
+  });
+
+  it('force-resets to ERROR_STATE on a malformed narrative', () => {
+    advanceToAct3();
+    useGameStore.getState().setAftermathNarrative('');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().aftermathNarrative).toBeNull();
+  });
+
+  it('resetGameState clears aftermathNarrative back to null', () => {
+    advanceToAct3();
+    useGameStore.getState().setAftermathNarrative('An ending.');
+    useGameStore.getState().resetGameState();
+    expect(useGameStore.getState().aftermathNarrative).toBeNull();
+  });
+});
+
 describe('useGameStore — case + narrative load atomically at WELCOME', () => {
   it('loads case then narrative then transitions to ACT_1_INTAKE without error', () => {
     useGameStore.getState().setActiveCase(validCase);

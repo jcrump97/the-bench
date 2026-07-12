@@ -2,8 +2,6 @@ import { useMemo } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { usePleaPosture } from './usePleaPosture';
 import { buildLedger, type LedgerEntry } from '../lib/buildLedger';
-import { findDemoCaseById } from '../lib/demoCases';
-import { classifyOutcome, selectAftermath } from '../lib/demoCases/aftermath';
 
 export function useLedgerEntries(): LedgerEntry[] {
   const currentPhase = useGameStore((state) => state.currentPhase);
@@ -13,16 +11,13 @@ export function useLedgerEntries(): LedgerEntry[] {
   const motionRulings = useGameStore((state) => state.motionRulings);
   const verdict = useGameStore((state) => state.verdict);
   const imposedSentence = useGameStore((state) => state.imposedSentence);
+  const storedAftermath = useGameStore((state) => state.aftermathNarrative);
   const postureResult = usePleaPosture();
 
-  // [LLM-FILL: Aftermath] — GameService's post-sentencing Aftermath call
-  // replaces this on the BYOK path. Demo is the only playable path today, so
-  // END_STATE picks the active bundle's authored variant for the outcome the
-  // player actually produced.
-  const demoBundle = activeCase !== null ? findDemoCaseById(activeCase.caseId) : undefined;
-  const aftermathNarrative = currentPhase === 'END_STATE' && demoBundle !== undefined
-    ? selectAftermath(demoBundle, classifyOutcome(pleaDecision, verdict))
-    : null;
+  // The aftermath is upstream narrative state, written through the CaseSource
+  // seam at sentencing time and already validated by the store; the ledger
+  // only surfaces it once the game reaches END_STATE.
+  const aftermathNarrative = currentPhase === 'END_STATE' ? storedAftermath : null;
 
   return useMemo(() => {
     if (activeCase === null) return [];

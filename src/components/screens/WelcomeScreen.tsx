@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
 import { DEMO_CASES } from '../../lib/demoCases';
+import { demoCaseSource } from '../../lib/caseSource';
 
 export function WelcomeScreen() {
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -15,14 +16,19 @@ export function WelcomeScreen() {
   const setVault = useSecurityStore((state) => state.setVault);
   const isAuthenticated = useSecurityStore((state) => state.isAuthenticated);
 
-  // [LLM-FILL: CasePayload + PleaNarrative] — on the BYOK path, GameService's
-  // four-stage generation pipeline produces the payload and plea narrative
-  // that hydrate the store here; the demo registry stands in for it today.
+  // [LLM-FILL: CasePayload + PleaNarrative] — on the BYOK path, a GameService-
+  // backed CaseSource produces the payload and plea narrative through this
+  // same async seam; the demo source stands in for it today. The store's Zod
+  // setters remain the validation boundary either way.
   const handlePlayDemo = () => {
-    const bundle = DEMO_CASES[0];
-    setActiveCase(bundle.payload);
-    setActivePleaNarrative(bundle.pleaNarrative);
-    setPhase('ACT_1_INTAKE');
+    void demoCaseSource(DEMO_CASES[0])
+      .generateCase()
+      .then(({ payload, pleaNarrative }) => {
+        setActiveCase(payload);
+        setActivePleaNarrative(pleaNarrative);
+        setPhase('ACT_1_INTAKE');
+      })
+      .catch(() => setPhase('ERROR_STATE'));
   };
 
   const handleSubmitKey = (event: FormEvent) => {
