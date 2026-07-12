@@ -121,8 +121,9 @@ whose `outcome` isn't in the closed set for that decision point.
       **Progress (2026-07-12, commit `6dfcdd1`):** the sidecar schema exists —
       `DialogueScriptSchema` + beat/line/decision-point schemas in section 9
       of `src/schemas/gameSchemas.ts`, tested in
-      `src/schemas/__tests__/dialogueScript{,.types}.test.ts`. Next: Webb
-      script (item 2, pilot), then the transcript projection and choice UI.
+      `src/schemas/__tests__/dialogueScript{,.types}.test.ts`. The execution
+      model is now fully designed — see **"Projection model — execution
+      spec"** below. Work proceeds by spec items P1–P7.
 - [ ] **2. Dialogue scripts for the four demo cases** — rewrite Webb /
       Boone / Reyes / Vaughn prose (summaries, plea rationales, motion
       context, aftermath) as spoken exchanges. Content rides in a
@@ -173,6 +174,121 @@ whose `outcome` isn't in the closed set for that decision point.
    and beat *content* is authored (demo) or generated (LLM), validated by
    the same sidecar schema. This is item 4 upgraded from "optional flavor"
    to core mechanic.
+
+### Projection model — execution spec (designed 2026-07-12)
+
+**How to use this section:** each work item P1–P7 is written to be executable
+by a fresh agent session (Claude Code or opencode) with no other context than
+this file plus the code it names. Items are dependency-ordered. Each carries a
+**Tier** tag for cost efficiency: `lower-tier` items have tight specs and
+should go to Sonnet-class models or opencode; `frontier` items need design
+judgment or narrative craft. When finishing an item, check it off here with a
+commit hash, and note anything the next item's agent must know.
+
+**Design decisions (settled — do not re-litigate):**
+
+1. **The script is a hydration-time sidecar, like the plea narrative.**
+   `DemoCaseBundle` gains optional `dialogueScript?: DialogueScript`;
+   `useGameStore` gains `activeDialogueScript: DialogueScript | null` with a
+   setter mirroring `setActivePleaNarrative` (WELCOME-gated,
+   `DialogueScriptSchema.safeParse`, any violation → ERROR_STATE). Cross-payload
+   checks the schema can't see live in a pure
+   `validateDialogueScriptAgainstCase(script, payload, posture)` in
+   `src/lib/`: motion `evidenceId`s are set-equal to `payload.evidence` ids;
+   verdict `chargeId`s set-equal to `payload.charges` ids; every WITNESS
+   `characterId` exists in `payload.witnesses`; `script.plea !== null` iff
+   computed posture is `PENDING_JUDICIAL_REVIEW` (Boone's declination and
+   Reyes's rejected offer are narrated in `openingBeat`, not a plea dialogue).
+   Called both at demo module load (`defineDemoCase`) and by the store setter
+   (which requires `activeCase` already hydrated; call order is
+   `setActiveCase` → `setActiveDialogueScript`).
+2. **The chosen line gets its own record; game logic never reads it.**
+   Structural stores (`pleaDecision`, `motionRulings`, `verdict`) stay the
+   sole inputs to derivations. New store field
+   `spokenJudgeLines: Record<string, string>` maps a decision-point id
+   (`'plea'` | `` `motion-${evidenceId}` `` | `` `verdict-${chargeId}` ``) to
+   the chosen `lineText`, written by the same ActionBar handler that
+   dispatches the structural decision. The projection falls back
+   deterministically (first option whose `choice` matches the recorded
+   structural decision) when a key is absent, so display totality never
+   depends on the voice record.
+3. **New projection beside the old one, not a rewrite of it.**
+   `buildTranscript(input): TranscriptEntry[]` in `src/lib/buildTranscript.ts`
+   with `TranscriptEntry = { id, order, phase, speaker: TranscriptSpeaker,
+   characterId: string | null, text, kind }` — one entry per *utterance*.
+   Beat lines get ids `` `${beatId}-${lineIndex}` `` (beat ids are
+   script-unique by schema, so these are stable React keys). `buildLedger`
+   is untouched; `GameShell` renders the transcript UI when
+   `activeDialogueScript !== null`, the legacy ledger otherwise. Legacy path
+   is deleted in P7 once all four cases carry scripts.
+4. **Assembly order is a pure function of (case, script, decisions, phase):**
+   openingBeat → [plea: promptBeat → chosen COURT line → `reactionBeats[pleaDecision]`]
+   → on the trial path, motions unroll **in script order**: motion *i*'s
+   promptBeat is emitted iff every motion before it is ruled; a ruled motion
+   also emits its chosen line + reaction beat → verdicts unroll the same way
+   (gated on phase ≥ ACT_3_VERDICT, trial path only) → sentencing
+   pronouncement (synthetic COURT lines from `formatSentence`; the sentencing
+   *form* stays structured per design item 5) → aftermath as PRESS entry at
+   END_STATE. Accepted plea ⇒ motion and verdict dialogues are simply never
+   emitted (no orphaned beats by construction).
+5. **The projection is append-only as state accrues.** Every store mutation
+   the sequential UI can produce only appends transcript entries (earlier
+   sections depend only on earlier decisions, which are never revised).
+   Sequential reveal (`revealedEntryCount`) relies on this invariant — assert
+   it in tests.
+6. **Reveal pauses at decision points without touching the phase machine.**
+   The projection naturally ends at the next undecided promptBeat; the
+   ActionBar's dialogue-choice buttons enable only when
+   `revealedEntryCount === transcript.length`. Phase transitions stay in the
+   existing ActionBar handlers; `useUIStore` gains reveal state only.
+   `?instant=1` (read once at `useUIStore` init) reveals everything
+   immediately — the driver escape hatch.
+
+**Work items:**
+
+- [ ] **P1 — store + cross-validation plumbing.** Implement design items 1–2:
+      `activeDialogueScript` + `setActiveDialogueScript`,
+      `spokenJudgeLines` + `recordSpokenJudgeLine` (Zod-validate: key
+      matches the three id shapes, text 1–300), and
+      `src/lib/validateDialogueScriptAgainstCase.ts` with unit tests
+      mirroring the store-gating tests in `src/store/__tests__/`.
+      **Tier: lower-tier** (spec above is complete; copy existing setter
+      patterns).
+- [ ] **P2 — `buildTranscript` projection + tests.** Implement design items
+      3–5 exactly. Tests must cover: plea-accept path (no motion/verdict
+      beats), trial path sequential unrolling, fallback line selection,
+      append-only invariant across a simulated full playthrough, WITNESS
+      characterId passthrough. **Tier: lower-tier implementation, frontier
+      line-by-line review** (this is the load-bearing module).
+- [ ] **P3 — Webb pilot `DialogueScript`.** Author the full script (opening,
+      plea prompt/reactions with ≥2 voiced options per outcome, four motions
+      with prompt/reaction beats incl. witness testimony beats, verdict,
+      both branches) in `src/lib/demoCases/webb.ts`; wire
+      `dialogueScript` through `DemoCaseBundle`/`defineDemoCase` (cross-validate
+      at load). Prose must keep Webb's authored stakes (second-chance
+      employer, custody timing, victims with faces). **Tier: frontier**
+      (narrative craft + first exercise of the whole schema).
+- [ ] **P4 — transcript UI.** `Transcript`/`TranscriptLineRow` components
+      (speaker-attributed utterances, WITNESS lines resolve `characterId` to
+      the witness name from `activeCase`), dialogue-choice ActionBar variant
+      rendering the active decision point's options and dispatching
+      structural decision + `recordSpokenJudgeLine` together; `GameShell`
+      branches per design item 3. **Tier: lower-tier** (per-speaker CSS voice
+      from the pacing section folds in here).
+- [ ] **P5 — reveal, auto-scroll, driver.** `revealedEntryCount` +
+      advance-on-click + reveal-all in `useUIStore`; auto-scroll newest
+      entry (respect `prefers-reduced-motion`); `?instant=1`; update
+      `driver.mjs` Webb runs to click dialogue options under instant mode
+      while the other three cases keep the legacy path. **Tier: lower-tier.**
+- [ ] **P6 — port Boone / Reyes / Vaughn scripts.** Follow the Webb pattern;
+      Boone/Reyes narrate their plea posture in `openingBeat` (`plea: null`);
+      Vaughn gets one verdict dialogue per charge. **Tier: lower-tier
+      drafting, frontier voice review.**
+- [ ] **P7 — retire the legacy ledger.** Remove `buildLedger`,
+      `useLedgerEntries`, `Ledger`/`LedgerEntryRow`, the form-style plea and
+      motion/verdict controls the dialogue UI replaced, and the `GameShell`
+      branch; make `dialogueScript` required on `DemoCaseBundle`; final
+      driver assertion sweep. **Tier: lower-tier.**
 
 ## Deferred MVP items (from plan §7)
 
