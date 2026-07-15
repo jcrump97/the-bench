@@ -8,14 +8,18 @@ import {
   SentenceSchema,
   PleaNarrativeSchema,
   AftermathNarrativeSchema,
+  DialogueScriptSchema,
   type GamePhase,
   type CasePayload,
   type PleaDecision,
   type MotionRuling,
   type Verdict,
   type PleaNarrative,
+  type DialogueScript,
 } from '../schemas/gameSchemas';
 import { z } from 'zod';
+import { computePleaPostureForCase } from '../lib/pleaAssessment';
+import { validateDialogueScriptAgainstCase } from '../lib/validateDialogueScriptAgainstCase';
 
 type Sentence = z.infer<typeof SentenceSchema>;
 
@@ -26,6 +30,10 @@ interface GameState {
   // (like activeCase), not a derived value — the computed PleaPosture stays
   // a pure derivation and is never stored here.
   activePleaNarrative: PleaNarrative | null;
+  // The narrative-only dialogue sidecar (courtroom-transcript redesign).
+  // Upstream input data, like activeCase/activePleaNarrative — hydrated once
+  // at WELCOME, cross-validated against activeCase + the computed PleaPosture.
+  activeDialogueScript: DialogueScript | null;
 
   // Player decisions — null until the player acts in each act
   pleaDecision:    PleaDecision | null;
@@ -38,30 +46,41 @@ interface GameState {
   // Aftermath call on the BYOK path) and read at END_STATE.
   aftermathNarrative: string | null;
 
-  setPhase:              (newPhase: unknown) => void;
-  setActiveCase:         (caseData: unknown) => void;
-  setActivePleaNarrative:(narrative: unknown) => void;
-  setPleaDecision:       (decision: unknown) => void;
-  addMotionRuling:       (ruling: unknown) => void;
-  setVerdict:            (verdict: unknown) => void;
-  setImposedSentence:    (sentences: unknown) => void;
-  setAftermathNarrative: (narrative: unknown) => void;
+  // The chosen judge line per decision point, keyed by decision-point id
+  // ('plea' | `motion-${evidenceId}` | `verdict-${chargeId}`). Narrative
+  // voice record only — game logic must never read this field; the
+  // structural stores (pleaDecision/motionRulings/verdict) stay the sole
+  // inputs to derivations.
+  spokenJudgeLines: Record<string, string>;
+
+  setPhase:               (newPhase: unknown) => void;
+  setActiveCase:          (caseData: unknown) => void;
+  setActivePleaNarrative: (narrative: unknown) => void;
+  setActiveDialogueScript:(script: unknown) => void;
+  setPleaDecision:        (decision: unknown) => void;
+  addMotionRuling:        (ruling: unknown) => void;
+  setVerdict:             (verdict: unknown) => void;
+  setImposedSentence:     (sentences: unknown) => void;
+  setAftermathNarrative:  (narrative: unknown) => void;
+  recordSpokenJudgeLine:  (decisionId: unknown, lineText: unknown) => void;
   // Sanctioned escape hatch from END_STATE; bypasses transition matrix by design.
   resetGameState:    () => void;
 }
 
 const INITIAL_STATE: Pick<
   GameState,
-  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence' | 'aftermathNarrative'
+  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'activeDialogueScript' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence' | 'aftermathNarrative' | 'spokenJudgeLines'
 > = {
   currentPhase:    'WELCOME',
   activeCase:      null,
   activePleaNarrative: null,
+  activeDialogueScript: null,
   pleaDecision:    null,
   motionRulings:   [],
   verdict:         null,
   imposedSentence: [],
   aftermathNarrative: null,
+  spokenJudgeLines: {},
 };
 
 const ERROR_PHASE: GamePhase = 'ERROR_STATE';
@@ -81,6 +100,16 @@ const ALLOWED_PHASE_TRANSITIONS: Record<GamePhase, ReadonlySet<GamePhase>> = {
 };
 
 const CASE_REHYDRATION_ALLOWED_PHASES: ReadonlySet<GamePhase> = new Set(['WELCOME']);
+
+// spokenJudgeLines key shape: 'plea' | `motion-${evidenceId}` | `verdict-${chargeId}`.
+// Defined locally (not in gameSchemas.ts) — this is a store-internal voice
+// record, never a trust-boundary payload shared with other modules.
+const SpokenDecisionIdSchema = z.union([
+  z.literal('plea'),
+  z.string().regex(/^motion-.{1,40}$/),
+  z.string().regex(/^verdict-.{1,40}$/),
+]);
+const SpokenLineTextSchema = z.string().min(1).max(300);
 
 function logValidationFailure(error: unknown): void {
   console.error('State validation failed');
@@ -157,6 +186,50 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ activePleaNarrative: result.data });
   },
 
+  setActiveDialogueScript: (script) => {
+    const currentPhase = get().currentPhase;
+    if (!CASE_REHYDRATION_ALLOWED_PHASES.has(currentPhase)) {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
+    const { activeCase, activePleaNarrative } = get();
+    if (activeCase === null || activePleaNarrative === null) {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
+    const result = DialogueScriptSchema.safeParse(script);
+    if (!result.success) {
+      logValidationFailure(result.error);
+      set(ERROR_RESET);
+      return;
+    }
+
+    // computePleaPostureForCase throws (not a Zod failure) on a schema-valid
+    // but inconsistent case/narrative pairing — e.g. an offering band with no
+    // defenseRationale. This setter is a trust boundary that will eventually
+    // receive LLM-shaped input, so that throw becomes ERROR_STATE, not a crash.
+    let issues: string[];
+    try {
+      const { posture } = computePleaPostureForCase(activeCase, activePleaNarrative);
+      issues = validateDialogueScriptAgainstCase(result.data, activeCase, posture);
+    } catch (error) {
+      logValidationFailure(error);
+      set(ERROR_RESET);
+      return;
+    }
+    if (issues.length > 0) {
+      logValidationFailure(issues);
+      set(ERROR_RESET);
+      return;
+    }
+
+    set({ activeDialogueScript: result.data });
+  },
+
   setPleaDecision: (decision) => {
     const result = PleaDecisionSchema.safeParse(decision);
     if (!result.success) {
@@ -215,6 +288,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
     set({ aftermathNarrative: result.data });
+  },
+
+  recordSpokenJudgeLine: (decisionId, lineText) => {
+    const idResult = SpokenDecisionIdSchema.safeParse(decisionId);
+    const textResult = SpokenLineTextSchema.safeParse(lineText);
+    if (!idResult.success || !textResult.success) {
+      logValidationFailure(!idResult.success ? idResult.error : textResult.error);
+      set(ERROR_RESET);
+      return;
+    }
+    set({ spokenJudgeLines: { ...get().spokenJudgeLines, [idResult.data]: textResult.data } });
   },
 
   resetGameState: () => set({ ...INITIAL_STATE }),
