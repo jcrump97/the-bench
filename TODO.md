@@ -46,6 +46,30 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       reflects the playable demo + next steps. The original written
       introduction ("Why This Exists") is untouched.
 
+## UI defects (player-perspective responsive sweep, 2026-07-15)
+
+Findings from a subagent-driven Playwright sweep (full docket via
+`run-the-bench` driver — all 24 checks passed, console clean — plus a
+Webb trial walkthrough screenshotted at 390/820/1440px). Phone and desktop
+render correctly; no horizontal overflow or console errors anywhere. One
+genuine defect:
+
+- [ ] **Tablet band (~768–1000px) is unplayable past Act 1.** Both side
+      panels default open at ≥768px (`useUIStore.ts` —
+      `matchMedia('(min-width: 768px)')`) and each open panel is a fixed
+      320px column (`md:w-80`, `GameShell.tsx`), so at e.g. 820px the center
+      column gets ~180px: ledger text wraps one word per line, "Accept Plea"
+      overflows its button, and the Act 3 submit button is pushed below the
+      viewport with no scrollbar (action bar is `shrink-0` in a non-scrolling
+      column). Fix: move the panels-open-by-default breakpoint to 1024px —
+      `min-width: 1024px` in `useUIStore.ts` and the matching `md:` → `lg:`
+      classes in `GameShell.tsx`/`PanelBackdrop.tsx` — so 768–1023px uses the
+      drawer pattern that already works on phones. Optionally add a `min-w`
+      floor on the center column as a guard. Verify by re-running the sweep
+      at 820x1180: all Act 1–3 controls reachable, no per-word text wrap.
+      **Tier: lower-tier** (contained to the three layout files; the fix is
+      specified above).
+
 ## Presentation & pacing (first-time-player review, 2026-07-12)
 
 Finding from a screenshot-by-screenshot playthrough: every phase renders its
