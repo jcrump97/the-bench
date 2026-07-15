@@ -246,7 +246,11 @@ commit hash, and note anything the next item's agent must know.
 
 **Work items:**
 
-- [ ] **P1 — store + cross-validation plumbing.** Implement design items 1–2:
+- [x] **P1 — store + cross-validation plumbing.** Done in `1f31893`. Note
+      for P2/P4 agents: `setActiveDialogueScript` requires `activeCase` *and*
+      `activePleaNarrative` already hydrated (it recomputes the posture for
+      the plea-presence check), so hydration order is case → narrative →
+      script. Implement design items 1–2:
       `activeDialogueScript` + `setActiveDialogueScript`,
       `spokenJudgeLines` + `recordSpokenJudgeLine` (Zod-validate: key
       matches the three id shapes, text 1–300), and
@@ -260,7 +264,11 @@ commit hash, and note anything the next item's agent must know.
       append-only invariant across a simulated full playthrough, WITNESS
       characterId passthrough. **Tier: lower-tier implementation, frontier
       line-by-line review** (this is the load-bearing module).
-- [ ] **P3 — Webb pilot `DialogueScript`.** Author the full script (opening,
+- [x] **P3 — Webb pilot `DialogueScript`.** Done in `133b92f`. Note for
+      P4/P6 agents: the script establishes two craft rules — no scripted
+      COURT lines (the judge speaks only player-chosen options plus the
+      deterministic sentencing pronouncement), and option text never states
+      numbers the engine doesn't produce. Author the full script (opening,
       plea prompt/reactions with ≥2 voiced options per outcome, four motions
       with prompt/reaction beats incl. witness testimony beats, verdict,
       both branches) in `src/lib/demoCases/webb.ts`; wire
