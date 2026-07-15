@@ -191,10 +191,584 @@ const webbAftermath = {
     'Not guilty, the foreman said, and Marcus Webb put his head in his hands. The Peninsula Sentinel ran it under "Reasonable Doubt at Hollis & Associates." The defense\'s two notes — the overwritten footage and the expert\'s concession that any of three employees could have moved the money — had been enough. Ray Hollis, 71, did not call it vindication; he told the reporter that the money was still gone, that somebody he trusted still took it, and that he had stopped trying to work out which sentence hurt more. The widow\'s escrow was made whole by the firm\'s insurer, which then raised the premium and required a two-signature rule anyway. Webb walked out with no conviction, no job, and a name that returns this story on the first page of any search. His older son came to hear the verdict in his school blazer; outside, for the first time since the arraignment, the two of them talked. The State Board of Accountancy\'s inquiry into the firm\'s trust controls stayed open. The laminated card above the coffee maker stayed too: "Reconcile daily."',
 };
 
+// [LLM-FILL: DialogueScript] — the courtroom transcript sidecar (TODO.md,
+// "Courtroom transcript redesign"). The future pipeline will generate scripts
+// under the same schema; Webb's is hand-authored as the pilot and quality bar.
+//
+// Craft rules this script establishes for the docket:
+// - No scripted COURT lines. Every COURT line in the transcript is either a
+//   player-chosen option or the deterministic sentencing pronouncement — the
+//   judge never says words the player didn't pick.
+// - Option lineText never states offer numbers the deterministic engine
+//   doesn't produce. Webb's computed offer is 2 years prison (MODERATE band,
+//   20% off the 3-year max), so spoken references to "two years" are safe.
+// - Structural facts in dialogue (amounts, evidence, witnesses) must match
+//   the payload above; cross-validated at module load once the ids resolve.
+const rawWebbDialogueScript = {
+  openingBeat: {
+    id: 'open',
+    lines: [
+      {
+        speaker: 'CLERK',
+        characterId: null,
+        text: 'Calling case number 24-CR-00847, People versus Marcus Webb. One count of grand theft, Penal Code section 487(a), a felony. The defendant is present with counsel; the People are represented.',
+      },
+      {
+        speaker: 'PROSECUTION',
+        characterId: null,
+        text: 'Your honor, for six years Marcus Webb was the most trusted man at Hollis & Associates — the only employee with keys, the alarm code, and transfer authority over the client trust account. Over four months, eleven transfers moved $14,200 from that account into his personal checking. Nine of the eleven landed within seventy-two hours of a child-support deadline. That account held a widow\'s home-sale escrow and a landscaping company\'s payroll. This is not a complicated case.',
+      },
+      {
+        speaker: 'DEFENSE',
+        characterId: null,
+        text: 'It is more complicated than the People would like, your honor. The firm\'s own expert will testify the controls were thin enough that the door was standing open — any of three employees could have moved that money. $3,100 came back before anyone noticed anything was gone. No witness will put Mr. Webb\'s hand on the keyboard. And the man the People describe was eighteen months sober, sleeping in his car between custody exchanges, and still showed up first every morning.',
+      },
+      {
+        speaker: 'PROSECUTION',
+        characterId: null,
+        text: 'He repaid a fifth of it, counsel. That is not innocence. That is bookkeeping.',
+      },
+    ],
+  },
+  plea: {
+    kind: 'PLEA',
+    promptBeat: {
+      id: 'plea-offer',
+      lines: [
+        {
+          speaker: 'CLERK',
+          characterId: null,
+          text: 'The parties have submitted a negotiated plea for the court\'s review.',
+        },
+        {
+          speaker: 'PROSECUTION',
+          characterId: null,
+          text: 'The People\'s offer: Mr. Webb pleads to the count as charged and serves two years, with restitution ordered in full. The paper is unanswerable — the transfers, the destination account, the timing, his intent in his own words. I don\'t need the keycard footage, which is convenient, because it has problems. What I don\'t have is a villain. He pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
+        },
+        {
+          speaker: 'DEFENSE',
+          characterId: null,
+          text: 'The defense joins, your honor — on the record and with my client\'s informed consent. I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. He hates this deal. I have told him to take it.',
+        },
+        {
+          speaker: 'DEFENDANT',
+          characterId: null,
+          text: 'Whatever keeps me close to my boys, your honor. That\'s all I have to say.',
+        },
+        {
+          speaker: 'CLERK',
+          characterId: null,
+          text: 'The negotiated plea is before the court.',
+        },
+      ],
+    },
+    options: [
+      {
+        choice: 'ACCEPT',
+        lineText: 'The court has reviewed the agreement. It is a hard bargain, honestly arrived at, and the victims are made whole without another year of this. The plea is accepted.',
+      },
+      {
+        choice: 'ACCEPT',
+        lineText: 'Mr. Webb, the court will not pretend two years is nothing. But the deal is fair and it is final. The plea is accepted; we proceed to sentencing.',
+      },
+      {
+        choice: 'REJECT',
+        lineText: 'Eleven transfers from a client trust account, against this record — two years does not answer it. The plea is rejected. Set the matter for trial.',
+      },
+      {
+        choice: 'REJECT',
+        lineText: 'The court is not satisfied this disposition serves the public interest. The plea is rejected. The People will prove their case, or they will not.',
+      },
+    ],
+    reactionBeats: {
+      ACCEPT: {
+        id: 'plea-accepted',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'The plea of guilty to count one is entered and accepted. The matter proceeds to sentencing.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'Thank you, your honor. We would ask the court to remember, at sentencing, everything that made this offer possible — the repayments, the recovery, the two boys.',
+          },
+          {
+            speaker: 'DEFENDANT',
+            characterId: null,
+            text: 'I\'ll make it whole. I was always going to.',
+          },
+        ],
+      },
+      REJECT: {
+        id: 'plea-rejected',
+        lines: [
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: 'Understood, your honor. Then the People will call the widow after all.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'My client understands the court\'s ruling. We are ready for trial — and we renew every objection to the People\'s evidence, starting with that footage.',
+          },
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'The plea is withdrawn. The matter is set for trial. The parties will be heard on the admissibility of the People\'s evidence.',
+          },
+        ],
+      },
+    },
+  },
+  motions: [
+    {
+      kind: 'MOTION',
+      evidenceId: 'ev-bank-records',
+      promptBeat: {
+        id: 'mot-bank-prompt',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'First motion: the defense moves to exclude the trust account bank records.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'As offered, your honor, the exhibit sweeps in years of Mr. Webb\'s private banking to prove four months of transfers. It is overbroad, and its breadth is the prejudice — the People want the jury reading a poor man\'s checkbook.',
+          },
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: 'These are certified business records, your honor, and they are the heart of the case. Detective Alvarez can speak to exactly what they show.',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-detective',
+            text: 'I traced all eleven transfers endpoint to endpoint. Every dollar lands in an account only Mr. Webb controlled. Nine of the eleven post within seventy-two hours of a child-support due date. The timing tracks his deadlines, not the firm\'s business cycle.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'And the three repayments, Detective — did your timeline flag those too?',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-detective',
+            text: 'They\'re in the exhibit, counsel. So is my note about them: in my experience, people don\'t quietly repay money they don\'t know they took.',
+          },
+        ],
+      },
+      options: [
+        {
+          choice: 'ADMITTED',
+          lineText: 'The records are certified and go to the heart of the charged conduct. The objection goes to weight, not admissibility. The motion is denied; the records are admitted.',
+        },
+        {
+          choice: 'ADMITTED',
+          lineText: 'The court will not blind the finder of fact to the ledger. Admitted — and counsel may argue the repayments to their heart\'s content.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'The People have swept years of a man\'s private banking into an exhibit meant to prove four months of conduct. As offered, it is overbroad. Excluded.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'The prejudice of the exhibit as assembled outweighs its probative value. The motion is granted; the records are excluded.',
+        },
+      ],
+      reactionBeats: {
+        ADMITTED: {
+          id: 'mot-bank-in',
+          lines: [
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'Thank you, your honor. The People\'s case is the paper, and the paper is in.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'Noted, your honor. Then the jury will also be hearing about every dollar that came back.',
+            },
+          ],
+        },
+        EXCLUDED: {
+          id: 'mot-bank-out',
+          lines: [
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'Your honor, the People\'s case just lost its spine. We would ask the court to note the People\'s objection for the record.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'The record will reflect it, counsel. The defense thanks the court.',
+            },
+          ],
+        },
+      },
+    },
+    {
+      kind: 'MOTION',
+      evidenceId: 'ev-email-chain',
+      promptBeat: {
+        id: 'mot-email-prompt',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'Next motion: the defense moves to exclude the internal email chain.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'These are private notes a man wrote to himself, your honor. "Put back 800 of March." A running tally is what a person keeps when he intends to return the money. The People want to read a conscience as a confession.',
+          },
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: '"Audit is the 14th — needs to be whole by the 10th." That is not conscience, your honor, that is a schedule for concealment. Consciousness of guilt, in the defendant\'s own words, timed to the day.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'Or the deadline a drowning man set himself to make it right. The jury should not be handed ambiguity dressed as admission.',
+          },
+        ],
+      },
+      options: [
+        {
+          choice: 'ADMITTED',
+          lineText: 'The defendant\'s own words about the money, in the period the money moved, are plainly probative. What they mean is for the finder of fact. Admitted.',
+        },
+        {
+          choice: 'ADMITTED',
+          lineText: 'Ambiguity is an argument, counsel, not a bar. Both readings go to the jury. The emails are admitted.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'These notes admit two readings, and the People offer them for exactly one. The risk the jury hears only that one is too high. Excluded.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'A man\'s private ledger of his own intentions is not a confession. The motion is granted; the emails are excluded.',
+        },
+      ],
+      reactionBeats: {
+        ADMITTED: {
+          id: 'mot-email-in',
+          lines: [
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'Thank you, your honor. The People intend to read them exactly as written.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'As will the defense, your honor — every word, including "put back."',
+            },
+          ],
+        },
+        EXCLUDED: {
+          id: 'mot-email-out',
+          lines: [
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'The People note their objection. The court has just excluded the defendant\'s state of mind in his own handwriting.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'The court has excluded a diary, your honor. The defense is grateful.',
+            },
+          ],
+        },
+      },
+    },
+    {
+      kind: 'MOTION',
+      evidenceId: 'ev-forensic-report',
+      promptBeat: {
+        id: 'mot-forensic-prompt',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'Next motion: admissibility of the independent forensic accounting report. The People call the report\'s author.',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-forensic-acct',
+            text: 'The math is not in dispute. $14,200 left the trust account; $3,100 came back in three irregular repayments before the transfers stopped. I\'ll also stand on my footnote: the firm\'s controls were poor enough that the door was standing open — and I mean that cuts both ways. It made the taking easy, and it makes proving no one else could have done it harder.',
+          },
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: 'The People offer the report for the number, your honor. The footnote is Ms. Whitfield\'s caution, not her finding.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'The defense has no quarrel with this witness, your honor — we want the jury to hear every word of that footnote. Our concern is a redacted exhibit. If the report comes in, it comes in whole.',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-forensic-acct',
+            text: 'For what it is worth, I wrote the footnote because the number is incomplete without it. I would not want my work quoted in halves.',
+          },
+        ],
+      },
+      options: [
+        {
+          choice: 'ADMITTED',
+          lineText: 'The report is admitted in its entirety — the number and the footnote. The expert\'s caution travels with the expert\'s finding.',
+        },
+        {
+          choice: 'ADMITTED',
+          lineText: 'An independent reconciliation by a neutral expert is exactly what a finder of fact should have. Admitted, unredacted.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'The People offer half a document and the defense the other half. A report neither side will take whole helps no one. Excluded.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'The court is not persuaded the report adds anything to the certified records beyond a footnote both sides intend to weaponize. Excluded.',
+        },
+      ],
+      reactionBeats: {
+        ADMITTED: {
+          id: 'mot-forensic-in',
+          lines: [
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'Whole is all we asked, your honor. The defense welcomes the exhibit.',
+            },
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'The number is $14,200, counsel. Footnotes don\'t subtract.',
+            },
+          ],
+        },
+        EXCLUDED: {
+          id: 'mot-forensic-out',
+          lines: [
+            {
+              speaker: 'WITNESS',
+              characterId: 'wit-forensic-acct',
+              text: 'Understood, your honor.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'The defense notes it has lost its best footnote along with the People\'s number, your honor. So be it.',
+            },
+          ],
+        },
+      },
+    },
+    {
+      kind: 'MOTION',
+      evidenceId: 'ev-surveillance',
+      promptBeat: {
+        id: 'mot-keycard-prompt',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'Final motion: the defense moves to exclude the keycard access log and office security footage.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'This is the People\'s weakest exhibit and they know it, your honor. The footage was pulled three weeks late, the system had already overwritten part of the period, and no one can account for every master keycard. It is a gap wearing a timestamp.',
+          },
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: 'It places the defendant alone in the office during two of the eleven transfer windows, your honor. Incompleteness goes to weight. The detective can speak to the chain.',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-detective',
+            text: 'The system overwrote part of the window before we imaged it — that\'s in my report. I can\'t tell you where every master card was. I can tell you where Mr. Webb\'s was.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'Thank you, Detective. Neither can anyone else — and that is precisely the problem.',
+          },
+        ],
+      },
+      options: [
+        {
+          choice: 'ADMITTED',
+          lineText: 'The gaps are real and counsel will no doubt make them sing, but what survived is relevant and its custody is explained. Admitted, for what it is worth.',
+        },
+        {
+          choice: 'ADMITTED',
+          lineText: 'The jury is entitled to see who was in the building. The defects go to weight. The motion is denied.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'An exhibit that cannot account for its own missing hours cannot corroborate anything. The motion is granted; the footage and logs are excluded.',
+        },
+        {
+          choice: 'EXCLUDED',
+          lineText: 'Three weeks late, partially overwritten, with master keycards unaccounted for — the court will not let a gap testify. Excluded.',
+        },
+      ],
+      reactionBeats: {
+        ADMITTED: {
+          id: 'mot-keycard-in',
+          lines: [
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'Then the jury will hear exactly how much of that footage no longer exists, your honor — hour by missing hour.',
+            },
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'And they will see who badged in for the hours that do, counsel.',
+            },
+          ],
+        },
+        EXCLUDED: {
+          id: 'mot-keycard-out',
+          lines: [
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'The People proceed on the paper, your honor. It has always been enough.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'The defense thanks the court. The People are welcome to their paper.',
+            },
+          ],
+        },
+      },
+    },
+  ],
+  verdicts: [
+    {
+      kind: 'VERDICT',
+      chargeId: 'charge-grand-theft',
+      promptBeat: {
+        id: 'closing',
+        lines: [
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'Both sides have rested. The court will hear closing argument on count one, grand theft.',
+          },
+          {
+            speaker: 'PROSECUTION',
+            characterId: null,
+            text: 'Eleven transfers. One destination account, and only one man with authority over the source. Nine of eleven timed to his support deadlines, and his own reminder — "needs to be whole by the 10th." The defense will talk about doors standing open. Doors do not move $14,200. People do, and the evidence tells you which one.',
+          },
+          {
+            speaker: 'DEFENSE',
+            characterId: null,
+            text: 'The People must prove whose hand moved that money, and they cannot. Three employees, thin controls, footage that no longer exists for the hours that matter. And a man who put $3,100 back before anyone knew anything was missing — because he was trying, badly and alone, to make it right. That is not proof beyond a reasonable doubt. That is a story with the doubt sanded off.',
+          },
+          {
+            speaker: 'WITNESS',
+            characterId: 'wit-character',
+            text: 'You asked me to be brief, so I will be. Marcus caught two billing errors in the firm\'s own favor and reported them himself. Ray Hollis called hiring him the best decision he ever made. Whatever the court decides, it should decide it about that man.',
+          },
+          {
+            speaker: 'DEFENDANT',
+            characterId: null,
+            text: 'I was going to put it back. I know how that sounds. Everyone in recovery knows how that sounds.',
+          },
+          {
+            speaker: 'CLERK',
+            characterId: null,
+            text: 'The matter is submitted. The court will render its verdict on count one.',
+          },
+        ],
+      },
+      options: [
+        {
+          choice: 'GUILTY',
+          lineText: 'On the evidence before it, the court finds the People have proven each element beyond a reasonable doubt. On count one, grand theft, the court finds the defendant guilty.',
+        },
+        {
+          choice: 'GUILTY',
+          lineText: 'Intent to repay is not a defense to taking. The money left, it left by his hand, and his own words prove he knew. Guilty on count one.',
+        },
+        {
+          choice: 'NOT_GUILTY',
+          lineText: 'The money moved — but the People must prove whose hand moved it, and on this record the court is left with reasonable doubt. Not guilty on count one.',
+        },
+        {
+          choice: 'NOT_GUILTY',
+          lineText: 'Where the door stood open, three people held keys, and the hours that matter are missing, the court cannot convict. Not guilty.',
+        },
+      ],
+      reactionBeats: {
+        GUILTY: {
+          id: 'verdict-guilty',
+          lines: [
+            {
+              speaker: 'DEFENDANT',
+              characterId: null,
+              text: 'Okay. Okay.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'Your honor, the defense asks the court to carry everything it heard today into sentencing — the repayments, the recovery, and the two boys waiting on a custody schedule.',
+            },
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'The People will be heard at sentencing as well, your honor. The trust account held real people\'s money.',
+            },
+          ],
+        },
+        NOT_GUILTY: {
+          id: 'verdict-not-guilty',
+          lines: [
+            {
+              speaker: 'DEFENDANT',
+              characterId: null,
+              text: 'Thank you. Thank you, your honor.',
+            },
+            {
+              speaker: 'PROSECUTION',
+              characterId: null,
+              text: 'The People accept the verdict, your honor. The money is still gone; someone still took it.',
+            },
+            {
+              speaker: 'DEFENSE',
+              characterId: null,
+              text: 'Mr. Webb is free to go, your honor. The defense thanks the court.',
+            },
+          ],
+        },
+      },
+    },
+  ],
+};
+
 export const webbCase = defineDemoCase({
   title: 'People v. Marcus Webb',
   teaser: 'A bookkeeper hired on faith, $14,200 gone from the client trust account — and $3,100 quietly put back.',
   payload: rawWebbPayload,
   pleaNarrative: rawWebbPleaNarrative,
   aftermath: webbAftermath,
+  dialogueScript: rawWebbDialogueScript,
 });

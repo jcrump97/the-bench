@@ -1,10 +1,13 @@
 import {
   CasePayloadSchema,
   PleaNarrativeSchema,
+  DialogueScriptSchema,
   type CasePayload,
   type PleaNarrative,
+  type DialogueScript,
 } from '../../schemas/gameSchemas';
 import { computePleaPostureForCase } from '../pleaAssessment';
+import { validateDialogueScriptAgainstCase } from '../validateDialogueScriptAgainstCase';
 
 // How the player's run of a case can end. The real Aftermath LLM call will be
 // conditioned on this same end-of-game state; demo bundles author one
@@ -43,6 +46,10 @@ export interface DemoCaseBundle {
   payload: CasePayload;
   pleaNarrative: PleaNarrative;
   aftermath: AftermathVariants;
+  // The courtroom-transcript sidecar (TODO.md, "Courtroom transcript
+  // redesign"). Optional during the Webb-pilot rollout; becomes required in
+  // work item P7 once all four cases carry scripts.
+  dialogueScript?: DialogueScript;
 }
 
 interface RawDemoCase {
@@ -51,6 +58,7 @@ interface RawDemoCase {
   payload: unknown;
   pleaNarrative: unknown;
   aftermath: AftermathVariants;
+  dialogueScript?: unknown;
 }
 
 // FinalResultSchema.aftermathNarrative bound — authored text must fit the
@@ -90,6 +98,20 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     );
   }
 
+  // The dialogue script gets the same treatment as the payload: schema-parsed
+  // at the boundary, then cross-validated against the case and its computed
+  // posture — an authored script that drifts out of sync with its case's
+  // evidence/charges/witnesses fails loudly at module load.
+  let dialogueScript: DialogueScript | undefined;
+  if (raw.dialogueScript !== undefined) {
+    const script = DialogueScriptSchema.parse(raw.dialogueScript);
+    const issues = validateDialogueScriptAgainstCase(script, payload, posture);
+    if (issues.length > 0) {
+      throw new Error(`Demo case ${payload.caseId}: dialogue script invalid — ${issues.join('; ')}`);
+    }
+    dialogueScript = script;
+  }
+
   return {
     id: payload.caseId,
     title: raw.title,
@@ -97,5 +119,6 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     payload,
     pleaNarrative,
     aftermath: raw.aftermath,
+    ...(dialogueScript !== undefined ? { dialogueScript } : {}),
   };
 }
