@@ -87,6 +87,67 @@ describe('useGameStore — aftermathNarrative', () => {
   });
 });
 
+describe('useGameStore — addMotionRuling phase gate', () => {
+  function advanceToAct2(): void {
+    useGameStore.getState().setActiveCase(validCase);
+    useGameStore.getState().setPhase('ACT_1_INTAKE');
+    useGameStore.getState().setPhase('ACT_2_MOTIONS');
+  }
+
+  it('accepts and dedupes rulings by evidenceId during ACT_2_MOTIONS', () => {
+    advanceToAct2();
+    useGameStore.getState().addMotionRuling({ evidenceId: 'e1', ruling: 'ADMITTED' });
+    useGameStore.getState().addMotionRuling({ evidenceId: 'e2', ruling: 'EXCLUDED' });
+    useGameStore.getState().addMotionRuling({ evidenceId: 'e1', ruling: 'EXCLUDED' });
+    expect(useGameStore.getState().motionRulings).toEqual([
+      { evidenceId: 'e2', ruling: 'EXCLUDED' },
+      { evidenceId: 'e1', ruling: 'EXCLUDED' },
+    ]);
+  });
+
+  it('force-resets to ERROR_STATE when a ruling is made outside ACT_2_MOTIONS', () => {
+    useGameStore.getState().addMotionRuling({ evidenceId: 'e1', ruling: 'ADMITTED' });
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().motionRulings).toEqual([]);
+  });
+});
+
+describe('useGameStore — addChargeVerdict', () => {
+  const guilty = {
+    chargeId: 'c1',
+    chargeName: 'Second-degree burglary',
+    classification: 'FELONY',
+    verdict: 'GUILTY',
+  };
+
+  function advanceToAct3(): void {
+    useGameStore.getState().setActiveCase(validCase);
+    useGameStore.getState().setPhase('ACT_1_INTAKE');
+    useGameStore.getState().setPleaDecision('ACCEPT');
+    useGameStore.getState().setPhase('ACT_3_VERDICT');
+  }
+
+  it('accepts a verdict per charge during ACT_3_VERDICT and upserts by chargeId', () => {
+    advanceToAct3();
+    useGameStore.getState().addChargeVerdict(guilty);
+    useGameStore.getState().addChargeVerdict({ ...guilty, verdict: 'NOT_GUILTY' });
+    expect(useGameStore.getState().chargeVerdicts).toEqual([{ ...guilty, verdict: 'NOT_GUILTY' }]);
+  });
+
+  it('force-resets to ERROR_STATE when a verdict is entered outside ACT_3_VERDICT', () => {
+    useGameStore.getState().addChargeVerdict(guilty);
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().chargeVerdicts).toEqual([]);
+  });
+
+  it('force-resets to ERROR_STATE on a malformed verdict', () => {
+    advanceToAct3();
+    useGameStore.getState().addChargeVerdict({ ...guilty, verdict: 'MAYBE' });
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().chargeVerdicts).toEqual([]);
+  });
+});
+
 describe('useGameStore — case + narrative load atomically at WELCOME', () => {
   it('loads case then narrative then transitions to ACT_1_INTAKE without error', () => {
     useGameStore.getState().setActiveCase(validCase);

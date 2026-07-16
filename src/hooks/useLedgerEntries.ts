@@ -9,7 +9,7 @@ export function useLedgerEntries(): LedgerEntry[] {
   const activePleaNarrative = useGameStore((state) => state.activePleaNarrative);
   const pleaDecision = useGameStore((state) => state.pleaDecision);
   const motionRulings = useGameStore((state) => state.motionRulings);
-  const verdict = useGameStore((state) => state.verdict);
+  const chargeVerdicts = useGameStore((state) => state.chargeVerdicts);
   const imposedSentence = useGameStore((state) => state.imposedSentence);
   const storedAftermath = useGameStore((state) => state.aftermathNarrative);
   const postureResult = usePleaPosture();
@@ -27,9 +27,12 @@ export function useLedgerEntries(): LedgerEntry[] {
       pleaPosture: postureResult?.posture ?? null,
       pleaDecision,
       motionRulings,
-      verdict,
+      // buildLedger predates incremental verdicts and takes the whole
+      // verdict or nothing; its courtroomScript successor consumes the
+      // accumulating array directly.
+      verdict: chargeVerdicts.length > 0 ? chargeVerdicts : null,
       imposedSentence,
       aftermathNarrative,
     });
-  }, [activeCase, activePleaNarrative, postureResult, pleaDecision, motionRulings, verdict, imposedSentence, aftermathNarrative]);
+  }, [activeCase, activePleaNarrative, postureResult, pleaDecision, motionRulings, chargeVerdicts, imposedSentence, aftermathNarrative]);
 }

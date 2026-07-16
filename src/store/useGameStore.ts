@@ -4,7 +4,7 @@ import {
   CasePayloadSchema,
   PleaDecisionSchema,
   MotionRulingSchema,
-  VerdictSchema,
+  ChargeVerdictSchema,
   SentenceSchema,
   PleaNarrativeSchema,
   AftermathNarrativeSchema,
@@ -12,7 +12,7 @@ import {
   type CasePayload,
   type PleaDecision,
   type MotionRuling,
-  type Verdict,
+  type ChargeVerdict,
   type PleaNarrative,
 } from '../schemas/gameSchemas';
 import { z } from 'zod';
@@ -27,10 +27,12 @@ interface GameState {
   // a pure derivation and is never stored here.
   activePleaNarrative: PleaNarrative | null;
 
-  // Player decisions — null until the player acts in each act
+  // Player decisions — empty/null until the player acts in each act.
+  // motionRulings and chargeVerdicts accumulate one entry per ruling so the
+  // court record can show each ruling the moment it is made.
   pleaDecision:    PleaDecision | null;
   motionRulings:   MotionRuling[];
-  verdict:         Verdict | null;
+  chargeVerdicts:  ChargeVerdict[];
   imposedSentence: Sentence[];
 
   // [LLM-FILL: Aftermath] — narrative input like activeCase, written after
@@ -43,7 +45,7 @@ interface GameState {
   setActivePleaNarrative:(narrative: unknown) => void;
   setPleaDecision:       (decision: unknown) => void;
   addMotionRuling:       (ruling: unknown) => void;
-  setVerdict:            (verdict: unknown) => void;
+  addChargeVerdict:      (chargeVerdict: unknown) => void;
   setImposedSentence:    (sentences: unknown) => void;
   setAftermathNarrative: (narrative: unknown) => void;
   // Sanctioned escape hatch from END_STATE; bypasses transition matrix by design.
@@ -52,14 +54,14 @@ interface GameState {
 
 const INITIAL_STATE: Pick<
   GameState,
-  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'verdict' | 'imposedSentence' | 'aftermathNarrative'
+  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'chargeVerdicts' | 'imposedSentence' | 'aftermathNarrative'
 > = {
   currentPhase:    'WELCOME',
   activeCase:      null,
   activePleaNarrative: null,
   pleaDecision:    null,
   motionRulings:   [],
-  verdict:         null,
+  chargeVerdicts:  [],
   imposedSentence: [],
   aftermathNarrative: null,
 };
@@ -168,6 +170,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   addMotionRuling: (ruling) => {
+    // Motion rulings are made from the bench during the evidentiary
+    // hearing — any other phase is an off-path write.
+    if (get().currentPhase !== 'ACT_2_MOTIONS') {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
     const result = MotionRulingSchema.safeParse(ruling);
     if (!result.success) {
       logValidationFailure(result.error);
@@ -179,14 +189,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ motionRulings: [...deduplicated, result.data] });
   },
 
-  setVerdict: (verdict) => {
-    const result = VerdictSchema.safeParse(verdict);
+  addChargeVerdict: (chargeVerdict) => {
+    // Verdicts are entered one charge at a time from the bench during
+    // ACT_3_VERDICT, mirroring addMotionRuling's accumulate-and-dedupe shape.
+    if (get().currentPhase !== 'ACT_3_VERDICT') {
+      logSecurityWarning();
+      set(ERROR_RESET);
+      return;
+    }
+
+    const result = ChargeVerdictSchema.safeParse(chargeVerdict);
     if (!result.success) {
       logValidationFailure(result.error);
       set(ERROR_RESET);
       return;
     }
-    set({ verdict: result.data });
+    const existing = get().chargeVerdicts;
+    const deduplicated = existing.filter(v => v.chargeId !== result.data.chargeId);
+    set({ chargeVerdicts: [...deduplicated, result.data] });
   },
 
   setImposedSentence: (sentences) => {

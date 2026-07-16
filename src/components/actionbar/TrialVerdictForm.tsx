@@ -26,7 +26,7 @@ export function TrialVerdictForm() {
   const activeCase = useGameStore((state) => state.activeCase);
   const motionRulings = useGameStore((state) => state.motionRulings);
   const pleaDecision = useGameStore((state) => state.pleaDecision);
-  const setVerdict = useGameStore((state) => state.setVerdict);
+  const addChargeVerdict = useGameStore((state) => state.addChargeVerdict);
   const setImposedSentence = useGameStore((state) => state.setImposedSentence);
   const setAftermathNarrative = useGameStore((state) => state.setAftermathNarrative);
   const setPhase = useGameStore((state) => state.setPhase);
@@ -57,7 +57,9 @@ export function TrialVerdictForm() {
       verdict: calls[charge.id] ?? 'NOT_GUILTY',
     }));
     const imposedSentence = anyGuilty ? buildSentences(exposure.maximumPenalties, amounts) : [];
-    setVerdict(verdict);
+    for (const chargeVerdict of verdict) {
+      addChargeVerdict(chargeVerdict);
+    }
     setImposedSentence(imposedSentence);
     if (caseSource === null) {
       setPhase('ERROR_STATE');
