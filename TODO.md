@@ -27,9 +27,12 @@ decisions still commit through the game store's validated actions.
       old act forms + buildLedger + useLedgerEntries deleted; cursor resets
       wired into WelcomeScreen and ResultActions. NOT yet verified in-browser
       (that's Commit 5's driver rewrite).
-- [ ] **Commit 5** — rewrite `.claude/skills/run-the-bench` driver for the
-      click-through flow (all 4 cases, both branches, exercise skip once).
-- [ ] **Commit 6** — docs sync (CLAUDE.md/README/TODO) + prose polish.
+- [x] **Commit 5 (`d426293`)** — run-the-bench driver rewritten for the beat
+      flow (advanceTo helper, per-exhibit/per-charge interactions, skip
+      exercised on Reyes, allocution/waiver/testimony assertions). Verified:
+      ALL CHECKS PASSED, clean console, desktop + mobile.
+- [x] **Commit 6** — docs synced (CLAUDE.md courtroom-script section +
+      beatCursor + schema additions; README beat-loop status + chart).
 - [ ] **Push** — after final review: run tests on all commits, check unstaged
       changes, quality review, push (user instruction 2026-07-16).
 

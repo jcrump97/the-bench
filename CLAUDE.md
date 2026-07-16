@@ -19,11 +19,11 @@ UI changes are verified with the committed `run-the-bench` skill (`.claude/skill
 
 ## Vision
 
-**The Bench** is a single-page California criminal court judge simulation. The player is the judge. A generated case lands on their desk and they make three sequential decisions:
+**The Bench** is a single-page California criminal court judge simulation. The player is the judge. A generated case lands on their desk and unfolds **one beat at a time** — a click-to-advance courtroom where every statement is spoken into the record by a party (clerk, counsel, witness, press; never an omniscient narrator) and the action bar pauses at each decision:
 
-1. **Act 1 — Intake & Plea**: Rule on a plea deal. Accept it and skip to sentencing, or force trial.
-2. **Act 2 — Evidentiary Motions**: Rule on admissibility of each piece of evidence. Rulings carry forward as penalty modifiers.
-3. **Act 3 — Verdict & Sentencing**: Deliver a verdict and impose sentence. The available sentencing range is shaped by the player's Act 2 rulings and the defendant's generated profile (OCEAN traits and criminal history).
+1. **Act 1 — Intake & Plea**: The case is called, charges are read, the attorneys voice the plea posture. Rule on the deal: accept it and skip to sentencing, or order trial.
+2. **Act 2 — Evidentiary Motions**: Each exhibit is offered by the People, objected to (or waived) by the defense, and ruled on individually. Rulings carry forward as penalty modifiers.
+3. **Act 3 — Verdict & Sentencing**: Witnesses testify (direct and cross), both sides close, verdicts are entered one charge at a time, and sentence is imposed (the defendant allocutes first on the plea path). The sentencing range is shaped by per-charge statutory ranges; Act 2 rulings and the defendant's profile (OCEAN traits, criminal history) are shown as judge's context.
 
 After sentencing, **Aftermath** generates: a Gemini narrative (public reaction, consequences, press coverage) and a persisted `FinalResult` snapshot.
 
@@ -61,6 +61,12 @@ The transition matrix is defined in `ALLOWED_PHASE_TRANSITIONS` in `src/store/us
 
 Alongside `activeCase`, the store holds `activePleaNarrative` — the LLM's (or demo case's) narrative-only plea input. It is upstream input data, not a derived value: the computed `PleaPosture` stays a pure derivation and is never stored. `setActivePleaNarrative` mirrors case hydration — phase-gated to `WELCOME` and `PleaNarrativeSchema.safeParse`d, with any violation forcing `ERROR_STATE`.
 
+Player decisions accumulate one entry at a time so the court record can show each ruling as it lands: `addMotionRuling` (upsert by `evidenceId`, phase-gated to `ACT_2_MOTIONS`) and `addChargeVerdict` (upsert by `chargeId`, phase-gated to `ACT_3_VERDICT`). There is no atomic `setVerdict`.
+
+### Courtroom Script (`src/lib/courtroomScript.ts`)
+
+The single source of courtroom truth. `buildCourtroomScript` is a pure projection of validated state into an ordered screenplay: speaker-attributed `STATEMENT` beats (the transcript) and `DECISION` beats (where the script pauses for the judge). Two tested invariants: **no spoilers** (emission stops at the first unresolved decision) and **prefix stability** (resolving a decision replaces its marker in place and only appends after it — earlier beats never change). The UI reveals a prefix of this one sequence via `beatCursor`, so the transcript can never disagree with the beats that played. On offer-less plea paths the trial order is resolved by phase (those paths write no `pleaDecision`).
+
 ### Security Store (`useSecurityStore` — BYOKVault)
 
 Isolated Zustand slice holding the user's Gemini API key **in memory only**. Key invariants:
@@ -70,7 +76,7 @@ Isolated Zustand slice holding the user's Gemini API key **in memory only**. Key
 
 ### UI Store (`useUIStore`)
 
-Third isolated Zustand slice holding **view state only**: the two side-panel open/closed flags and the active detail modal (`ActiveModal` discriminated union). Deliberately unvalidated — nothing in it crosses a trust boundary or is persisted, and it never holds case data, only entity IDs that point into `useGameStore`'s already-validated `activeCase`.
+Third isolated Zustand slice holding **view state only**: the two side-panel open/closed flags, the active detail modal (`ActiveModal` discriminated union), and `beatCursor` — how many beats of the courtroom script are revealed (`advanceBeat`, forward-only `setBeatCursor` for skip-to-next-decision, `resetBeatCursor` on case start/reset). Deliberately unvalidated — nothing in it crosses a trust boundary or is persisted, and a cursor bug can only pace the reveal wrong, never corrupt the record: decisions still commit through the game store's validated actions.
 
 ### Schemas (`src/schemas/gameSchemas.ts`)
 
@@ -78,8 +84,8 @@ Single source of truth for all Zod schemas and their inferred TypeScript types. 
 1. **Security** — `BYOKSchema` (discriminated union: live key vs. demo mode)
 2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), `ChargeSchema` (carries per-charge `mandatoryMinimums`/`maximumPenalties` — the source of truth for sentencing ranges; case-level exposure is derived deterministically by `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), `StatuteElementSchema`
 3. **Character entities** — `CharacterSchema` with OCEAN personality traits
-4. **Evidence & witnesses** — `EvidenceSchema`, `WitnessSchema`
-5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`); `PleaNarrativeSchema` carries the LLM's plea rationale strings
+4. **Evidence & witnesses** — `EvidenceSchema` (with voiced `prosecutionArgument` and nullable `defenseObjection`; a refinement ties waiver to LOW `objectionRisk`), `WitnessSchema` (with `directExamination` and nullable `crossExamination`; which side calls the witness derives from `bias`)
+5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`; carries `closingArguments`); `PleaNarrativeSchema` carries the LLM's plea rationale strings plus an optional `allocution` (authored exactly when the posture is `PENDING_JUDICIAL_REVIEW` — `defineDemoCase` enforces the pairing)
 6. **State machine** — `GamePhaseSchema`
 
 ### Generation Pipeline (designed — implementation begins with Act 1)

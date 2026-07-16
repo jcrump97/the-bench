@@ -86,6 +86,7 @@ flowchart LR
         PLEA["buildPleaPosture (plea structure)"]
         EXPO["deriveSentencingExposure (per-charge ranges → case exposure)"]
         MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
+        SCRIPT["buildCourtroomScript (beat sequence, cursor-revealed)"]
     end
 
     subgraph GamePhases["Game Phases"]
@@ -110,13 +111,16 @@ flowchart LR
     EXPO -->|"Statutory Floor and Ceiling"| A3
     A3 -->|"Sentence Entered"| END
     END -->|"Trigger Final Snapshot"| GS
+    SCRIPT -->|"One beat at a time"| GamePhases
 ```
 
-The LLM provides color; deterministic code provides structure. Plea structure, case-level sentencing exposure (aggregated from per-charge statutory ranges), and the Act 2 → Act 3 penalty modifier are all pure functions of validated data — the LLM's only plea contribution is narrative rationale strings.
+The LLM provides color; deterministic code provides structure. Plea structure, case-level sentencing exposure (aggregated from per-charge statutory ranges), and the Act 2 → Act 3 penalty modifier are all pure functions of validated data — the LLM's only plea contribution is narrative strings (rationales, arguments, testimony, allocution).
+
+The case plays out **one beat at a time**: `buildCourtroomScript` projects validated state into an ordered screenplay of speaker-attributed statements and decision points, truncated at the first unresolved decision (no spoilers) and prefix-stable (resolving a decision never rewrites the past). A reveal cursor in the view-state slice paces the courtroom — the prosecutor offers each exhibit, the defense objects or waives, witnesses testify, and the judge rules from the bench at every pause.
 
 ## Status
 
-Foundation and first UI layer complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, courtroom ledger with speaker attribution, phase-aware action bar, OCEAN traits meter) are implemented. Four hardcoded demo cases — **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge) — are playable end-to-end on both accepted-plea and forced-trial paths. A docket picker on the welcome screen replaces the single "Play Demo" button. Next up: `GameService` and the four-stage LLM generation pipeline (the BYOK path), then `ResultGenerator` with localStorage persistence.
+Foundation, UI layer, and the beat-by-beat courtroom loop complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, OCEAN traits meter) are implemented — and the game now plays as a living courtroom: the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually, witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Four hardcoded demo cases — **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, split-verdict) — are playable end-to-end on every branch. Next up: `GameService` and the four-stage LLM generation pipeline (the BYOK path), then `ResultGenerator` with localStorage persistence.
 
 ## License
 
