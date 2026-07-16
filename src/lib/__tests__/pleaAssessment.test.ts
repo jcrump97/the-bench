@@ -39,15 +39,19 @@ const weakCase = CasePayloadSchema.parse({
   ],
   statuteContexts: ['Cal. Penal Code § 484 — petty theft.'],
   witnesses: [
-    { id: 'ww1', name: 'Jamie Lowe', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Vouches for the defendant.', credibilityScore: 1 },
-    { id: 'ww2', name: 'Casey Vu', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Disputes the account.', credibilityScore: 1 },
+    { id: 'ww1', name: 'Jamie Lowe', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Vouches for the defendant.', credibilityScore: 1, directExamination: 'I vouch for the defendant.', crossExamination: null },
+    { id: 'ww2', name: 'Casey Vu', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Disputes the account.', credibilityScore: 1, directExamination: 'I dispute the account.', crossExamination: null },
   ],
   evidence: [
-    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
-    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
-    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null },
+    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a vague description.', defenseObjection: 'Objection — vague.' },
+    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer an unrelated note.', defenseObjection: 'Objection — irrelevant.' },
+    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a secondhand account.', defenseObjection: 'Objection — hearsay.' },
   ],
   summary: 'Alleged petty theft with minimal supporting evidence.',
+  closingArguments: {
+    prosecution: 'The People submit the matter.',
+    defense: 'The defense submits the matter.',
+  },
 });
 
 describe('buildPleaPosture — PleaPostureInput type contract (2C)', () => {

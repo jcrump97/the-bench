@@ -113,6 +113,8 @@ const rawVaughnPayload = {
       bias: 'PROSECUTION',
       statement: 'The cyclist, 58, a retired shop teacher who rides the Alder Avenue lane home every evening. Will testify to headlights behind him, the strike, and the pavement — a shattered pelvis, two surgeries, a walker he is still using. He never saw the driver and will say so plainly; what he remembers is the sound of a car that did not stop getting quieter.',
       credibilityScore: 6,
+      directExamination: 'I ride that lane home every evening — thirty years of shop class, you keep your habits. I remember headlights coming up behind me, and then I was on the pavement and my hip was wrong in a way I knew immediately. Two surgeries. I\'m still on the walker. I never saw the driver, and I won\'t pretend I did. What I remember is lying in the lane listening to a car that didn\'t stop get quieter.',
+      crossExamination: 'That\'s right — I can\'t tell you who was driving, or whether they could see me, or what they knew. It was dusk and my tail light was on; past that I won\'t guess. You want me to say the engine I heard idling was a stop sign two blocks up? Could be. I was busy on the ground, counselor. I\'ll give you this much: whoever it was, I\'d rather believe they didn\'t know. Believing it is harder some days than others.',
     },
     {
       id: 'wit-neighbor',
@@ -121,6 +123,8 @@ const rawVaughnPayload = {
       bias: 'NEUTRAL',
       statement: 'Lives on the corner of Alder and 9th. Will testify she heard the impact from her porch, saw a light-colored sedan stopped in the intersection "for a breath or two," and watched it pull away before she understood what the shape in the bike lane was. She cannot describe the driver and puts the light at "almost dark." Neither side\'s witness, which is why both sides will spend an hour with her.',
       credibilityScore: 7,
+      directExamination: 'I was on my porch when I heard it — a thump, not a crash, the kind of sound you talk yourself out of. There was a light-colored sedan stopped in the intersection. It sat there a breath or two. Then it pulled away, calm as anything, and it wasn\'t until it was gone that I understood what the shape in the bike lane was. I called 911 before I got to him.',
+      crossExamination: 'A breath or two — I won\'t swear to seconds, I wasn\'t counting. It was almost dark; the streetlights weren\'t on yet, which everyone on that block has complained about for a year. No, I couldn\'t see the driver, not even to say man or woman. Was the car stopped at the stop sign or stopped because of what happened? Counselor, I\'ve asked myself that every night since. The honest answer is I don\'t know.',
     },
     {
       id: 'wit-officer',
@@ -129,6 +133,8 @@ const rawVaughnPayload = {
       bias: 'PROSECUTION',
       statement: 'Traffic investigator. Will testify to the paint transfer match, the bumper fragment fitted to Vaughn\'s sedan "like a puzzle piece," the online repair quote opened from her phone at 7:04 the next morning, and the certified DMV mailing history on her suspension. Will acknowledge on cross that no witness puts Vaughn behind the wheel and that her son, eleven, was in the car — a fact the defense will use for sympathy and Kirby uses for knowledge: a mother, he will say, checks the seat next to her before anything else.',
       credibilityScore: 8,
+      directExamination: 'The lab matched the paint transfer on Mr. Pyle\'s frame to the Vaughn sedan, and the bumper fragment from the scene fits her car\'s damage like a puzzle piece — physical fit, the lab\'s highest confidence finding. At 7:04 the next morning, her phone opened a body-shop quote form: front-right bumper, headlamp, "hit a deer." And the DMV file shows mailed notice of her suspension to an address she wrote on the forms herself, plus a prior conviction for driving on it. This was not a car that didn\'t know where it had been.',
+      crossExamination: 'Correct: no witness puts Mrs. Vaughn behind the wheel, and I\'ve never claimed otherwise — I put her car there, and her phone the next morning. Her son was in the car, yes. Eleven years old. Counsel offers that for sympathy and I understand why. I\'ll tell you how I read it after twenty years of these: a mother who feels an impact checks the seat next to her before anything else. She knew something happened. The eight seconds say she checked.',
     },
     {
       id: 'wit-sponsor',
@@ -137,6 +143,8 @@ const rawVaughnPayload = {
       bias: 'DEFENSE',
       statement: 'Vaughn\'s AA sponsor of three years. Will testify she called him at 7:20 that evening — not about an accident, about her ex missing the custody exchange again — and that she was sober, has been for three years, and drives only when the alternative is her son standing alone outside a locked gym at dusk. He will not be able to say what she did or did not feel her car strike.',
       credibilityScore: 7,
+      directExamination: 'Teresa called me at 7:20 that evening. Not about any accident — about her ex missing the custody exchange again, third time that month, and her boy standing outside a locked gym at dusk. She was calm, she was sober — three years sober, and I\'d stake my own chip on it. She drives when the choice is her son alone on a curb in the dark or her behind the wheel. I\'m not excusing it. I\'m telling you what the choice looked like from inside her life.',
+      crossExamination: 'No — I can\'t say what she felt her car hit, or what she saw in the mirror. I wasn\'t in the car and I won\'t pretend I was. Did she mention hitting anything at 7:20? A deer. She said she thought she\'d clipped a deer coming down Alder, and she was rattled about the car because the car is how her son gets anywhere. That\'s what she told me nine hours before any police officer knocked. Make of the timing what you will, counselor. I make of it that she believed it.',
     },
   ],
   evidence: [
@@ -148,24 +156,30 @@ const rawVaughnPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-hr-accident',
+      prosecutionArgument: 'The People offer the paint transfer and the bumper fragment. The lab calls the fragment match "physical fit" — its highest confidence language. The defendant\'s sedan struck Mr. Pyle. The defense does not seriously contest it, and the exhibits close the question.',
+      defenseObjection: null,
     },
     {
       id: 'ev-repair',
       name: 'Online repair-quote request',
       type: 'DIGITAL',
-      description: 'A body-shop web form opened from Vaughn\'s phone at 7:04 the next morning: front-right bumper and headlamp, photos attached, damage description "hit a deer." The People call the deer a confession with antlers. The defense notes it is also what a person types when she believes she hit something, not someone.',
+      description: 'A body-shop web form opened from Vaughn\'s phone at 7:04 the next morning: front-right bumper and headlamp, photos attached, damage description "hit a deer."',
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-hr-knowledge',
+      prosecutionArgument: 'The People offer the repair-quote request from the defendant\'s own phone, 7:04 the next morning: front-right bumper, headlamp, photos attached, cause of damage — "hit a deer." There are no deer on Alder Avenue, Your Honor. It is a confession with antlers: she knew that night she had hit something, and by sunrise she was writing the cover story.',
+      defenseObjection: 'Objection to the People\'s characterization. This form is exactly what a person types when she believes she hit something, not someone — no deletion, no cash repair across town, her own name and number on the request. People conscious of guilt hide damage. Teresa Vaughn photographed hers and asked for a quote before breakfast. The exhibit is the defense\'s case, and the People know it.',
     },
     {
       id: 'ev-doorbell',
       name: 'Doorbell-camera audio',
       type: 'DIGITAL',
-      description: 'Audio from a doorbell camera facing away from the intersection: the impact, then approximately eight seconds of engine idle, then acceleration. No video of the street. The People say eight seconds is a driver looking in her mirror and deciding. The defense says it is a stop sign, and that the camera that heard everything saw nothing.',
+      description: 'Audio from a doorbell camera facing away from the intersection: the impact, then approximately eight seconds of engine idle, then acceleration. No video of the street.',
       relevanceScore: 5,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-hr-flee',
+      prosecutionArgument: 'The People offer the doorbell-camera audio: the impact, then eight seconds of engine idle, then acceleration. Eight seconds, Your Honor. That is a driver looking in her mirror at a man in the bike lane and deciding. The idle is the decision; the acceleration is the crime.',
+      defenseObjection: 'Objection — this is a soundtrack being offered as an eyewitness. The camera faces away from the intersection; it heard everything and saw nothing. There is a four-way stop at Alder and 9th, and eight seconds of idle is called "stopping at it." The People want the court to convict on the noise a stop sign makes. Speculation on top of foundation problems, and the prejudice is the whole point of the offer.',
     },
     {
       id: 'ev-dmv',
@@ -175,6 +189,8 @@ const rawVaughnPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-dsl-knowledge',
+      prosecutionArgument: 'The People offer the certified DMV record: suspended since 2021, two renewal denials, mailed notice to an address the defendant wrote on the forms herself — and a 2023 conviction for driving on this very suspension. Knowledge is not an inference here. It is a prior conviction.',
+      defenseObjection: null,
     },
     {
       id: 'ev-cam-still',
@@ -184,11 +200,19 @@ const rawVaughnPayload = {
       relevanceScore: 5,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-dsl-drove',
+      prosecutionArgument: 'The People offer the red-light camera still: the defendant\'s sedan, plate legible, two intersections north, four minutes after the collision. Her car, on that road, at that hour — and the only other person in it was eleven years old.',
+      defenseObjection: 'Objection — the driver in this frame is a silhouette, and the People\'s argument for who it shows is "who else would it be." That is burden-shifting in a picture frame. The exhibit proves the car was on the road; it cannot put anyone behind the wheel, and offering it for that purpose invites exactly the inference the rules of evidence exist to police.',
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
   // assembly call with all four stage outputs in context.
   summary: 'At 6:40 on an October evening, a sedan clipped Gordon Pyle in the Alder Avenue bike lane, idled for roughly eight seconds, and drove on. Pyle, 58, got a shattered pelvis and two surgeries. The car was Teresa Vaughn\'s — paint transfer and a fitted bumper fragment put that beyond argument — and her license has been suspended since a felony DUI in 2021, a fact she has already been convicted of ignoring once. At 7:04 the next morning her phone opened a repair-quote form: "hit a deer." Vaughn, 41 and three years sober, was driving her son home because her ex missed the custody exchange again. One count is paper: she drove, and she knew she couldn\'t. The other is those eight seconds of engine idle on a doorbell camera that saw nothing — the distance between a woman who hit a deer and a mother who looked in the mirror, saw a man in the bike lane, and chose the child in the passenger seat over the stranger on the ground.',
+  // [LLM-FILL: CasePayload] — closing arguments, written by the final
+  // assembly call once the evidence and witness stages are complete.
+  closingArguments: {
+    prosecution: 'Take the counts in order. The license: certified suspension, mailed notice, and a prior conviction for ignoring it — that count was over before opening statements. The felony: her car struck a man hard enough to shatter his pelvis, her engine idled for eight seconds, and she drove on. Eight seconds is not a stop sign — it is a mirror, a man in a bike lane, and a decision. By morning she had a story with antlers in it. The People are not asking the court to punish her bad luck or her ex-husband\'s failures. We are asking the court to say that the man bleeding in the bike lane was owed those eight seconds, and everything after them.',
+    defense: 'The People\'s felony case is a sound with no picture. Eight seconds of idle at a four-way stop — their own neutral witness cannot tell you whether that car was fleeing or obeying the sign, and she was looking right at it. "Hit a deer" is not a cover story; it is what Teresa told her sponsor at 7:20 that night, nine hours before any officer knocked, and it is what a person believes when dusk and a bad streetlight and a glancing blow leave her nothing else to go on. Convict her of the license count if the paper demands it — she has never pretended otherwise. But the felony asks whether she knew she left a human being on the ground, and on that question the People have a silhouette, a soundtrack, and a guess.',
+  },
 };
 
 // [LLM-FILL: PleaNarrative] — both rationales required on an offering band;
@@ -197,6 +221,7 @@ const rawVaughnPayload = {
 const rawVaughnPleaNarrative = {
   prosecutionRationale: 'The license count is arithmetic — certified record, mailed notice, a prior for the identical offense. On the felony, I have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a jury will not forgive. What I don\'t have is a monster: a sober woman, a missed custody exchange, a kid in the car. The offer prices all of it — she pleads to both counts at a real discount, Mr. Pyle gets restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
   defenseRationale: 'I can try the felony — the camera saw nothing, the deer is honest confusion, and June Castellanos\'s "breath or two" is a stop sign, not a getaway. But I cannot try the license count, and once a jury hears "suspended, again," the felony gets harder to win in the same room. Teresa has a prison prior; a trial loss means the full term and her son standing outside a locked gym for good this time. She wept when I explained the offer. Then she asked where to sign. I have advised the court she accepts.',
+  allocution: 'I\'ve gone over those eight seconds every night since, Your Honor, and I want to be honest with the court even where it doesn\'t help me: I don\'t know what I knew. I felt the hit and I told myself it was a deer, and I have asked myself every day whether I told myself that because it was almost dark, or because my son was in the seat next to me and I couldn\'t afford for it to be anything else. I know I shouldn\'t have been driving at all. I knew it that night. Mr. Pyle was on the ground and whatever I believed, he stayed there after I didn\'t. I\'m sorry in a way I don\'t have better words for. Whatever the court decides, I\'ll carry those eight seconds longer than any sentence.',
 };
 
 // [LLM-FILL: Aftermath] — all four variants: the offer is pending (plea

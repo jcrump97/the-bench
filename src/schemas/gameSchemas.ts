@@ -115,6 +115,11 @@ export const WitnessSchema = z.strictObject({
   bias: BiasIndicatorEnum,
   statement: z.string().max(1000).describe("A summary of their expected testimony."),
   credibilityScore: z.number().min(1).max(10),
+  // Voiced testimony beats for the trial phase. Which side conducts direct
+  // (and which crosses) is derived from `bias` — PROSECUTION/NEUTRAL
+  // witnesses are the People's, DEFENSE witnesses are the defense's.
+  directExamination: z.string().min(1).max(1200).describe("The witness's testimony on direct examination, first person, as spoken from the stand."),
+  crossExamination: z.string().min(1).max(1200).nullable().describe("The witness's testimony under cross-examination, first person; null when opposing counsel declines to cross."),
 });
 
 export const EvidenceSchema = z.strictObject({
@@ -126,6 +131,20 @@ export const EvidenceSchema = z.strictObject({
   objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
   isAdmitted: z.boolean().optional().transform((): boolean => false).describe("Always initialized to false. Mutated by player action during the trial phase."),
+  // Voiced motion-hearing beats: the prosecutor offers the exhibit, defense
+  // counsel objects (or waives), and the judge rules on that exchange.
+  prosecutionArgument: z.string().min(1).max(600).describe("The prosecutor's in-character offer of this exhibit to the court."),
+  defenseObjection: z.string().min(1).max(600).nullable().describe("Defense counsel's in-character objection to this exhibit; null when the defense waives objection."),
+}).superRefine((ev, ctx) => {
+  // The objectionRisk score and the voiced objection must agree: a MEDIUM or
+  // HIGH risk exhibit is one the defense fights, so waiving (null) is only
+  // coherent on LOW. (A LOW-risk exhibit may still carry an objection.)
+  if (ev.objectionRisk !== 'LOW' && ev.defenseObjection === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Evidence ${ev.id} has ${ev.objectionRisk} objectionRisk but no defenseObjection — the defense only waives on LOW-risk exhibits`,
+    });
+  }
 });
 
 // ==========================================
@@ -202,6 +221,11 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
 export const PleaNarrativeSchema = z.strictObject({
   prosecutionRationale: z.string().min(1).max(1000),
   defenseRationale:     z.string().min(1).max(1000).optional(),
+  // The defendant's own statement to the court on the accepted-plea path,
+  // spoken before sentencing. Only meaningful when an offer can reach the
+  // bench (PENDING_JUDICIAL_REVIEW) — defineDemoCase enforces that pairing
+  // for authored cases, mirroring the defenseRationale convention above.
+  allocution:           z.string().min(1).max(800).optional(),
 });
 
 export const CaseSchema = z.strictObject({
@@ -216,6 +240,13 @@ export const CaseSchema = z.strictObject({
   evidence: z.array(EvidenceSchema).min(3),
 
   summary: z.string().max(1500),
+
+  // Voiced closing arguments, delivered after testimony and before the
+  // per-charge verdicts on the trial path.
+  closingArguments: z.strictObject({
+    prosecution: z.string().min(1).max(1200).describe("The People's closing argument, in character."),
+    defense: z.string().min(1).max(1200).describe("The defense's closing argument, in character."),
+  }),
 }).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
   const chargeIds = new Set<string>();

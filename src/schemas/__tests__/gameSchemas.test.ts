@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CasePayloadSchema, ChargeSchema, PleaNarrativeSchema } from '../gameSchemas';
+import { CasePayloadSchema, ChargeSchema, EvidenceSchema, WitnessSchema, PleaNarrativeSchema } from '../gameSchemas';
 import { rawValidCase } from '../../lib/__tests__/fixtures';
 
 describe('ChargeSchema per-charge sentencing range', () => {
@@ -44,6 +44,58 @@ describe('ChargeSchema per-charge sentencing range', () => {
   });
 });
 
+describe('EvidenceSchema courtroom argument fields', () => {
+  const lowRisk = rawValidCase.evidence[0];   // LOW, defenseObjection null
+  const highRisk = rawValidCase.evidence[2];  // HIGH, defenseObjection present
+
+  it('accepts a LOW-risk exhibit with a waived (null) defenseObjection', () => {
+    expect(EvidenceSchema.safeParse(lowRisk).success).toBe(true);
+  });
+
+  it('accepts a LOW-risk exhibit that still carries an objection', () => {
+    const result = EvidenceSchema.safeParse({
+      ...lowRisk,
+      defenseObjection: 'Objection — chain of custody.',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a MEDIUM- or HIGH-risk exhibit whose defenseObjection is null', () => {
+    for (const risk of ['MEDIUM', 'HIGH'] as const) {
+      const result = EvidenceSchema.safeParse({
+        ...lowRisk,
+        objectionRisk: risk,
+        defenseObjection: null,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('rejects an exhibit missing prosecutionArgument entirely', () => {
+    const withoutArgument: Record<string, unknown> = { ...highRisk };
+    delete withoutArgument.prosecutionArgument;
+    expect(EvidenceSchema.safeParse(withoutArgument).success).toBe(false);
+  });
+});
+
+describe('WitnessSchema testimony fields', () => {
+  const witness = rawValidCase.witnesses[0];
+
+  it('accepts a witness with direct and cross testimony', () => {
+    expect(WitnessSchema.safeParse(witness).success).toBe(true);
+  });
+
+  it('accepts a declined cross (null)', () => {
+    expect(WitnessSchema.safeParse({ ...witness, crossExamination: null }).success).toBe(true);
+  });
+
+  it('rejects a witness missing directExamination', () => {
+    const withoutDirect: Record<string, unknown> = { ...witness };
+    delete withoutDirect.directExamination;
+    expect(WitnessSchema.safeParse(withoutDirect).success).toBe(false);
+  });
+});
+
 describe('PleaNarrativeSchema (1D)', () => {
   it('accepts prosecutionRationale alone (defenseRationale optional)', () => {
     expect(PleaNarrativeSchema.safeParse({ prosecutionRationale: 'Strong case.' }).success).toBe(true);
@@ -63,6 +115,12 @@ describe('PleaNarrativeSchema (1D)', () => {
 
   it('rejects a prosecutionRationale over 1000 chars', () => {
     expect(PleaNarrativeSchema.safeParse({ prosecutionRationale: 'x'.repeat(1001) }).success).toBe(false);
+  });
+
+  it('accepts an optional allocution and bounds it at 800 chars', () => {
+    const base = { prosecutionRationale: 'Strong case.', defenseRationale: 'Take the deal.' };
+    expect(PleaNarrativeSchema.safeParse({ ...base, allocution: 'I want to say I am sorry.' }).success).toBe(true);
+    expect(PleaNarrativeSchema.safeParse({ ...base, allocution: 'x'.repeat(801) }).success).toBe(false);
   });
 });
 
@@ -97,6 +155,12 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
       ],
     };
     expect(CasePayloadSchema.safeParse(danglingRef).success).toBe(false);
+  });
+
+  it('rejects a case missing closingArguments', () => {
+    const withoutClosings: Record<string, unknown> = { ...rawValidCase };
+    delete withoutClosings.closingArguments;
+    expect(CasePayloadSchema.safeParse(withoutClosings).success).toBe(false);
   });
 
   it('rejects legacy case-level sentencing fields (ranges are per-charge now)', () => {

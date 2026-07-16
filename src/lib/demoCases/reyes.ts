@@ -76,6 +76,8 @@ const rawReyesPayload = {
       bias: 'PROSECUTION',
       statement: 'The victim\'s cousin, ten feet behind him at the exit. Will testify Reyes was waiting under the floodlight, said something none of them caught, and threw one punch — and that Kyle Sr. never raised a hand. Will concede he was inside during whatever happened by the restrooms, and that his uncle "runs his mouth when he drinks" — a phrase the defense intends to repeat until the jury can say it with him.',
       credibilityScore: 7,
+      directExamination: 'I was maybe ten feet behind my uncle coming out. Reyes was already there, under the floodlight, like he was waiting on us. He said something — I didn\'t catch it — and then it was one punch and Kyle was on the ground not moving. My uncle never raised a hand. I want that to be clear. He never got the chance to raise a hand.',
+      crossExamination: 'I was inside when whatever happened by the restrooms happened, yeah. I didn\'t see any of that. And yes — I\'ve said it before, my uncle runs his mouth when he drinks. He\'d had a few. But running your mouth isn\'t a shove, and I was looking right at them, and I didn\'t see my uncle touch him.',
     },
     {
       id: 'wit-physician',
@@ -84,6 +86,8 @@ const rawReyesPayload = {
       bias: 'NEUTRAL',
       statement: 'Trauma physician who treated the victim. Will testify to a depressed skull fracture and a subdural bleed consistent with the back of the head striking concrete after a single high-force blow; three days in the ICU, cognitive testing still pending. On the mechanics she is unshakable. On who started it she has, by design, nothing to say.',
       credibilityScore: 9,
+      directExamination: 'Mr. Merritt presented with a depressed skull fracture and a subdural hematoma. The injury pattern is consistent with the back of the head striking concrete after a single high-force blow to the face — the punch starts the mechanism, the pavement finishes it. He spent three days in intensive care. His cognitive testing is still pending, which is a sentence I\'d ask the court not to hear as routine. Force of this kind is, in my clinical experience, absolutely capable of killing.',
+      crossExamination: 'Correct — I can speak to the mechanism, not the sequence of events. My findings are identical whether the first move in that parking lot was the defendant\'s or the victim\'s. Could a single unlucky fall produce this? A fall doesn\'t throw the punch, counselor, but yes: the catastrophic component here is the concrete, and no one chooses where a man lands. That is precisely why I don\'t editorialize about intent.',
     },
     {
       id: 'wit-bouncer',
@@ -92,6 +96,8 @@ const rawReyesPayload = {
       bias: 'NEUTRAL',
       statement: 'Door security that night. Will testify he separated Merritt from Reyes\'s sister near the restrooms twenty minutes earlier — Merritt leaning in, her backing up — and that he told Merritt to close out his tab. Did not see a shove and did not see the punch; he was walking Merritt\'s group out when it happened. The People call his account context. The defense calls it the first chapter the video doesn\'t show.',
       credibilityScore: 8,
+      directExamination: 'About twenty minutes before it happened outside, I separated Mr. Merritt from a young woman near the restrooms — him leaning in, arm up on the wall, her backing away. Standard stuff, unfortunately. I told him he was done and to close out his tab. I was walking his group out when the thing in the lot happened, so no — I didn\'t see the punch, and I didn\'t see any shove before it. I saw the before, not the during.',
+      crossExamination: 'How did she look when I stepped in? Cornered. That\'s the honest word. Was Merritt aggressive with me? Mouthy, not swinging. I\'ve seen worse nights end with handshakes. If you\'re asking whether the man I moved off that girl and the man on the pavement are hard to hold in my head at the same time — no, counselor. In this job you learn they\'re usually the same man.',
     },
     {
       id: 'wit-sister',
@@ -100,6 +106,8 @@ const rawReyesPayload = {
       bias: 'DEFENSE',
       statement: 'Defendant\'s younger sister. Will testify Merritt followed her from the bar to the restroom hallway twice, that she texted Dominic "come get me" at 11:42, and that outside Merritt shoved Dominic first — a shove she describes to the inch and the video, which begins mid-swing, does not capture. She has told the story the same way every time. She is also the reason her brother was there.',
       credibilityScore: 5,
+      directExamination: 'He followed me from the bar to the restroom hallway twice. The second time the bouncer pulled him off and I texted my brother: "come get me," 11:42, it\'s in the phone. Outside, Dominic put himself between us and told me to get in the car. Merritt came at him and shoved him — two hands, chest, hard enough that Dominic\'s heel hit the curb stop. Then Merritt stepped in again and Dominic swung once. I was six feet away. I have told this exactly the same way since that night, because it happened exactly one way.',
+      crossExamination: 'Yes, he\'s my brother, and yes, he was there because I asked him to come. You can keep saying that. It doesn\'t change where I was standing. The video starts four seconds too late for the shove — I can\'t help where their camera points. I know what two hands on my brother\'s chest looks like. I was closer to it than anyone who\'s testified in this room.',
     },
   ],
   evidence: [
@@ -111,6 +119,8 @@ const rawReyesPayload = {
       relevanceScore: 9,
       objectionRisk: 'LOW',
       targetElementId: 'elem-act',
+      prosecutionArgument: 'The People offer the exterior camera footage: fourteen seconds, high definition, authenticated and time-stamped. The court will see the defendant stationary at the exit, the victim walking toward him, one blow, and a man on the pavement who does not move again. It is the act itself, on film.',
+      defenseObjection: null,
     },
     {
       id: 'ev-medical',
@@ -120,15 +130,19 @@ const rawReyesPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-gbi',
+      prosecutionArgument: 'The People offer Mr. Merritt\'s certified emergency records and CT imaging: a depressed skull fracture, a subdural bleed, three days in intensive care. The defense will say "one punch," and these exhibits are the answer — this is what one punch from a trained fighter does when the pavement finishes it.',
+      defenseObjection: null,
     },
     {
       id: 'ev-texts',
       name: 'Defendant\'s text messages',
       type: 'DIGITAL',
-      description: 'Messages from Reyes\'s phone that night: his sister\'s "come get me" at 11:42, his "on my way" reply, and — forty minutes after the punch — "caught him flush. he dropped." The People read a fighter\'s scorekeeping. The defense reads a scared kid describing the worst second of his life to his corner coach.',
+      description: 'Messages from Reyes\'s phone that night: his sister\'s "come get me" at 11:42, his "on my way" reply, and — forty minutes after the punch — "caught him flush. he dropped."',
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-aware',
+      prosecutionArgument: 'The People offer the defendant\'s own messages. Forty minutes after Mr. Merritt stopped moving, while he was in a scanner, the defendant typed: "caught him flush. he dropped." That is a fighter scoring a knockout — proof he knew exactly what his hands are and exactly what he had done with them.',
+      defenseObjection: 'Objection — the People are offering three words shorn of every message around them. The same thread starts with "come get me" from his little sister and ends with him asking his coach what to do. Read whole, it is a scared twenty-six-year-old describing the worst second of his life to the closest thing he has to a father. Prejudice over probative value, Your Honor — unless it all comes in.',
     },
     {
       id: 'ev-hall-video',
@@ -138,11 +152,19 @@ const rawReyesPayload = {
       relevanceScore: 6,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-act',
+      prosecutionArgument: 'The People offer the interior hallway clip — and we offer it against the defendant. It shows him receiving his sister\'s account of this confrontation twenty minutes before the parking lot: it is why a trained fighter was waiting under that floodlight instead of driving away. It proves motive and it proves he chose the encounter.',
+      defenseObjection: 'The defense objects to the People\'s framing, not the footage — this clip is the first chapter of their own story and they\'re offering it as a footnote. A man braced over a cornered young woman, a bouncer stepping in: that is the context for everything the parking-lot camera missed. If it comes in, it comes in as what it is, not as "motive."',
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
   // assembly call with all four stage outputs in context.
   summary: 'Fourteen seconds of video show Dominic Reyes, 26, an amateur middleweight with no record of any kind, drop Kyle Merritt with one punch outside the Golden Spur. Merritt\'s head hit a painted curb; he spent three days in intensive care and his cognitive testing is still pending. The video does not show the twenty minutes before: Merritt following Reyes\'s sister to the restroom hallway, the bouncer stepping in, her text — "come get me" — and, per the sister, a shove from Merritt that the camera missed by four seconds. The People say a trained fighter waited under a floodlight and threw a blow he of all people knew could kill. Reyes says he came for his sister and defended himself against a bigger, drunker man. The tape, both sides agree, is devastating. They disagree about what it is devastating to.',
+  // [LLM-FILL: CasePayload] — closing arguments, written by the final
+  // assembly call once the evidence and witness stages are complete.
+  closingArguments: {
+    prosecution: 'A trained fighter is charged with knowing what his hands are. That is the whole theory, and the tape proves it twice: once when the blow lands, and once in his own words forty minutes later — "caught him flush." He wasn\'t dragged into that parking lot; he chose the floodlight and he waited. Whatever Kyle Merritt was in that hallway — and the People are not here to defend it — he walked out of that bar into the one thing deadlier than his own bad manners: a middleweight with a grievance. The hallway explains the anger. It does not license the punch. Nothing does.',
+    defense: 'Dominic Reyes has never been arrested in his life. His sister texted "come get me," and he came — that is the whole of his premeditation. The bouncer, nobody\'s witness, tells you what kind of night Merritt was having and who he was having it at. The People\'s tape starts four seconds too late, and those four seconds are the case: Elena saw the shove, the camera didn\'t, and the People ask you to convict a man because their camera blinked. One punch, thrown at a bigger, drunker man advancing on him and his sister. The law does not require Dominic to lose that fight to be innocent. Self-defense is not an apology. It is an answer.',
+  },
 };
 
 // [LLM-FILL: PleaNarrative] — both rationales required on an offering band;

@@ -78,6 +78,14 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     throw new Error(`Demo case ${payload.caseId}: a NO_OFFER (WEAK) case must not carry a defenseRationale`);
   }
   const pleaReachable = posture.status === 'PENDING_JUDICIAL_REVIEW';
+  // The allocution beat plays only on the accepted-plea path, so it must be
+  // authored exactly when that path is reachable — same pairing rule as the
+  // PLEA_ACCEPTED aftermath below.
+  if (pleaReachable !== (pleaNarrative.allocution !== undefined)) {
+    throw new Error(
+      `Demo case ${payload.caseId}: pleaNarrative.allocution must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
+    );
+  }
   if (pleaReachable !== (raw.aftermath.PLEA_ACCEPTED !== undefined)) {
     throw new Error(
       `Demo case ${payload.caseId}: aftermath.PLEA_ACCEPTED must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`

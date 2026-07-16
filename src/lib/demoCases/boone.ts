@@ -81,6 +81,8 @@ const rawBoonePayload = {
       bias: 'PROSECUTION',
       statement: 'Was waiting out the rain under the laundromat awning across the street when she saw a figure working the rear-alley door of QuickCoin. Picked Boone from a photo array nine days later — she knows his face, because he cashed her checks for two years. Will testify she is "pretty sure." The defense will ask how far "pretty sure" carries at night, in rain, across four lanes, and whether she recognized the burglar or simply recognized Boone.',
       credibilityScore: 4,
+      directExamination: 'I was under the laundromat awning waiting out the rain, and I saw a man working at the back door of QuickCoin — crouched at the lock, then inside. When the detective showed me the photos I picked Curtis right away. I know that face. He cashed my checks every other Friday for two years. I\'m pretty sure it was him.',
+      crossExamination: 'It was about one in the morning, yes. Raining, yes. Across four lanes of El Camino — I don\'t know the feet. The alley light was... there\'s one light. No, I couldn\'t see his face the whole time, mostly the side and the back. I said pretty sure because that\'s what I am. You can say it back to me as many times as you like, counselor. Pretty sure is pretty sure.',
     },
     {
       id: 'wit-owner',
@@ -89,6 +91,8 @@ const rawBoonePayload = {
       bias: 'PROSECUTION',
       statement: 'Owner of QuickCoin. Will testify that $2,300 and the spare cash box were gone by morning, that whoever entered walked straight through the camera\'s blind spot without a wasted step, and that he fired Boone two months earlier over a till-count dispute — a dispute Boone himself had flagged. Will concede on cross that at least four current and former employees knew that blind spot as well as Boone did.',
       credibilityScore: 5,
+      directExamination: 'By morning the register cash and the spare box were gone — $2,300. And here\'s the thing that put my stomach on the floor: whoever came through that back door walked the one path my camera can\'t see. Not wandering, not searching. Straight through the blind spot like they\'d walked it a hundred times. I fired Curtis Boone two months before, over a till count. He knew that hallway with the lights off.',
+      crossExamination: 'The till dispute — yes, Curtis is the one who flagged the count being off in the first place. I fired him anyway; I couldn\'t make the numbers say who. How many people know the blind spot? Me, my two current tellers, and... former staff. Four people, maybe five, counting Curtis. Yes, counselor, that means at least four people who aren\'t sitting at that table knew it too. I know how that sounds.',
     },
     {
       id: 'wit-sister',
@@ -97,6 +101,8 @@ const rawBoonePayload = {
       bias: 'DEFENSE',
       statement: 'Defendant\'s older sister. Will testify Curtis was asleep on her couch across town when the alarm company logged the door at 1:52 a.m., that he had been there most nights since losing his job, and that he does not own the sneakers the print came from. She is his sister, and the jury will be told to weigh that.',
       credibilityScore: 6,
+      directExamination: 'Curtis was on my couch. He\'d been on my couch most nights since Herrera let him go — he\'d watch TV with the sound off so he wouldn\'t wake my kids, and he was there when I went to bed and there when my alarm went off at six. The night they\'re talking about was no different. And those Meridian trainers everybody keeps holding up? My brother wears the same two pairs of work boots he\'s owned for three years. I do his laundry. I\'d know.',
+      crossExamination: 'No, I didn\'t sit up and watch him sleep. I went to bed around midnight and my door was closed. Could he have left and come back without me hearing — I suppose a person could, but you\'re asking me to imagine it, and I\'m telling you what I know. Yes, he\'s my brother. That\'s not a reason to lie. It\'s the reason I know what shoes he owns.',
     },
   ],
   evidence: [
@@ -104,19 +110,23 @@ const rawBoonePayload = {
       id: 'ev-lineup',
       name: 'Photo array identification',
       type: 'DOCUMENTARY',
-      description: 'Six-pack photo identification made nine days after the burglary; the witness picked Boone in eleven seconds. The defense has a suppression motion drafted: Boone\'s photo — pulled from the store\'s own staff-page archive — is the only one in the array where the subject wears a QuickCoin uniform shirt.',
+      description: 'Six-pack photo identification made nine days after the burglary; the witness picked Boone in eleven seconds. Boone\'s photo was pulled from the store\'s own staff-page archive.',
       relevanceScore: 6,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-entry',
+      prosecutionArgument: 'The People offer the photo array identification. Nine days after the burglary, Ms. Voss picked the defendant out of a six-pack in eleven seconds — a face she\'d seen across a counter every other week for two years. The identification was administered by a detective with no connection to the case.',
+      defenseObjection: 'The defense moves to suppress, Your Honor. Look at the array: Mr. Boone\'s photo was pulled from QuickCoin\'s own staff page, and his is the only picture in the six where the man is wearing a QuickCoin uniform shirt. That is not an identification, it is a multiple-choice question with one answer in bold. Eleven seconds proves the suggestion worked, not that the memory was real.',
     },
     {
       id: 'ev-shoeprint',
       name: 'Partial shoe print cast',
       type: 'FORENSIC',
-      description: 'Tread cast from the mud inside the rear door: a size-10 Meridian trainer, one of the most common shoes sold in the county. Boone wears a size 10. So, the defense will note, does roughly one man in eight.',
+      description: 'Tread cast from the mud inside the rear door: a size-10 Meridian trainer, one of the most common shoes sold in the county. Boone wears a size 10.',
       relevanceScore: 4,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-entry',
+      prosecutionArgument: 'The People offer the tread cast lifted from the mud inside the rear door: a size-10 Meridian trainer. The defendant wears a size 10. It places a matching shoe inside the point of entry on the night of the burglary.',
+      defenseObjection: 'Objection — relevance dressed up as forensics. The Meridian is one of the most common shoes sold in this county, and size 10 fits roughly one man in eight. The People are offering the court a shoe that fits a hundred thousand people, none of whom have been shown to be my client, who does not own a pair.',
     },
     {
       id: 'ev-prybar',
@@ -126,6 +136,8 @@ const rawBoonePayload = {
       relevanceScore: 5,
       objectionRisk: 'MEDIUM',
       targetElementId: null,
+      prosecutionArgument: 'The People offer the pry bar recovered from a dumpster two blocks north of QuickCoin. The tool-mark examiner will say it is consistent with the marks on the rear door. It is the instrument of the entry, discarded on the natural walking route away from the scene.',
+      defenseObjection: 'Objection — foundation, Your Honor. No prints, no DNA, no purchase record, no witness. The People\'s entire connection is that the dumpster is near a bus stop my client has used, which describes half the neighborhood. "Consistent with the tool marks" means consistent with every pry bar in every garage in this county.',
     },
     {
       id: 'ev-cellsite',
@@ -135,11 +147,19 @@ const rawBoonePayload = {
       relevanceScore: 5,
       objectionRisk: 'HIGH',
       targetElementId: null,
+      prosecutionArgument: 'The People offer the carrier\'s cell-site records: the defendant\'s phone, inside the sector containing QuickCoin, from 1:40 to 2:15 in the morning — squarely bracketing the 1:52 alarm. His phone was where the burglary was, when the burglary was.',
+      defenseObjection: 'Objection, and I\'d ask the court to look at the map before ruling. The sector is three-quarters of a mile wide and it contains his sister\'s apartment — the couch he sleeps on every night. This exhibit proves Curtis Boone was at home. The People are offering evidence of the defense\'s own alibi and asking the court to read it backwards.',
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
   // assembly call with all four stage outputs in context.
   summary: 'Someone came through the rear door of QuickCoin Check Cashing at 1:52 a.m. in the rain, walked the one path the camera cannot see, and left with $2,300 and the spare cash box. Nine days later a woman who waited out the storm across the street picked Curtis Boone out of a photo array — Boone, who cashed her checks for two years, and whom the owner fired two months ago over a till dispute Boone himself had reported. The People have a common shoe print, a pry bar no one can connect to anyone, a phone that was somewhere in the neighborhood where Boone also happens to live, and a witness who is pretty sure. Boone has a sister who says he was on her couch, no job since the firing, and one act of vandalism from when he was twenty. Four other people knew the blind spot. One of them got charged.',
+  // [LLM-FILL: CasePayload] — closing arguments, written by the final
+  // assembly call once the evidence and witness stages are complete.
+  closingArguments: {
+    prosecution: 'Strip away the noise and ask one question: who walks the blind spot without a wasted step? Not a stranger. Someone who counted that till, closed that store, knew where the camera stops seeing. Curtis Boone was fired from that knowledge two months before someone used it. A woman who knew his face for two years picked him in eleven seconds. His phone sat in the sector while the door came open. His size came out of the mud inside it. Any one thread, alone, you could cut. Together they only fit one man, and he\'s the one who had a reason to come back angry.',
+    defense: 'The People built this case backwards: they started with the obvious suspect and went looking for things that don\'t rule him out. A shoe one man in eight wears. A phone sleeping in the same sector as its owner\'s couch. A pry bar connected to nothing and no one. An identification made across four lanes, at night, in the rain, by a witness who didn\'t recognize the burglar — she recognized Curtis, the man from the counter, in the only photo wearing the store\'s own shirt. And the four other people who knew that blind spot? Never asked a single question. Pretty sure isn\'t proof beyond a reasonable doubt. It isn\'t even close.',
+  },
 };
 
 // [LLM-FILL: PleaNarrative] — WEAK band: the prosecution declines to bargain,

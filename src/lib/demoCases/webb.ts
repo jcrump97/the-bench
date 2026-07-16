@@ -108,6 +108,8 @@ const rawWebbPayload = {
       bias: 'PROSECUTION',
       statement: 'Traced all eleven transfers endpoint to endpoint: every dollar lands in an account only Webb controlled, and the timing tracks his child-support deadlines, not the firm\'s business cycle. Will testify that when asked about the partial repayments, Webb said nothing and asked for a lawyer — and that in his experience, "people don\'t quietly repay money they don\'t know they took."',
       credibilityScore: 9,
+      directExamination: 'I traced all eleven transfers endpoint to endpoint. Every dollar leaves the client trust account and lands in a personal checking account only Mr. Webb controlled. The timing isn\'t the firm\'s business cycle — nine of eleven transfers post within seventy-two hours of one of his child-support deadlines. When I asked him about the partial repayments, he said nothing and asked for a lawyer. Twenty years working financial crimes, I\'ll tell you what I told my sergeant: people don\'t quietly repay money they don\'t know they took.',
+      crossExamination: 'Yes, three repayments came back before anyone at the firm noticed anything — before there was any investigation to get ahead of. No, I can\'t tell you what he intended; I can tell you what the account did. And yes, it\'s true the keycard system had gaps. I didn\'t build my case on the keycard system.',
     },
     {
       id: 'wit-forensic-acct',
@@ -116,6 +118,8 @@ const rawWebbPayload = {
       bias: 'NEUTRAL',
       statement: 'Independent forensic accountant. Will testify the math is not in dispute — $14,200 out, $3,100 quietly returned — and that the firm\'s controls were poor enough that the door was standing open. She is careful to say that cuts both ways: it made the taking easy, and it makes proving no one else could have done it harder.',
       credibilityScore: 8,
+      directExamination: 'The reconciliation is not complicated and it is not in dispute: $14,200 left the trust account in eleven transfers, and $3,100 came back in three irregular repayments. Net diversion, $11,100. I verified every entry against the bank\'s own records. The arithmetic in my report is the arithmetic.',
+      crossExamination: 'Counsel is correct that I flagged the firm\'s controls as materially deficient. One person held the keys, the alarm code, and transfer authority, with no second signature required on trust disbursements. I\'ll say what I wrote: that made the taking easy, and it means I cannot certify, from the books alone, that no one else could have initiated a transfer. That cuts in both directions, and I\'d rather the court hear it from me.',
     },
     {
       id: 'wit-character',
@@ -124,6 +128,8 @@ const rawWebbPayload = {
       bias: 'DEFENSE',
       statement: 'Webb\'s supervisor for four years. Will testify that he was the one who caught and reported two billing errors in the firm\'s own favor; that Ray Hollis knew Webb\'s record when he hired him and called it the best decision he\'d made; and that in the months before the transfers, Webb was sleeping in his car between custody exchanges and would not ask anyone for help.',
       credibilityScore: 6,
+      directExamination: 'I supervised Marcus for four years. He\'s the one who caught two billing errors in our own favor and made us return the money — clients never would have known. Ray hired him knowing his record and used to call it the best decision he\'d made. Last winter I found out he was sleeping in his car some nights between custody exchanges. He never told anyone. He\'d have died before asking any of us for help. I wish to God he had.',
+      crossExamination: 'No, I didn\'t know about the transfers while they were happening. Yes, I trusted him completely — that\'s rather the point of what happened, isn\'t it. You can call my judgment into question all you like; I watched the man return money nobody knew was missing, twice. I\'m telling you what I saw for four years. The jury can weigh it however they need to.',
     },
   ],
   evidence: [
@@ -135,38 +141,52 @@ const rawWebbPayload = {
       relevanceScore: 9,
       objectionRisk: 'LOW',
       targetElementId: 'elem-value',
+      prosecutionArgument: 'The People offer the trust account records: eleven transfers, $14,200, every one landing in Mr. Webb\'s personal checking, nine of them within three days of a child-support deadline. These are the bank\'s own certified statements. The paper does not have a theory of the case, Your Honor. It just has the money.',
+      defenseObjection: null,
     },
     {
       id: 'ev-email-chain',
       name: 'Internal email chain',
       type: 'DIGITAL',
-      description: 'Emails Webb sent to his own personal account: reminders, a running tally, "put back 800 of March," "audit is the 14th — needs to be whole by the 10th." The People read consciousness of guilt. The defense reads a man keeping careful score of what he intended to return.',
+      description: 'Emails Webb sent to his own personal account: reminders, a running tally, "put back 800 of March," "audit is the 14th — needs to be whole by the 10th."',
       relevanceScore: 8,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-intent',
+      prosecutionArgument: 'The People offer Mr. Webb\'s emails to himself: a running tally of what he took, and the line that ends the intent argument — "audit is the 14th, needs to be whole by the 10th." That is consciousness of guilt in the defendant\'s own words, timed to the calendar of getting caught.',
+      defenseObjection: 'Objection, Your Honor. The People want to read half the document. The same tally says "put back 800 of March" — these are the notes of a man keeping careful score of what he intended to return, and offering them as proof he intended to keep the money turns the writing on its head. If they come in, they come in whole.',
     },
     {
       id: 'ev-forensic-report',
       name: 'Forensic accounting report',
       type: 'FORENSIC',
-      description: 'Independent reconciliation fixing the diversion at $14,200 net of repayments. A footnote the defense intends to enlarge: the firm\'s controls were thin enough that, in principle, any of the three employees could have initiated a transfer. The trust account held real money — a widow\'s home-sale escrow, a landscaping company\'s payroll reserve.',
+      description: 'Independent reconciliation fixing the diversion at $14,200 net of repayments. The trust account held real money — a widow\'s home-sale escrow, a landscaping company\'s payroll reserve.',
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-value',
+      prosecutionArgument: 'The People offer the independent forensic reconciliation. It fixes the diversion at $14,200, well past the felony threshold, and it puts faces on the number: a widow\'s escrow, a landscaper\'s payroll. Ms. Whitfield answers to neither party, and her math has not been challenged.',
+      defenseObjection: 'No objection to the arithmetic, Your Honor — but the defense objects to the report coming in without its own footnote: the examiner found the firm\'s controls so thin that any of three employees could have initiated a transfer. The People cannot offer her conclusions and leave her caveats on the table.',
     },
     {
       id: 'ev-surveillance',
       name: 'Keycard access log and office security footage',
       type: 'DIGITAL',
-      description: 'Keycard logs and hallway footage placing Webb alone in the office during two of the eleven transfer windows. Pulled by the landlord three weeks after the fact; the system had already overwritten part of the period, and no one can account for every master keycard. The People call it corroboration. The defense calls it a gap wearing a timestamp.',
+      description: 'Keycard logs and hallway footage placing Webb alone in the office during two of the eleven transfer windows. Pulled by the landlord three weeks after the fact; the system had already overwritten part of the period, and no one can account for every master keycard.',
       relevanceScore: 6,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-taking',
+      prosecutionArgument: 'The People offer the keycard logs and hallway footage. For two of the eleven transfer windows they place Mr. Webb alone in that office — corroboration, in time and place, of what the bank records already show.',
+      defenseObjection: 'Objection — foundation and completeness, Your Honor. This system was pulled by the landlord three weeks late, it had already overwritten part of the period, and nobody can account for every master keycard. Two windows out of eleven isn\'t corroboration; it\'s a gap wearing a timestamp, and the People want the court to hear the timestamp and forget the gap.',
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
   // assembly call with all four stage outputs in context.
   summary: 'Marcus Webb kept the books at Hollis & Associates for six years. Ray Hollis hired him knowing his record — two theft convictions and a possession charge — because Webb owned it in the interview, and for six years that faith looked justified. Then, over four months, $14,200 left the client trust account for Webb\'s personal checking in eleven transfers, most landing days before a child-support deadline. About $3,100 came back in small, irregular repayments before the transfers stopped. The trust account held real people\'s money: a widow\'s home-sale escrow, a landscaper\'s payroll reserve. Webb — divorced, two kids, eighteen months sober, sleeping in his car some weeks — has said nothing publicly. His emails say he meant to make it whole before the audit. The People say that is what every embezzler says.',
+  // [LLM-FILL: CasePayload] — closing arguments, written by the final
+  // assembly call once the evidence and witness stages are complete.
+  closingArguments: {
+    prosecution: 'Eleven transfers. One destination account, and only one man with the password. Nine of eleven timed to his own support deadlines, and an email in his own hand counting down to the audit. The defense will tell you about the repayments, and I\'ll say it plainly: returning a fifth of what you took is not innocence, it\'s arithmetic with a conscience — and Section 487 does not have an element for feeling bad. He took money that belonged to a widow and a payroll clerk because he decided his emergency outranked their trust. Hold him to the same ledger he kept for everyone else.',
+    defense: 'Marcus Webb is the man who twice returned money this firm didn\'t know it was owed — remember who told you that, his supervisor, under oath. The People\'s own expert says the door stood open and she cannot prove no one else walked through it. Their footage is a gap with a timestamp. What\'s left is a tally that says "put back," repayments that started before anyone was looking, and a man sleeping in his car who never asked a soul for help. Taking with intent to permanently deprive — that is the element. A running note that says "needs to be whole by the 10th" is not a man planning to keep anything. Find the doubt, because it\'s sitting in the People\'s own exhibits.',
+  },
 };
 
 // [LLM-FILL: PleaNarrative] — the LLM's only plea contribution: the voiced
@@ -176,6 +196,7 @@ const rawWebbPayload = {
 const rawWebbPleaNarrative = {
   prosecutionRationale: 'The paper is unanswerable: the transfers, the destination account, the timing against his support deadlines, and his intent in his own words. I don\'t need the keycard footage — which is convenient, because it has problems. What I don\'t have is a villain. He paid a fifth of it back, and the firm\'s own expert will say the door was left standing open. That is why the offer exists: he pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
   defenseRationale: 'I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. The offer puts a floor under his life. He hates it. I have told him to take it.',
+  allocution: 'I\'m not going to stand here and tell the court it wasn\'t stealing, because I kept the books and I know exactly what it was. I told myself it was a loan every single time I moved the money, and I put back what I could, and none of that makes it not stealing — it just means I knew better while I did it. Mr. Hollis gave me a chance nobody else would, and I spent it. The people whose money sat in that account never agreed to fund my emergency. I\'d ask the court to leave me able to work, because the restitution is mine to pay and I mean to pay all of it. That\'s all I have, Your Honor.',
 };
 
 // [LLM-FILL: Aftermath] — generated after sentencing from the full end-of-

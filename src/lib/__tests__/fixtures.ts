@@ -54,6 +54,8 @@ export const rawValidCase = {
       bias: 'PROSECUTION',
       statement: 'Saw a figure force the rear door.',
       credibilityScore: 7,
+      directExamination: 'I saw a figure force the rear door open.',
+      crossExamination: 'It was dark, and I was across the street.',
     },
     {
       id: 'w2',
@@ -62,6 +64,8 @@ export const rawValidCase = {
       bias: 'NEUTRAL',
       statement: 'Lifted prints from the rear door handle.',
       credibilityScore: 8,
+      directExamination: 'I lifted a clean set of prints from the rear door handle.',
+      crossExamination: null,
     },
   ],
   evidence: [
@@ -73,6 +77,8 @@ export const rawValidCase = {
       relevanceScore: 5,
       objectionRisk: 'LOW',
       targetElementId: 'el1',
+      prosecutionArgument: 'The People offer the latent print lifted from the rear door.',
+      defenseObjection: null,
     },
     {
       id: 'e2',
@@ -82,6 +88,8 @@ export const rawValidCase = {
       relevanceScore: 3,
       objectionRisk: 'MEDIUM',
       targetElementId: null,
+      prosecutionArgument: 'The People offer the security camera still showing a figure at the door.',
+      defenseObjection: 'Objection — the image is too degraded to identify anyone.',
     },
     {
       id: 'e3',
@@ -91,9 +99,15 @@ export const rawValidCase = {
       relevanceScore: 2,
       objectionRisk: 'HIGH',
       targetElementId: null,
+      prosecutionArgument: 'The People offer the crowbar recovered a block from the scene.',
+      defenseObjection: 'Objection — nothing connects this tool to the defendant.',
     },
   ],
   summary: 'Defendant allegedly broke into a closed electronics store.',
+  closingArguments: {
+    prosecution: 'The print on the door is the defendant\'s. That is the case.',
+    defense: 'A print proves presence at a public door, not entry and not intent.',
+  },
 };
 
 // Parsed + validated at module load. Throws here if the fixture ever drifts
