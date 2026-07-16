@@ -95,7 +95,9 @@ export interface BuildCourtroomScriptInput {
 // Phase ordering for "has the case moved past Act 1" checks. On the NO_OFFER
 // and REJECTED_BY_DEFENSE paths the trial order writes no decision record —
 // only the phase advances — so resolution is read off the phase itself.
-const PHASE_RANK: Record<GamePhase, number> = {
+// Exported for the Continue control, which fires the same one-way phase
+// transitions when the reveal crosses an act boundary.
+export const PHASE_RANK: Record<GamePhase, number> = {
   WELCOME: 0,
   ACT_1_INTAKE: 1,
   ACT_2_MOTIONS: 2,

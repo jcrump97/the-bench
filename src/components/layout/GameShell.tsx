@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useUIStore } from '../../store/useUIStore';
-import { useLedgerEntries } from '../../hooks/useLedgerEntries';
+import { useCourtroomScript } from '../../hooks/useCourtroomScript';
 import { TopBar } from './TopBar';
 import { Ledger } from '../ledger/Ledger';
 import { ActionBar } from '../actionbar/ActionBar';
@@ -32,7 +32,7 @@ function PanelDrawer({ side, open, children }: { side: 'left' | 'right'; open: b
 export function GameShell() {
   const casePanelOpen = useUIStore((state) => state.casePanelOpen);
   const evidencePanelOpen = useUIStore((state) => state.evidencePanelOpen);
-  const ledgerEntries = useLedgerEntries();
+  const { visibleEntries } = useCourtroomScript();
 
   return (
     <div className="flex h-dvh flex-col bg-(--bg)">
@@ -47,7 +47,7 @@ export function GameShell() {
 
         <main className="flex min-w-0 flex-1 flex-col md:min-h-0">
           <div className="flex-1 overflow-y-auto p-4">
-            <Ledger entries={ledgerEntries} />
+            <Ledger entries={visibleEntries} />
           </div>
           <div className="shrink-0 border-t border-(--border) bg-(--bg-panel) p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <ActionBar />

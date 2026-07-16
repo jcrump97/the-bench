@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useGameStore } from '../../store/useGameStore';
+import { useUIStore } from '../../store/useUIStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
 import { DEMO_CASES, type DemoCaseBundle } from '../../lib/demoCases';
 import { demoCaseSource } from '../../lib/caseSource';
@@ -11,6 +12,7 @@ export function WelcomeScreen() {
   const setActiveCase = useGameStore((state) => state.setActiveCase);
   const setActivePleaNarrative = useGameStore((state) => state.setActivePleaNarrative);
   const setPhase = useGameStore((state) => state.setPhase);
+  const resetBeatCursor = useUIStore((state) => state.resetBeatCursor);
 
   const vault = useSecurityStore((state) => state.vault);
   const setVault = useSecurityStore((state) => state.setVault);
@@ -26,6 +28,7 @@ export function WelcomeScreen() {
       .then(({ payload, pleaNarrative }) => {
         setActiveCase(payload);
         setActivePleaNarrative(pleaNarrative);
+        resetBeatCursor();
         setPhase('ACT_1_INTAKE');
       })
       .catch(() => setPhase('ERROR_STATE'));

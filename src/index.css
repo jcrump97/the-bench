@@ -92,3 +92,23 @@
     outline-offset: 2px;
   }
 }
+
+/* Entrance animation for the newest beat in the court record. Mount-only:
+   older entries keep stable keys, so only the just-revealed beat animates.
+   Guarded so reduced-motion users get an instant reveal instead. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes beat-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .beat-in {
+    animation: beat-in 240ms ease-out;
+  }
+}

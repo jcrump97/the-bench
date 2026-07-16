@@ -1,5 +1,40 @@
 # TODO
 
+## ACTIVE: Beat-by-beat courtroom loop redesign (2026-07-16)
+
+The static form-dump loop is being replaced by a click-to-advance courtroom
+where the case unfolds one statement at a time. Full plan:
+`~/.claude/plans/ok-let-s-try-that-lively-koala.md`. Core design: one derived
+script (`src/lib/courtroomScript.ts`, prefix-stable, no-spoilers truncation at
+the first unresolved decision) revealed by a `beatCursor` in `useUIStore`;
+decisions still commit through the game store's validated actions.
+
+- [x] **Commit 1 (`a62469c`)** — schema extensions (`prosecutionArgument`/
+      `defenseObjection` on Evidence keyed to objectionRisk, `direct`/
+      `crossExamination` on Witness, `closingArguments` on Case, `allocution`
+      on PleaNarrative w/ defineDemoCase pairing rule) + all four demo cases
+      re-authored with voiced beats.
+- [x] **Commit 2 (`fbd13d8`)** — `buildCourtroomScript` beat projection
+      (STATEMENT/DECISION union) + tests incl. prefix-stability playthroughs
+      of the whole docket. buildLedger untouched.
+- [x] **Commit 3 (`f503c6d`)** — incremental `chargeVerdicts[]` +
+      `addChargeVerdict` (upsert, ACT_3-gated); `addMotionRuling` phase-gated.
+- [x] **Commit 4** — beat-by-beat UI: `beatCursor` in useUIStore (advance /
+      forward-only setBeatCursor / reset), `useCourtroomScript` hook, Ledger
+      reveal + auto-scroll + `beat-in` animation (reduced-motion guarded),
+      ActionBar switches on pendingBeat (Continue w/ skip-to-next-decision,
+      PleaRuling, MotionRuling, ChargeVerdict, Sentencing controls); the four
+      old act forms + buildLedger + useLedgerEntries deleted; cursor resets
+      wired into WelcomeScreen and ResultActions. NOT yet verified in-browser
+      (that's Commit 5's driver rewrite).
+- [ ] **Commit 5** — rewrite `.claude/skills/run-the-bench` driver for the
+      click-through flow (all 4 cases, both branches, exercise skip once).
+- [ ] **Commit 6** — docs sync (CLAUDE.md/README/TODO) + prose polish.
+- [ ] **Push** — after final review: run tests on all commits, check unstaged
+      changes, quality review, push (user instruction 2026-07-16).
+
+---
+
 Status of the "First UI Layer" plan (side panels, popups, ledger, action bar).
 Phases 0–4 are **done and verified**: the full demo docket is playable end-to-end
 (WELCOME → select a case → Act 1 → [Act 2] → Act 3 → END_STATE) on both the

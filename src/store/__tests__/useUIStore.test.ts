@@ -7,7 +7,7 @@ const INITIAL = {
 };
 
 beforeEach(() => {
-  useUIStore.setState({ ...INITIAL, activeModal: null });
+  useUIStore.setState({ ...INITIAL, activeModal: null, beatCursor: 0 });
 });
 
 describe('useUIStore', () => {
@@ -49,5 +49,27 @@ describe('useUIStore', () => {
 
     useUIStore.getState().setCasePanelOpen(true);
     expect(useUIStore.getState().casePanelOpen).toBe(true);
+  });
+});
+
+describe('useUIStore — beatCursor', () => {
+  it('starts at zero and advances one beat at a time', () => {
+    expect(useUIStore.getState().beatCursor).toBe(0);
+    useUIStore.getState().advanceBeat();
+    useUIStore.getState().advanceBeat();
+    expect(useUIStore.getState().beatCursor).toBe(2);
+  });
+
+  it('setBeatCursor fast-forwards but never rewinds the reveal', () => {
+    useUIStore.getState().setBeatCursor(7);
+    expect(useUIStore.getState().beatCursor).toBe(7);
+    useUIStore.getState().setBeatCursor(3);
+    expect(useUIStore.getState().beatCursor).toBe(7);
+  });
+
+  it('resetBeatCursor returns to zero for a new case', () => {
+    useUIStore.getState().setBeatCursor(9);
+    useUIStore.getState().resetBeatCursor();
+    expect(useUIStore.getState().beatCursor).toBe(0);
   });
 });
