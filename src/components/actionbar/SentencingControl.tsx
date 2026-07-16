@@ -33,6 +33,10 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
   const caseSource = useCaseSource();
 
   const isPleaPath = pleaDecision === 'ACCEPT';
+  // Guards the async submit against a double-click: a second resolution would
+  // call setAftermathNarrative after the END_STATE transition and trip its
+  // phase gate, wiping a finished game to ERROR_STATE.
+  const [submitting, setSubmitting] = useState(false);
   const exposure = activeCase ? deriveSentencingExposure(activeCase.charges) : null;
   const [amounts, setAmounts] = useState<number[]>(() => {
     if (!exposure) return [];
@@ -57,6 +61,8 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
   // variant today) before the END_STATE transition; any failure, including a
   // sourceless active case, is an ErrorState.
   const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     const imposedSentence = anyGuilty ? buildSentences(exposure.maximumPenalties, amounts) : [];
     setImposedSentence(imposedSentence);
     if (caseSource === null) {
@@ -82,7 +88,7 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
     return (
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-medium text-(--text-h)">Acquitted on all counts. There is nothing to impose.</h2>
-        <button type="button" onClick={() => void handleSubmit()} className={PRIMARY_BUTTON}>
+        <button type="button" disabled={submitting} onClick={() => void handleSubmit()} className={PRIMARY_BUTTON}>
           Adjourn
         </button>
       </div>
@@ -115,7 +121,7 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
       />
 
       <div className="flex justify-end">
-        <button type="button" onClick={() => void handleSubmit()} className={PRIMARY_BUTTON}>
+        <button type="button" disabled={submitting} onClick={() => void handleSubmit()} className={PRIMARY_BUTTON}>
           Impose Sentence
         </button>
       </div>

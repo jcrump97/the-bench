@@ -52,13 +52,23 @@ export function useCourtroomScript(): CourtroomScriptView {
 
   return useMemo(() => {
     const cursor = Math.min(beatCursor, script.length);
+    const last = script.at(-1);
+    // Self-heal an overshoot: a raced double-advance can push the raw cursor
+    // past the script's trailing unresolved decision (emission truncates at
+    // it, so cursor lands at length). Re-present that decision instead of
+    // rendering no control at all — the alternative is a soft-lock.
+    const pendingBeat = cursor < script.length
+      ? script[cursor]
+      : last?.kind === 'DECISION'
+        ? last
+        : undefined;
     return {
       script,
       cursor,
       visibleEntries: script
         .slice(0, cursor)
         .filter((beat): beat is StatementBeat => beat.kind === 'STATEMENT'),
-      pendingBeat: script[cursor],
+      pendingBeat,
     };
   }, [script, beatCursor]);
 }
