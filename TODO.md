@@ -84,6 +84,120 @@ widths, with clean consoles. Verified via headless-Chromium playthroughs against
       reflects the playable demo + next steps. The original written
       introduction ("Why This Exists") is untouched.
 
+## UI defects (player-perspective responsive sweep, 2026-07-15)
+
+Findings from a subagent-driven Playwright sweep (full docket via
+`run-the-bench` driver — all 24 checks passed, console clean — plus a
+Webb trial walkthrough screenshotted at 390/820/1440px). Phone and desktop
+render correctly; no horizontal overflow or console errors anywhere. One
+genuine defect:
+
+- [ ] **Tablet band (~768–1000px) is unplayable past Act 1.** Both side
+      panels default open at ≥768px (`useUIStore.ts` —
+      `matchMedia('(min-width: 768px)')`) and each open panel is a fixed
+      320px column (`md:w-80`, `GameShell.tsx`), so at e.g. 820px the center
+      column gets ~180px: ledger text wraps one word per line, "Accept Plea"
+      overflows its button, and the Act 3 submit button is pushed below the
+      viewport with no scrollbar (action bar is `shrink-0` in a non-scrolling
+      column). Fix: move the panels-open-by-default breakpoint to 1024px —
+      `min-width: 1024px` in `useUIStore.ts` and the matching `md:` → `lg:`
+      classes in `GameShell.tsx`/`PanelBackdrop.tsx` — so 768–1023px uses the
+      drawer pattern that already works on phones. Optionally add a `min-w`
+      floor on the center column as a guard. Verify by re-running the sweep
+      at 820x1180: all Act 1–3 controls reachable, no per-word text wrap.
+      **Tier: lower-tier** (contained to the three layout files; the fix is
+      specified above).
+
+## Presentation & pacing (first-time-player review, 2026-07-12)
+
+Finding from a screenshot-by-screenshot playthrough: every phase renders its
+full state in one frame — no sequencing, no acknowledgment of the player's
+decisions, and the verdict/aftermath entries append **below the fold with no
+scroll**, so the ending is invisible unless the player scrolls. It reads as a
+case-review tool, not a courtroom. All fixes below are view-layer only
+(`useUIStore` + CSS): `buildLedger` stays a pure projection, no schema/store
+validation or phase-machine changes, no new dependencies.
+
+- [ ] **Auto-scroll + entrance animation for new ledger entries** — when
+      `entries.length` grows, `scrollIntoView` the newest entry with a
+      fade/slide-in (respect `prefers-reduced-motion`). Closest to a bug fix:
+      makes the verdict and aftermath visible at all.
+- [ ] **Sequential ledger reveal** — `revealedEntryCount` in `useUIStore`;
+      render `entries.slice(0, revealed)`, advance on click/tap (VN-style,
+      respects reading speed) with a "reveal all" skip. Action bar stays
+      disabled until the current phase's entries have been "heard." Reveal
+      whole entries, not typewriter text.
+- [ ] **Stage the finale as its own beat** — after sentencing, stagger the
+      verdict → sentence → press Aftermath entries (~600ms), with the
+      "Case closed / New Case" bar appearing only after the last one lands.
+- [ ] **Per-speaker visual voice in `LedgerEntryRow`** — accent left-border
+      keyed on `entry.speaker`, heavier headings for verdict/sentence `kind`s,
+      press Aftermath styled as a clipping. Pure CSS on fields that already
+      exist.
+- [ ] **Act title cards on phase transition** — brief interstitial overlay
+      ("Act 2 — Evidentiary Motions · The parties will be heard on
+      admissibility"), rendered as UI chrome, not a ledger entry, so the
+      ledger stays a pure court record.
+- [ ] **Act 2 as per-motion beats** (biggest scope — absorbed into the
+      "Courtroom transcript redesign" section below) — one contested evidence
+      item center-stage at a time (description from validated case data),
+      ruling echoes into the ledger before the next motion appears. Later:
+      short prosecution/defense arguments per motion as narrative-only LLM
+      color, same pattern as the plea rationale.
+- [ ] **Driver escape hatch** — the paced reveal breaks `driver.mjs`'s pinned
+      assertions; add an instant-reveal mode (e.g. `?instant=1` query param
+      read at `useUIStore` init) so headless runs stay fast and deterministic,
+      and update the driver alongside each item above.
+
+## Unified courtroom design (merge of beat loop + dialogue-ledger pilot, 2026-07-18)
+
+Two parallel redesigns of the same problem were reconciled by merge (user
+ruling: the beat-loop architecture wins). The local beat-by-beat loop
+(`courtroomScript.ts` projection over payload-embedded prose, `beatCursor`
+reveal, per-decision ActionBar controls — see the ACTIVE section above) is the
+base. The DialogueScript sidecar (schema section 9, `validateDialogueScriptAgainstCase`,
+`setActiveDialogueScript`, the authored Webb script) was removed in the merge
+resolution rather than left as dead code — its ideas survive as the work items
+below, re-implemented natively in the beat-loop architecture. Harvested intact
+from the pilot branch: the shared `EvidenceRulingSchema`/`VerdictValueSchema`
+enums, the `spokenJudgeLines` + `recordSpokenJudgeLine` store plumbing (voice
+record only; game logic never reads it), and the AGENTS.md cross-agent
+coordination rules. The retired pilot's prose remains harvestable from git
+history (`git show <pilot>:src/lib/demoCases/webb.ts`, merged parent).
+
+Governing invariant (unchanged from both plans): **LLM/authored text provides
+color, the deterministic pipeline provides structure.** A dialogue option is
+`{ lineText, choice }` with `choice` drawn from the closed decision enums;
+variants multiply voice, never the state space.
+
+- [ ] **U1 — choice-keyed reaction beats.** Extend the payload schemas with
+      per-choice reaction prose: evidence gains ruling reactions keyed
+      `ADMITTED`/`EXCLUDED`, charges gain verdict reactions keyed
+      `GUILTY`/`NOT_GUILTY`, the plea narrative gains `ACCEPT`/`REJECT`
+      reactions (authored exactly when the posture puts an offer before the
+      bench — same pairing rule as `allocution`). `buildCourtroomScript`
+      emits the matching reaction after each resolved decision; prefix
+      stability holds because reactions append with their decision's
+      resolution. Author all four cases (harvest Webb's from the pilot
+      script). **Tier: frontier schema/projection, lower-tier authoring for
+      Boone/Reyes/Vaughn.**
+- [ ] **U2 — voiced judge-line options.** Each decision point carries ≥1
+      authored `{ lineText, choice }` option per outcome (choice-coverage
+      refinement — port the pilot's `dialogueOption`/coverage-check pattern
+      from git history). The decision controls (PleaRuling/MotionRuling/
+      ChargeVerdict) present the voiced lines; the handler dispatches the
+      structural decision + `recordSpokenJudgeLine` together, and the
+      projection speaks the recorded line as the COURT beat (deterministic
+      fallback: first option matching the recorded decision). Craft rules
+      from the pilot: no scripted COURT lines the player didn't pick;
+      option text never states numbers the engine doesn't produce.
+      Sentencing stays a structured form. **Tier: frontier.**
+- [ ] **U3 — tablet-band fix** — see "UI defects" above (768→1024 breakpoint;
+      spec is complete). **Tier: lower-tier.**
+- [ ] **U4 — driver + docs sweep.** `driver.mjs` asserts reaction beats and
+      clicks voiced options; CLAUDE.md/README/AGENTS.md synced. **Tier:
+      lower-tier.**
+
 ## Deferred MVP items (from plan §7)
 
 - [ ] `GameService` + the 4-stage LLM generation pipeline

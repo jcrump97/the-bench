@@ -148,6 +148,53 @@ describe('useGameStore — addChargeVerdict', () => {
   });
 });
 
+describe('useGameStore — spokenJudgeLines / recordSpokenJudgeLine', () => {
+  it('records a line under a valid plea decision id', () => {
+    useGameStore.getState().recordSpokenJudgeLine('plea', 'The court accepts the plea.');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({ plea: 'The court accepts the plea.' });
+  });
+
+  it('records a line under a valid motion-<evidenceId> id', () => {
+    useGameStore.getState().recordSpokenJudgeLine('motion-e1', 'Admitted.');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({ 'motion-e1': 'Admitted.' });
+  });
+
+  it('records a line under a valid verdict-<chargeId> id', () => {
+    useGameStore.getState().recordSpokenJudgeLine('verdict-c1', 'Guilty.');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({ 'verdict-c1': 'Guilty.' });
+  });
+
+  it('overwrites the line on re-recording the same decision id', () => {
+    useGameStore.getState().recordSpokenJudgeLine('plea', 'First phrasing.');
+    useGameStore.getState().recordSpokenJudgeLine('plea', 'Second phrasing.');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({ plea: 'Second phrasing.' });
+  });
+
+  it('force-resets to ERROR_STATE on an invalid decision id shape', () => {
+    useGameStore.getState().recordSpokenJudgeLine('not-a-real-id', 'Some line.');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({});
+  });
+
+  it('force-resets to ERROR_STATE on empty lineText', () => {
+    useGameStore.getState().recordSpokenJudgeLine('plea', '');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({});
+  });
+
+  it('force-resets to ERROR_STATE on lineText over 300 chars', () => {
+    useGameStore.getState().recordSpokenJudgeLine('plea', 'x'.repeat(301));
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({});
+  });
+
+  it('resetGameState clears spokenJudgeLines back to {}', () => {
+    useGameStore.getState().recordSpokenJudgeLine('plea', 'A line.');
+    useGameStore.getState().resetGameState();
+    expect(useGameStore.getState().spokenJudgeLines).toEqual({});
+  });
+});
+
 describe('useGameStore — case + narrative load atomically at WELCOME', () => {
   it('loads case then narrative then transitions to ACT_1_INTAKE without error', () => {
     useGameStore.getState().setActiveCase(validCase);

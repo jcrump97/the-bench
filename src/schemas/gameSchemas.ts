@@ -290,16 +290,22 @@ export const CasePayloadSchema = CaseSchema;
 // ==========================================
 export const PleaDecisionSchema = z.enum(['ACCEPT', 'REJECT']);
 
+// Shared with the dialogue script (section 9): dialogue options carry these
+// same closed choice sets, so a script can never invent an outcome the
+// decision schemas don't accept.
+export const EvidenceRulingSchema = z.enum(['ADMITTED', 'EXCLUDED']);
+export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
+
 export const MotionRulingSchema = z.strictObject({
   evidenceId: z.string().min(1).max(40),
-  ruling: z.enum(['ADMITTED', 'EXCLUDED']),
+  ruling: EvidenceRulingSchema,
 });
 
 export const ChargeVerdictSchema = z.strictObject({
   chargeId:       z.string().min(1).max(40),
   chargeName:     z.string().max(200),
   classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
-  verdict:        z.enum(['GUILTY', 'NOT_GUILTY']),
+  verdict:        VerdictValueSchema,
 });
 
 export const VerdictSchema = z.array(ChargeVerdictSchema).min(1);
@@ -391,3 +397,5 @@ export type Verdict             = z.infer<typeof VerdictSchema>;
 export type ProsecutionStrength = z.infer<typeof ProsecutionStrengthSchema>;
 export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
 export type FinalResult         = z.infer<typeof FinalResultSchema>;
+export type EvidenceRuling      = z.infer<typeof EvidenceRulingSchema>;
+export type VerdictValue        = z.infer<typeof VerdictValueSchema>;
