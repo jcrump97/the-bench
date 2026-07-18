@@ -1,7 +1,7 @@
 import { useUIStore } from '../../store/useUIStore';
 
 // Mobile-only scrim behind an open drawer; clicking it closes both panels.
-// On desktop (md:) panels are static columns and need no backdrop.
+// On desktop (lg:) panels are static columns and need no backdrop.
 export function PanelBackdrop() {
   const casePanelOpen = useUIStore((state) => state.casePanelOpen);
   const evidencePanelOpen = useUIStore((state) => state.evidencePanelOpen);
@@ -17,7 +17,7 @@ export function PanelBackdrop() {
         setCasePanelOpen(false);
         setEvidencePanelOpen(false);
       }}
-      className="fixed inset-0 z-30 bg-black/50 md:hidden"
+      className="fixed inset-0 z-30 bg-black/50 lg:hidden"
     />
   );
 }

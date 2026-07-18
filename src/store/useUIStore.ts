@@ -33,12 +33,16 @@ interface UIState {
   resetBeatCursor: () => void;
 }
 
-// Both panels default open on desktop, closed on mobile. This is the only
-// place view state needs to know viewport width — the open/closed behavior
-// itself is pure CSS (drawer vs. static column).
+// Both panels default open on desktop, closed on mobile and tablet. 1024px
+// matches the lg: classes in GameShell/PanelBackdrop: below it two open 320px
+// columns would crush the center column (the 768–1023px band was unplayable
+// past Act 1 — see TODO.md, responsive sweep 2026-07-15), so tablets use the
+// drawer pattern that already works on phones. This is the only place view
+// state needs to know viewport width — the open/closed behavior itself is
+// pure CSS (drawer vs. static column).
 const isDesktop =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(min-width: 768px)').matches
+    ? window.matchMedia('(min-width: 1024px)').matches
     : true;
 
 export const useUIStore = create<UIState>((set) => ({
