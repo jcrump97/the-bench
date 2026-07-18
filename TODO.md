@@ -33,8 +33,10 @@ decisions still commit through the game store's validated actions.
       ALL CHECKS PASSED, clean console, desktop + mobile.
 - [x] **Commit 6** — docs synced (CLAUDE.md courtroom-script section +
       beatCursor + schema additions; README beat-loop status + chart).
-- [ ] **Push** — after final review: run tests on all commits, check unstaged
-      changes, quality review, push (user instruction 2026-07-16).
+- [x] **Push** — done 2026-07-18, as the head of the unified-design push
+      (see "Unified courtroom design" below): full docket verified headless
+      (ALL CHECKS PASSED, clean console) plus a tablet spot-check at
+      820x1180 before pushing.
 
 ---
 
@@ -92,7 +94,7 @@ Webb trial walkthrough screenshotted at 390/820/1440px). Phone and desktop
 render correctly; no horizontal overflow or console errors anywhere. One
 genuine defect:
 
-- [ ] **Tablet band (~768–1000px) is unplayable past Act 1.** Both side
+- [x] **Tablet band (~768–1000px) is unplayable past Act 1.** Fixed in `2194c8a` (verified at 820x1180: controls reachable, drawers off-canvas). Both side
       panels default open at ≥768px (`useUIStore.ts` —
       `matchMedia('(min-width: 768px)')`) and each open panel is a fixed
       320px column (`md:w-80`, `GameShell.tsx`), so at e.g. 820px the center
@@ -170,7 +172,7 @@ color, the deterministic pipeline provides structure.** A dialogue option is
 `{ lineText, choice }` with `choice` drawn from the closed decision enums;
 variants multiply voice, never the state space.
 
-- [ ] **U1 — choice-keyed reaction beats.** Extend the payload schemas with
+- [x] **U1 (`b46485f`) — choice-keyed reaction beats.** Extend the payload schemas with
       per-choice reaction prose: evidence gains ruling reactions keyed
       `ADMITTED`/`EXCLUDED`, charges gain verdict reactions keyed
       `GUILTY`/`NOT_GUILTY`, the plea narrative gains `ACCEPT`/`REJECT`
@@ -181,7 +183,7 @@ variants multiply voice, never the state space.
       resolution. Author all four cases (harvest Webb's from the pilot
       script). **Tier: frontier schema/projection, lower-tier authoring for
       Boone/Reyes/Vaughn.**
-- [ ] **U2 — voiced judge-line options.** Each decision point carries ≥1
+- [x] **U2 (`6cd1534`) — voiced judge-line options.** Each decision point carries ≥1
       authored `{ lineText, choice }` option per outcome (choice-coverage
       refinement — port the pilot's `dialogueOption`/coverage-check pattern
       from git history). The decision controls (PleaRuling/MotionRuling/
@@ -192,9 +194,9 @@ variants multiply voice, never the state space.
       from the pilot: no scripted COURT lines the player didn't pick;
       option text never states numbers the engine doesn't produce.
       Sentencing stays a structured form. **Tier: frontier.**
-- [ ] **U3 — tablet-band fix** — see "UI defects" above (768→1024 breakpoint;
+- [x] **U3 (`2194c8a`) — tablet-band fix** — see "UI defects" above (768→1024 breakpoint;
       spec is complete). **Tier: lower-tier.**
-- [ ] **U4 — driver + docs sweep.** `driver.mjs` asserts reaction beats and
+- [x] **U4 — driver + docs sweep.** Done alongside U2 + this commit: `driver.mjs` asserts reaction beats and
       clicks voiced options; CLAUDE.md/README/AGENTS.md synced. **Tier:
       lower-tier.**
 

@@ -63,9 +63,15 @@ Alongside `activeCase`, the store holds `activePleaNarrative` — the LLM's (or 
 
 Player decisions accumulate one entry at a time so the court record can show each ruling as it lands: `addMotionRuling` (upsert by `evidenceId`, phase-gated to `ACT_2_MOTIONS`) and `addChargeVerdict` (upsert by `chargeId`, phase-gated to `ACT_3_VERDICT`). There is no atomic `setVerdict`.
 
+The store also keeps `spokenJudgeLines` — the judge's chosen line per decision-point id (`'plea'` | `` `motion-${evidenceId}` `` | `` `verdict-${chargeId}` ``), written by `recordSpokenJudgeLine` from the same handler that dispatches the structural decision. It is a narrative voice record only: game logic never reads it, and the courtroom-script projection falls back deterministically to the first authored option matching the recorded decision when a key is absent.
+
 ### Courtroom Script (`src/lib/courtroomScript.ts`)
 
 The single source of courtroom truth. `buildCourtroomScript` is a pure projection of validated state into an ordered screenplay: speaker-attributed `STATEMENT` beats (the transcript) and `DECISION` beats (where the script pauses for the judge). Two tested invariants: **no spoilers** (emission stops at the first unresolved decision) and **prefix stability** (resolving a decision replaces its marker in place and only appends after it — earlier beats never change). The UI reveals a prefix of this one sequence via `beatCursor`, so the transcript can never disagree with the beats that played. On offer-less plea paths the trial order is resolved by phase (those paths write no `pleaDecision`).
+
+Two voiced layers ride on the decisions (both harvested from the retired DialogueScript pilot and re-implemented natively):
+- **Judge-line options** — the decision controls present authored `{ choice, lineText }` options (2–6 per decision point, every closed choice covered by schema refinement; variants multiply voice, never the state space). The chosen line is spoken as the `COURT` beat's body and recorded in `spokenJudgeLines`; the structural outcome always also appears deterministically in the beat's heading. Craft rules: the judge speaks only lines the player picked, and option text never states numbers the engine doesn't produce. Sentencing stays a structured form.
+- **Reaction beats** — after each resolved decision the courtroom reacts: 1–4 in-character lines selected from closed records keyed by the decision value (`rulingReactions` per exhibit, `verdictReactions` per charge, `pleaReactions` on the plea narrative). Selection is deterministic; content is narrative. `COURT` is not a reaction speaker — the court never reacts to its own ruling.
 
 ### Security Store (`useSecurityStore` — BYOKVault)
 
@@ -82,10 +88,10 @@ Third isolated Zustand slice holding **view state only**: the two side-panel ope
 
 Single source of truth for all Zod schemas and their inferred TypeScript types. Schema sections:
 1. **Security** — `BYOKSchema` (discriminated union: live key vs. demo mode)
-2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), `ChargeSchema` (carries per-charge `mandatoryMinimums`/`maximumPenalties` — the source of truth for sentencing ranges; case-level exposure is derived deterministically by `deriveSentencingExposure` in `src/lib/sentencingExposure.ts`), `StatuteElementSchema`
+2. **Legal infrastructure** — `SentenceSchema` (5 literal variants with correlated unit constraints), the closed decision vocabularies (`PleaDecisionSchema`, `EvidenceRulingSchema`, `VerdictValueSchema`) with the voiced-dialogue machinery keyed off them (`ReactionLineSchema`/`ReactionBeatSchema`, the `judgeLineOption` factory + choice-coverage refinement), `ChargeSchema` (per-charge `mandatoryMinimums`/`maximumPenalties` — the source of truth for sentencing ranges; case-level exposure is derived deterministically by `deriveSentencingExposure` in `src/lib/sentencingExposure.ts` — plus `verdictReactions` and `verdictOptions`), `StatuteElementSchema`
 3. **Character entities** — `CharacterSchema` with OCEAN personality traits
-4. **Evidence & witnesses** — `EvidenceSchema` (with voiced `prosecutionArgument` and nullable `defenseObjection`; a refinement ties waiver to LOW `objectionRisk`), `WitnessSchema` (with `directExamination` and nullable `crossExamination`; which side calls the witness derives from `bias`)
-5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`; carries `closingArguments`); `PleaNarrativeSchema` carries the LLM's plea rationale strings plus an optional `allocution` (authored exactly when the posture is `PENDING_JUDICIAL_REVIEW` — `defineDemoCase` enforces the pairing)
+4. **Evidence & witnesses** — `EvidenceSchema` (voiced `prosecutionArgument` and nullable `defenseObjection` with a refinement tying waiver to LOW `objectionRisk`; `rulingReactions` + `rulingOptions`), `WitnessSchema` (with `directExamination` and nullable `crossExamination`; which side calls the witness derives from `bias`)
+5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`; carries `closingArguments`); `PleaNarrativeSchema` carries the LLM's plea rationale strings plus optional `allocution`, `pleaReactions`, and `pleaRulingOptions` (each authored exactly when the posture is `PENDING_JUDICIAL_REVIEW` — `defineDemoCase` enforces the pairings)
 6. **State machine** — `GamePhaseSchema`
 
 ### Generation Pipeline (designed — implementation begins with Act 1)
