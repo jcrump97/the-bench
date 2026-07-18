@@ -3,8 +3,8 @@ import { defineDemoCase } from './types';
 // People v. Teresa Vaughn — Felony Hit-and-Run Causing Injury (VC § 20001(a))
 // + Driving on a Suspended License (VC § 14601.1(a)). The docket's
 // multi-charge case: it exercises deriveSentencingExposure's cross-charge
-// aggregation (prison + jail + fine), per-charge verdicts in
-// TrialVerdictForm, and the SPLIT aftermath. Tuned MODERATE (score ~63) with
+// aggregation (prison + jail + fine), verdicts entered one charge at a
+// time, and the SPLIT aftermath. Tuned MODERATE (score ~63) with
 // a defendant built to accept: heavy priors (including a felony prison
 // term), high neuroticism, low openness — the anxious mirror of Reyes. The
 // texture: one count is a paper certainty, the other turns entirely on eight

@@ -6,7 +6,7 @@ import { defineDemoCase } from './types';
 // zero priors, high openness, low neuroticism. The STRONG band's 5% discount
 // rounds the offer back up to the statutory maximum, offerGenerosity computes
 // to 0, and assessDefense REJECTs — the docket's REJECTED_BY_DEFENSE case,
-// exercising PleaOfferForm's rejected-offer state (offer terms shown, trial
+// exercising the rejected-offer beats (offer terms shown, trial
 // forced). The texture: the tape shows everything except what started it.
 const rawReyesPayload = {
   // [LLM-FILL: CasePayload] — caseId is assigned by the pipeline's final

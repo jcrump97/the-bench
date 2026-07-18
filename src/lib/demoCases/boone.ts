@@ -4,8 +4,8 @@ import { defineDemoCase } from './types';
 // Tuned WEAK (score ~33: element coverage 1/2, HIGH objection risk on the
 // People's best exhibits, a 4-credibility eyewitness), so assessProsecution
 // bands WEAK and buildPleaPosture yields NO_OFFER — the docket's trial-only
-// case, exercising PleaOfferForm's "No Plea Offer Made" state. The moral
-// texture is the mirror of Webb: not "did a good man do it" but "can the
+// case, exercising the offer-less plea-ruling path (no ACCEPT option
+// exists). The moral texture is the mirror of Webb: not "did a good man do it" but "can the
 // People prove the obvious suspect is the right one." Boone is the fired
 // employee everyone recognized in the rain — which is exactly why the
 // identification is worth less than it looks.

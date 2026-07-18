@@ -1,8 +1,8 @@
 # TODO
 
-## ACTIVE: Beat-by-beat courtroom loop redesign (2026-07-16)
+## Beat-by-beat courtroom loop redesign (2026-07-16 — DONE)
 
-The static form-dump loop is being replaced by a click-to-advance courtroom
+The static form-dump loop was replaced by a click-to-advance courtroom
 where the case unfolds one statement at a time. Full plan:
 `~/.claude/plans/ok-let-s-try-that-lively-koala.md`. Core design: one derived
 script (`src/lib/courtroomScript.ts`, prefix-stable, no-spoilers truncation at
@@ -112,44 +112,23 @@ genuine defect:
 
 ## Presentation & pacing (first-time-player review, 2026-07-12)
 
-Finding from a screenshot-by-screenshot playthrough: every phase renders its
-full state in one frame — no sequencing, no acknowledgment of the player's
-decisions, and the verdict/aftermath entries append **below the fold with no
-scroll**, so the ending is invisible unless the player scrolls. It reads as a
-case-review tool, not a courtroom. All fixes below are view-layer only
-(`useUIStore` + CSS): `buildLedger` stays a pure projection, no schema/store
-validation or phase-machine changes, no new dependencies.
+Original finding: every phase rendered its full state in one frame — no
+sequencing, no acknowledgment of decisions, ending below the fold. **Mostly
+superseded by the beat-by-beat loop** (sections above): auto-scroll +
+`beat-in` entrance animation, sequential reveal via `beatCursor` with
+skip-to-next-decision, per-exhibit Act 2 beats, and a beat-paced finale all
+shipped with it, and the driver advances beat-by-beat via `advanceTo()`
+(no `?instant=1` escape hatch ever proved necessary). Still open, both pure
+view-layer polish:
 
-- [ ] **Auto-scroll + entrance animation for new ledger entries** — when
-      `entries.length` grows, `scrollIntoView` the newest entry with a
-      fade/slide-in (respect `prefers-reduced-motion`). Closest to a bug fix:
-      makes the verdict and aftermath visible at all.
-- [ ] **Sequential ledger reveal** — `revealedEntryCount` in `useUIStore`;
-      render `entries.slice(0, revealed)`, advance on click/tap (VN-style,
-      respects reading speed) with a "reveal all" skip. Action bar stays
-      disabled until the current phase's entries have been "heard." Reveal
-      whole entries, not typewriter text.
-- [ ] **Stage the finale as its own beat** — after sentencing, stagger the
-      verdict → sentence → press Aftermath entries (~600ms), with the
-      "Case closed / New Case" bar appearing only after the last one lands.
 - [ ] **Per-speaker visual voice in `LedgerEntryRow`** — accent left-border
-      keyed on `entry.speaker`, heavier headings for verdict/sentence `kind`s,
-      press Aftermath styled as a clipping. Pure CSS on fields that already
-      exist.
+      keyed on `entry.speaker`, heavier headings for verdict/sentence
+      `entryKind`s, press Aftermath styled as a clipping. Pure CSS on fields
+      that already exist. **Tier: lower-tier.**
 - [ ] **Act title cards on phase transition** — brief interstitial overlay
       ("Act 2 — Evidentiary Motions · The parties will be heard on
-      admissibility"), rendered as UI chrome, not a ledger entry, so the
-      ledger stays a pure court record.
-- [ ] **Act 2 as per-motion beats** (biggest scope — absorbed into the
-      "Courtroom transcript redesign" section below) — one contested evidence
-      item center-stage at a time (description from validated case data),
-      ruling echoes into the ledger before the next motion appears. Later:
-      short prosecution/defense arguments per motion as narrative-only LLM
-      color, same pattern as the plea rationale.
-- [ ] **Driver escape hatch** — the paced reveal breaks `driver.mjs`'s pinned
-      assertions; add an instant-reveal mode (e.g. `?instant=1` query param
-      read at `useUIStore` init) so headless runs stay fast and deterministic,
-      and update the driver alongside each item above.
+      admissibility"), rendered as UI chrome, not a courtroom beat, so the
+      record stays a pure projection. **Tier: lower-tier.**
 
 ## Unified courtroom design (merge of beat loop + dialogue-ledger pilot, 2026-07-18)
 
@@ -196,9 +175,31 @@ variants multiply voice, never the state space.
       Sentencing stays a structured form. **Tier: frontier.**
 - [x] **U3 (`2194c8a`) — tablet-band fix** — see "UI defects" above (768→1024 breakpoint;
       spec is complete). **Tier: lower-tier.**
-- [x] **U4 — driver + docs sweep.** Done alongside U2 + this commit: `driver.mjs` asserts reaction beats and
-      clicks voiced options; CLAUDE.md/README/AGENTS.md synced. **Tier:
-      lower-tier.**
+- [x] **U4 — driver + docs sweep.** Done alongside U2 and the docs commit
+      (`2318e93`): `driver.mjs` selects options by `data-choice` and asserts
+      the new ruling headings + reaction beats; CLAUDE.md/README/AGENTS.md
+      synced. **Tier: lower-tier.**
+- [ ] **U5 — README Mermaid refresh.** Both architecture diagrams predate
+      the unified design: update them to show `buildCourtroomScript` as the
+      single projection (beats + decisions, spokenJudgeLines voice record,
+      reaction beats), `beatCursor` reveal in the UI slice, and the retired
+      `buildLedger` removed. Verify the diagrams against the actual module
+      graph (`src/lib/courtroomScript.ts`, `src/hooks/useCourtroomScript.ts`,
+      the three stores) before editing. **Tier: lower-tier, frontier review.**
+- [ ] **U6 — make the record read as a spoken transcript** (user-reported,
+      2026-07-18). Despite speaker attribution, the courtroom record still
+      reads as a stack of headed summary cards, not dialogue between named
+      parties — each beat renders as a boxed entry with an editorial heading
+      ("The People's Offer", "Ruling of the Court — …") above a paragraph,
+      which is case-review chrome, not courtroom speech. Explore
+      utterance-style rendering in `Ledger`/`LedgerEntryRow`: the speaker's
+      name leads the line (witnesses resolved to their actual names, not the
+      WITNESS role), headings demoted to small procedural stage direction or
+      dropped where the line speaks for itself, less box chrome so exchanges
+      flow. View-layer only — `buildCourtroomScript` already carries
+      `speaker`/`heading`/`body` per beat; pair with the open per-speaker
+      visual-voice item above. **Tier: frontier design, lower-tier
+      implementation once the treatment is chosen.**
 
 ## Deferred MVP items (from plan §7)
 
@@ -228,8 +229,9 @@ variants multiply voice, never the state space.
       in the demo docket. Covered by the `run-the-bench` headless playthrough.
 - [ ] Whether `sentencingModifierFromRulings` + defendant profile should
       algorithmically narrow the selectable sentencing range in
-      `TrialVerdictForm`, versus being displayed as judge's context only
-      (current behavior, flagged as an interpretation in the plan).
+      `SentencingControl` (successor to the retired `TrialVerdictForm`),
+      versus being displayed as judge's context only (current behavior,
+      flagged as an interpretation in the plan).
 - [ ] `isProven` on `StatuteElement` is permanently `false` by schema contract;
       the Charge Detail modal's "Supported" indicator is a derived UI-only
       convenience, not a real proof-tracking system.
