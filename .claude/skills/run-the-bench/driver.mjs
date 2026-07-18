@@ -77,6 +77,10 @@ async function ledgerSpeakers(page) {
 // they should win when more than one is on screen.
 const ADVANCE_BUTTONS = ['Call the Case', 'Proceed to Trial', 'Continue'];
 
+// Decision controls now present voiced judge lines (authored prose), so the
+// driver selects them by their structural choice, not their text.
+const choiceButton = (page, choice) => page.locator(`button[data-choice="${choice}"]`).first();
+
 // Click through statement beats until `target` (a locator) is visible.
 // Fails the run (and returns false) if the script never presents it.
 async function advanceTo(page, target, label, max = 80) {
@@ -109,14 +113,14 @@ async function openDocketCase(page, titlePattern) {
 // excludeLast=true excludes the final exhibit, otherwise everything is admitted.
 async function ruleAllMotions(page, expectedCount, label, { excludeLast = false } = {}) {
   for (let i = 0; i < expectedCount; i++) {
-    const admit = page.getByRole('button', { name: 'Admit', exact: true });
+    const admit = choiceButton(page, 'ADMITTED');
     if (!(await advanceTo(page, admit, `${label} exhibit ${i + 1}`))) return;
     if (i === 0) {
       check(`${label}: exhibit counter shows 1 of ${expectedCount}`,
         (await page.locator(`text=Exhibit 1 of ${expectedCount}`).count()) === 1);
     }
     if (excludeLast && i === expectedCount - 1) {
-      await page.getByRole('button', { name: 'Exclude', exact: true }).click();
+      await choiceButton(page, 'EXCLUDED').click();
     } else {
       await admit.click();
     }
@@ -125,7 +129,7 @@ async function ruleAllMotions(page, expectedCount, label, { excludeLast = false 
 
 // Act 3: verdicts are called one charge at a time.
 async function callCharge(page, verdict, label) {
-  const btn = page.getByRole('button', { name: verdict, exact: true });
+  const btn = choiceButton(page, verdict);
   if (await advanceTo(page, btn, label)) await btn.click();
 }
 
@@ -157,7 +161,7 @@ const browser = await chromium.launch();
   await page.waitForSelector('text=Case Called');
 
   // Advance to the plea ruling and verify the Act 1 beats arrived in order.
-  await advanceTo(page, page.getByRole('button', { name: 'Accept Plea' }), 'Webb plea ruling');
+  await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Webb plea ruling');
   const act1 = await ledgerSpeakers(page);
   check('Webb Act1: beats are clerk, clerk (charge read), people, defense',
     JSON.stringify(act1) === JSON.stringify(['CLERK OF THE COURT', 'CLERK OF THE COURT', 'THE PEOPLE', 'DEFENSE COUNSEL']),
@@ -183,8 +187,8 @@ const browser = await chromium.launch();
   await page.screenshot({ path: path.join(SHOTS, '03-charge-modal.png') });
   await page.keyboard.press('Escape');
 
-  // Accept plea → allocution beat → sentence → END
-  await page.getByRole('button', { name: 'Accept Plea' }).click();
+  // Accept plea (voiced from the bench) → plea reaction → allocution → sentence → END
+  await choiceButton(page, 'ACCEPT').click();
   await advanceTo(page, page.getByRole('button', { name: 'Impose Sentence' }), 'Webb plea sentencing');
   check('Webb plea path: allocution beat revealed before sentencing',
     (await page.locator('text=Allocution of Marcus Webb').count()) === 1);
@@ -208,14 +212,20 @@ const browser = await chromium.launch();
   await gotoWithRetry(page, BASE);
   await openDocketCase(page, /People v\. Marcus Webb/);
 
-  await advanceTo(page, page.getByRole('button', { name: 'Reject & Force Trial' }), 'Webb plea ruling');
-  await page.getByRole('button', { name: 'Reject & Force Trial' }).click();
+  await advanceTo(page, choiceButton(page, 'REJECT'), 'Webb plea ruling');
+  await choiceButton(page, 'REJECT').click();
   await ruleAllMotions(page, 4, 'Webb Act2', { excludeLast: true });
   check('Webb Act2: LOW-risk exhibit drew the derived waiver line',
     (await page.locator('text=No objection from the defense.').count()) === 1);
+  check('Webb Act2: rulings carry the structural outcome in the heading',
+    (await page.locator('text=Ruling of the Court —').count()) === 4);
+  check('Webb Act2: the courtroom reacted to at least one ruling',
+    (await page.locator('text=The People Respond').count())
+      + (await page.locator('text=The Defense Responds').count())
+      + (await page.locator('text=The Clerk Notes the Record').count()) >= 1);
   await page.screenshot({ path: path.join(SHOTS, '05-act2-ruling-mobile.png') });
 
-  await callCharge(page, 'Guilty', 'Webb verdict');
+  await callCharge(page, 'GUILTY', 'Webb verdict');
   check('Webb Act3: witness testimony beats played',
     (await page.locator('text=The People Call Detective Ray Alvarez').count()) === 1);
   check('Webb Act3: cross-examination beat played',
@@ -243,15 +253,15 @@ const browser = await chromium.launch();
   await advanceTo(page, page.getByRole('button', { name: 'Order Trial' }), 'Boone trial order');
   check('Boone Act1: declination beat in the record',
     (await page.locator('text=The People Decline to Offer a Plea').count()) === 1);
-  check('Boone Act1: no Accept Plea action exists',
-    (await page.getByRole('button', { name: 'Accept Plea' }).count()) === 0);
+  check('Boone Act1: no plea-acceptance option exists',
+    (await page.locator('button[data-choice="ACCEPT"]').count()) === 0);
   await page.screenshot({ path: path.join(SHOTS, '07-boone-no-offer.png'), fullPage: true });
   await page.getByRole('button', { name: 'Order Trial' }).click();
 
   await ruleAllMotions(page, 4, 'Boone Act2');
   check('Boone Act2: suppression objection voiced in-character',
     (await page.locator('text=multiple-choice question with one answer in bold').count()) === 1);
-  await callCharge(page, 'Not Guilty', 'Boone verdict');
+  await callCharge(page, 'NOT_GUILTY', 'Boone verdict');
   await finishCase(page, 'Boone acquittal', 'Adjourn');
   check('Boone end: acquittal aftermath variant shown',
     (await page.locator('text=the quiet scandal').count()) === 1);
@@ -280,12 +290,12 @@ const browser = await chromium.launch();
   await advanceTo(page, skip, 'Reyes skip affordance');
   await skip.click();
   check('Reyes skip: landed on the first verdict decision',
-    await page.getByRole('button', { name: 'Guilty', exact: true }).isVisible());
+    await choiceButton(page, 'GUILTY').isVisible());
   check('Reyes skip: skipped testimony still entered the record',
     (await page.locator('text=Cross-Examination of Elena Reyes').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '10-reyes-after-skip.png'), fullPage: true });
 
-  await callCharge(page, 'Guilty', 'Reyes verdict');
+  await callCharge(page, 'GUILTY', 'Reyes verdict');
   await finishCase(page, 'Reyes trial');
   check('Reyes end: convicted aftermath variant shown',
     (await page.locator('text=photo off the wall').count()) === 1);
@@ -299,15 +309,15 @@ const browser = await chromium.launch();
   await gotoWithRetry(page, BASE);
   await openDocketCase(page, /People v\. Teresa Vaughn/);
 
-  await advanceTo(page, page.getByRole('button', { name: 'Reject & Force Trial' }), 'Vaughn plea ruling');
-  await page.getByRole('button', { name: 'Reject & Force Trial' }).click();
+  await advanceTo(page, choiceButton(page, 'REJECT'), 'Vaughn plea ruling');
+  await choiceButton(page, 'REJECT').click();
   await ruleAllMotions(page, 5, 'Vaughn Act2');
 
-  await callCharge(page, 'Guilty', 'Vaughn count 1');
+  await callCharge(page, 'GUILTY', 'Vaughn count 1');
   check('Vaughn Act3: per-charge verdict counter reached count 2',
     (await advanceTo(page, page.locator('text=Count 2 of 2'), 'Vaughn count 2 counter')));
   await page.screenshot({ path: path.join(SHOTS, '12-vaughn-count-2.png'), fullPage: true });
-  await callCharge(page, 'Not Guilty', 'Vaughn count 2');
+  await callCharge(page, 'NOT_GUILTY', 'Vaughn count 2');
   await finishCase(page, 'Vaughn split');
   check('Vaughn end: both verdict beats in the record',
     (await page.locator('text=Verdict of the Court').count()) === 2);

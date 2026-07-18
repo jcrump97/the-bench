@@ -86,11 +86,17 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
       `Demo case ${payload.caseId}: pleaNarrative.allocution must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
     );
   }
-  // The plea-reaction beats play only when a negotiated plea is actually
-  // ruled on from the bench — same reachability, same pairing rule.
+  // The plea-reaction beats and the judge's voiced plea options play only
+  // when a negotiated plea is actually ruled on from the bench — same
+  // reachability, same pairing rule.
   if (pleaReachable !== (pleaNarrative.pleaReactions !== undefined)) {
     throw new Error(
       `Demo case ${payload.caseId}: pleaNarrative.pleaReactions must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
+    );
+  }
+  if (pleaReachable !== (pleaNarrative.pleaRulingOptions !== undefined)) {
+    throw new Error(
+      `Demo case ${payload.caseId}: pleaNarrative.pleaRulingOptions must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
     );
   }
   if (pleaReachable !== (raw.aftermath.PLEA_ACCEPTED !== undefined)) {

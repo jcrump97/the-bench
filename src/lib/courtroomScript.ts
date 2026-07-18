@@ -93,6 +93,12 @@ export interface BuildCourtroomScriptInput {
   chargeVerdicts: ChargeVerdict[];
   imposedSentence: Sentence[];
   aftermathNarrative: string | null;
+  // The judge's chosen line per decision-point id ('plea' | `motion-${id}` |
+  // `verdict-${id}`) — the store's voice record. Display color only: outcomes
+  // are always read off the structural decisions, and a missing key falls
+  // back to the first authored option matching the recorded choice, so the
+  // record stays total even if the voice record is lost.
+  spokenJudgeLines: Record<string, string>;
 }
 
 // Phase ordering for "has the case moved past Act 1" checks. On the NO_OFFER
@@ -129,6 +135,18 @@ function describeOffer(
   return `Pleads to: ${pleadsTo}. Proposed sentence: ${sentence}.${dismissed} ${posture.prosecutionRationale}`;
 }
 
+// The court's voiced line for a resolved decision: what the judge actually
+// said (the store's voice record), else the first authored option matching
+// the recorded choice — deterministic and total, since the schemas' coverage
+// refinement guarantees every choice has at least one option.
+function spokenLine(
+  recorded: string | undefined,
+  options: readonly { choice: string; lineText: string }[] | undefined,
+  choice: string,
+): string | undefined {
+  return recorded ?? options?.find((o) => o.choice === choice)?.lineText;
+}
+
 // This is a display projection, not a validator: unlike
 // sentencingModifierFromRulings (which throws on an unknown evidenceId
 // because it gates a sentencing calculation), an unresolvable id here just
@@ -143,6 +161,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
     chargeVerdicts,
     imposedSentence,
     aftermathNarrative,
+    spokenJudgeLines,
   } = input;
 
   const beats: ScriptBeat[] = [];
@@ -236,11 +255,14 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       : pleaDecision === 'REJECT'
         ? 'Judge Rejects the Plea — Trial Ordered'
         : 'Trial Ordered',
-    body: pleaDecision === 'ACCEPT'
-      ? 'The court accepts the negotiated plea and proceeds directly to sentencing.'
-      : pleaDecision === 'REJECT'
-        ? 'The court rejects the negotiated plea and orders the case to trial.'
-        : 'With no plea before the bench, the court orders the case to trial.',
+    body: (pleaDecision !== null
+      ? spokenLine(spokenJudgeLines['plea'], input.pleaNarrative?.pleaRulingOptions, pleaDecision)
+      : undefined)
+      ?? (pleaDecision === 'ACCEPT'
+        ? 'The court accepts the negotiated plea and proceeds directly to sentencing.'
+        : pleaDecision === 'REJECT'
+          ? 'The court rejects the negotiated plea and orders the case to trial.'
+          : 'With no plea before the bench, the court orders the case to trial.'),
   });
 
   // The parties' voiced reaction to the plea ruling. Only a ruled-on offer
@@ -307,8 +329,9 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'MOTION_RULING',
         phase: 'ACT_2_MOTIONS',
         speaker: 'COURT',
-        heading: 'Ruling of the Court',
-        body: `${evidence.name}: ${enumLabel(ruling.ruling)}`,
+        heading: `Ruling of the Court — ${evidence.name}: ${enumLabel(ruling.ruling)}`,
+        body: spokenLine(spokenJudgeLines[`motion-${evidence.id}`], evidence.rulingOptions, ruling.ruling)
+          ?? `${evidence.name}: ${enumLabel(ruling.ruling)}`,
       });
       evidence.rulingReactions[ruling.ruling].forEach((line, index) => {
         pushStatement({
@@ -379,8 +402,9 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'VERDICT',
         phase: 'ACT_3_VERDICT',
         speaker: 'COURT',
-        heading: 'Verdict of the Court',
-        body: `${chargeVerdict.chargeName} (${enumLabel(chargeVerdict.classification)}): ${enumLabel(chargeVerdict.verdict)}`,
+        heading: `Verdict of the Court — ${chargeVerdict.chargeName}: ${enumLabel(chargeVerdict.verdict)}`,
+        body: spokenLine(spokenJudgeLines[`verdict-${charge.id}`], charge.verdictOptions, chargeVerdict.verdict)
+          ?? `${chargeVerdict.chargeName} (${enumLabel(chargeVerdict.classification)}): ${enumLabel(chargeVerdict.verdict)}`,
       });
       charge.verdictReactions[chargeVerdict.verdict].forEach((line, index) => {
         pushStatement({

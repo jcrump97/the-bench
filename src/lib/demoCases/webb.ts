@@ -101,6 +101,12 @@ const rawWebbPayload = {
           { speaker: 'DEFENSE', text: 'Mr. Webb is free to go, Your Honor. The defense thanks the court.' },
         ],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'On the evidence before it, the court finds the People have proven each element beyond a reasonable doubt. On count one, grand theft, the court finds the defendant guilty.' },
+        { choice: 'GUILTY', lineText: 'Intent to repay is not a defense to taking. The money left, it left by his hand, and his own words prove he knew. Guilty on count one.' },
+        { choice: 'NOT_GUILTY', lineText: 'The money moved — but the People must prove whose hand moved it, and on this record the court is left with reasonable doubt. Not guilty on count one.' },
+        { choice: 'NOT_GUILTY', lineText: 'Where the door stood open, three people held keys, and the hours that matter are missing, the court cannot convict. Not guilty.' },
+      ],
     },
   ],
   statuteContexts: [
@@ -163,6 +169,12 @@ const rawWebbPayload = {
           { speaker: 'DEFENSE', text: 'The record will reflect it, counsel. The defense thanks the court.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The records are certified and go to the heart of the charged conduct. The objection goes to weight, not admissibility. The motion is denied; the records are admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court will not blind the finder of fact to the ledger. Admitted — and counsel may argue the repayments to their heart\'s content.' },
+        { choice: 'EXCLUDED', lineText: 'The People have swept years of a man\'s private banking into an exhibit meant to prove four months of conduct. As offered, it is overbroad. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The prejudice of the exhibit as assembled outweighs its probative value. The motion is granted; the records are excluded.' },
+      ],
     },
     {
       id: 'ev-email-chain',
@@ -184,6 +196,12 @@ const rawWebbPayload = {
           { speaker: 'DEFENSE', text: 'The court has excluded a diary, Your Honor. The defense is grateful.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The defendant\'s own words about the money, in the period the money moved, are plainly probative. What they mean is for the finder of fact. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'Ambiguity is an argument, counsel, not a bar. Both readings go to the jury. The emails are admitted.' },
+        { choice: 'EXCLUDED', lineText: 'These notes admit two readings, and the People offer them for exactly one. The risk the jury hears only that one is too high. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'A man\'s private ledger of his own intentions is not a confession. The motion is granted; the emails are excluded.' },
+      ],
     },
     {
       id: 'ev-forensic-report',
@@ -205,6 +223,12 @@ const rawWebbPayload = {
           { speaker: 'DEFENSE', text: 'The defense notes it has lost its best footnote along with the People\'s number, Your Honor. So be it.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The report is admitted in its entirety — the number and the footnote. The expert\'s caution travels with the expert\'s finding.' },
+        { choice: 'ADMITTED', lineText: 'An independent reconciliation by a neutral expert is exactly what a finder of fact should have. Admitted, unredacted.' },
+        { choice: 'EXCLUDED', lineText: 'The People offer half a document and the defense the other half. A report neither side will take whole helps no one. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The court is not persuaded the report adds anything to the certified records beyond a footnote both sides intend to weaponize. Excluded.' },
+      ],
     },
     {
       id: 'ev-surveillance',
@@ -226,6 +250,12 @@ const rawWebbPayload = {
           { speaker: 'DEFENSE', text: 'The defense thanks the court. The People are welcome to their paper.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The gaps are real and counsel will no doubt make them sing, but what survived is relevant and its custody is explained. Admitted, for what it is worth.' },
+        { choice: 'ADMITTED', lineText: 'The jury is entitled to see who was in the building. The defects go to weight. The motion is denied.' },
+        { choice: 'EXCLUDED', lineText: 'An exhibit that cannot account for its own missing hours cannot corroborate anything. The motion is granted; the footage and logs are excluded.' },
+        { choice: 'EXCLUDED', lineText: 'Three weeks late, partially overwritten, with master keycards unaccounted for — the court will not let a gap testify. Excluded.' },
+      ],
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
@@ -258,6 +288,12 @@ const rawWebbPleaNarrative = {
       { speaker: 'CLERK', text: 'The plea is withdrawn. The matter is set for trial. The parties will be heard on the admissibility of the People\'s evidence.' },
     ],
   },
+  pleaRulingOptions: [
+    { choice: 'ACCEPT', lineText: 'The court has reviewed the agreement. It is a hard bargain, honestly arrived at, and the victims are made whole without another year of this. The plea is accepted.' },
+    { choice: 'ACCEPT', lineText: 'Mr. Webb, the court will not pretend two years is nothing. But the deal is fair and it is final. The plea is accepted; we proceed to sentencing.' },
+    { choice: 'REJECT', lineText: 'Eleven transfers from a client trust account, against this record — two years does not answer it. The plea is rejected. Set the matter for trial.' },
+    { choice: 'REJECT', lineText: 'The court is not satisfied this disposition serves the public interest. The plea is rejected. The People will prove their case, or they will not.' },
+  ],
 };
 
 // [LLM-FILL: Aftermath] — generated after sentencing from the full end-of-

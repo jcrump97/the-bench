@@ -95,6 +95,14 @@ function addMinimumCeilingIssues(
   }
 }
 
+// The closed decision vocabularies. Every judge decision resolves to one of
+// these values; the voiced dialogue below (reactions, judge-line options)
+// keys off them, so authored or LLM text can never invent an outcome the
+// decision schemas don't accept.
+export const PleaDecisionSchema   = z.enum(['ACCEPT', 'REJECT']);
+export const EvidenceRulingSchema = z.enum(['ADMITTED', 'EXCLUDED']);
+export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
+
 // One in-character line spoken in reaction to a ruling of the court. Reaction
 // *selection* is deterministic (closed records keyed by the decision enums
 // below); reaction *content* is narrative — the same color/structure split as
@@ -108,6 +116,30 @@ export const ReactionLineSchema = z.strictObject({
 // A short scripted exchange — one to four reaction lines played in order
 // after a ruling enters the record.
 export const ReactionBeatSchema = z.array(ReactionLineSchema).min(1).max(4);
+
+// One selectable judge line: the words the court speaks when the player picks
+// it, bound to a choice from a closed decision vocabulary. Multiple options
+// may share a choice — variants multiply voice, never the state space.
+function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
+  return z.strictObject({
+    choice,
+    lineText: z.string().min(1).max(300),
+  });
+}
+
+// Every value in the closed choice set must be reachable through at least one
+// option — a decision the player cannot express is an illegal payload.
+function addChoiceCoverageIssues(
+  options: readonly { choice: string }[],
+  allChoices: readonly string[],
+  ctx: z.RefinementCtx,
+): void {
+  for (const choice of allChoices) {
+    if (!options.some((o) => o.choice === choice)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `No judge-line option covers choice ${choice}` });
+    }
+  }
+}
 
 // Charges carry their own statutory range; case-level exposure is derived
 // deterministically from these in src/lib/sentencingExposure.ts.
@@ -124,9 +156,13 @@ export const ChargeSchema = z.strictObject({
     GUILTY: ReactionBeatSchema,
     NOT_GUILTY: ReactionBeatSchema,
   }),
-}).superRefine((charge, ctx) =>
-  addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx)
-);
+  // The judge's selectable verdict lines for this charge — what the court
+  // actually says from the bench when the player calls the count.
+  verdictOptions: z.array(judgeLineOption(VerdictValueSchema)).min(2).max(6),
+}).superRefine((charge, ctx) => {
+  addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx);
+  addChoiceCoverageIssues(charge.verdictOptions, VerdictValueSchema.options, ctx);
+});
 
 export const WitnessSchema = z.strictObject({
   id: z.string().min(1).max(40),
@@ -161,7 +197,10 @@ export const EvidenceSchema = z.strictObject({
     ADMITTED: ReactionBeatSchema,
     EXCLUDED: ReactionBeatSchema,
   }),
+  // The judge's selectable ruling lines for this exhibit.
+  rulingOptions: z.array(judgeLineOption(EvidenceRulingSchema)).min(2).max(6),
 }).superRefine((ev, ctx) => {
+  addChoiceCoverageIssues(ev.rulingOptions, EvidenceRulingSchema.options, ctx);
   // The objectionRisk score and the voiced objection must agree: a MEDIUM or
   // HIGH risk exhibit is one the defense fights, so waiving (null) is only
   // coherent on LOW. (A LOW-risk exhibit may still carry an objection.)
@@ -259,6 +298,13 @@ export const PleaNarrativeSchema = z.strictObject({
     ACCEPT: ReactionBeatSchema,
     REJECT: ReactionBeatSchema,
   }).optional(),
+  // The judge's selectable ruling lines on the negotiated plea. Paired with
+  // pleaReactions above: authored exactly when an offer reaches the bench.
+  pleaRulingOptions: z.array(judgeLineOption(PleaDecisionSchema)).min(2).max(6).optional(),
+}).superRefine((narrative, ctx) => {
+  if (narrative.pleaRulingOptions !== undefined) {
+    addChoiceCoverageIssues(narrative.pleaRulingOptions, PleaDecisionSchema.options, ctx);
+  }
 });
 
 export const CaseSchema = z.strictObject({
@@ -321,14 +367,6 @@ export const CasePayloadSchema = CaseSchema;
 // ==========================================
 // 5. PLAYER DECISIONS
 // ==========================================
-export const PleaDecisionSchema = z.enum(['ACCEPT', 'REJECT']);
-
-// Shared with the dialogue script (section 9): dialogue options carry these
-// same closed choice sets, so a script can never invent an outcome the
-// decision schemas don't accept.
-export const EvidenceRulingSchema = z.enum(['ADMITTED', 'EXCLUDED']);
-export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
-
 export const MotionRulingSchema = z.strictObject({
   evidenceId: z.string().min(1).max(40),
   ruling: EvidenceRulingSchema,

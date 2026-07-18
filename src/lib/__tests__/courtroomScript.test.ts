@@ -43,6 +43,7 @@ const baseInput: BuildCourtroomScriptInput = {
   chargeVerdicts: [],
   imposedSentence: [],
   aftermathNarrative: null,
+  spokenJudgeLines: {},
 };
 
 const statements = (beats: ScriptBeat[]): StatementBeat[] =>
@@ -123,7 +124,9 @@ describe('buildCourtroomScript — Act 2 exhibit-by-exhibit', () => {
     expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1));
     const rulingBeat = after[before.length - 1];
     expect(rulingBeat?.kind === 'STATEMENT' && rulingBeat.entryKind).toBe('MOTION_RULING');
-    expect(rulingBeat?.kind === 'STATEMENT' && rulingBeat.body).toBe('Rear door fingerprint: Admitted');
+    // No voice record → the first authored option matching the ruling speaks.
+    expect(rulingBeat?.kind === 'STATEMENT' && rulingBeat.heading).toBe('Ruling of the Court — Rear door fingerprint: Admitted');
+    expect(rulingBeat?.kind === 'STATEMENT' && rulingBeat.body).toBe('The print comes in. Admitted.');
     // The MEDIUM-risk e2 carries a voiced objection.
     const nextObjection = statements(after).at(-1);
     expect(nextObjection?.heading).toBe('Defense Objects');
@@ -136,13 +139,13 @@ describe('buildCourtroomScript — Act 2 exhibit-by-exhibit', () => {
       { evidenceId: 'e2', ruling: 'EXCLUDED' },
     ];
     const beats = buildCourtroomScript({ ...trialInput, motionRulings: rulings });
-    const rulingBodies = statements(beats)
+    const rulingHeadings = statements(beats)
       .filter((b) => b.entryKind === 'MOTION_RULING')
-      .map((b) => b.body);
-    expect(rulingBodies).toEqual([
-      'Rear door fingerprint: Admitted',
-      'Security camera still: Excluded',
-      'Recovered crowbar: Excluded',
+      .map((b) => b.heading);
+    expect(rulingHeadings).toEqual([
+      'Ruling of the Court — Rear door fingerprint: Admitted',
+      'Ruling of the Court — Security camera still: Excluded',
+      'Ruling of the Court — Recovered crowbar: Excluded',
     ]);
   });
 });
@@ -322,6 +325,71 @@ describe('buildCourtroomScript — choice-keyed reaction beats', () => {
   });
 });
 
+describe('buildCourtroomScript — voiced judge lines', () => {
+  const trialInput: BuildCourtroomScriptInput = {
+    ...baseInput,
+    pleaPosture: rejectedPosture,
+    currentPhase: 'ACT_2_MOTIONS',
+    motionRulings: [{ evidenceId: 'e1', ruling: 'ADMITTED' }],
+  };
+
+  it('the recorded spoken line wins over the authored fallback', () => {
+    const beats = buildCourtroomScript({
+      ...trialInput,
+      spokenJudgeLines: { 'motion-e1': 'The court has heard enough. Admitted.' },
+    });
+    const ruling = statements(beats).find((b) => b.entryKind === 'MOTION_RULING');
+    expect(ruling?.body).toBe('The court has heard enough. Admitted.');
+  });
+
+  it('a verdict speaks the recorded line under its verdict-<chargeId> key', () => {
+    const beats = buildCourtroomScript({
+      ...trialInput,
+      currentPhase: 'ACT_3_VERDICT',
+      motionRulings: [
+        { evidenceId: 'e1', ruling: 'ADMITTED' },
+        { evidenceId: 'e2', ruling: 'ADMITTED' },
+        { evidenceId: 'e3', ruling: 'ADMITTED' },
+      ],
+      chargeVerdicts: [
+        { chargeId: 'c1', chargeName: 'Second-degree burglary', classification: 'FELONY', verdict: 'GUILTY' },
+      ],
+      spokenJudgeLines: { 'verdict-c1': 'The paper convicts you, Mr. Vance. Guilty.' },
+    });
+    const verdict = statements(beats).find((b) => b.entryKind === 'VERDICT');
+    expect(verdict?.body).toBe('The paper convicts you, Mr. Vance. Guilty.');
+    expect(verdict?.heading).toBe('Verdict of the Court — Second-degree burglary: Guilty');
+  });
+
+  it('a ruled-on plea speaks the recorded line; without one it falls back to the matching option', () => {
+    const narrative = {
+      prosecutionRationale: 'p',
+      defenseRationale: 'd',
+      allocution: 'a',
+      pleaReactions: {
+        ACCEPT: [{ speaker: 'CLERK' as const, text: 'The plea is entered.' }],
+        REJECT: [{ speaker: 'PROSECUTION' as const, text: 'The People will prove it.' }],
+      },
+      pleaRulingOptions: [
+        { choice: 'ACCEPT' as const, lineText: 'The deal is fair and final. Accepted.' },
+        { choice: 'REJECT' as const, lineText: 'Two years does not answer it. Rejected.' },
+      ],
+    };
+    const base = {
+      ...baseInput,
+      pleaNarrative: narrative,
+      pleaPosture: pendingPosture,
+      currentPhase: 'ACT_3_VERDICT' as const,
+      pleaDecision: 'ACCEPT' as const,
+    };
+    const spoken = buildCourtroomScript({ ...base, spokenJudgeLines: { plea: 'So ordered. We proceed to sentencing.' } });
+    expect(statements(spoken).find((b) => b.entryKind === 'PLEA_DECISION')?.body).toBe('So ordered. We proceed to sentencing.');
+
+    const fallback = buildCourtroomScript(base);
+    expect(statements(fallback).find((b) => b.entryKind === 'PLEA_DECISION')?.body).toBe('The deal is fair and final. Accepted.');
+  });
+});
+
 describe('buildCourtroomScript — robustness and purity', () => {
   it('attributes every statement to a courtroom speaker, never an omniscient narrator', () => {
     const beats = buildCourtroomScript({
@@ -379,6 +447,7 @@ describe('buildCourtroomScript — demo docket playthroughs are prefix-stable', 
       chargeVerdicts: [],
       imposedSentence: [],
       aftermathNarrative: null,
+      spokenJudgeLines: {},
     };
 
     let previous = buildCourtroomScript(input);

@@ -32,6 +32,7 @@ export function useCourtroomScript(): CourtroomScriptView {
   const chargeVerdicts = useGameStore((state) => state.chargeVerdicts);
   const imposedSentence = useGameStore((state) => state.imposedSentence);
   const aftermathNarrative = useGameStore((state) => state.aftermathNarrative);
+  const spokenJudgeLines = useGameStore((state) => state.spokenJudgeLines);
   const beatCursor = useUIStore((state) => state.beatCursor);
   const postureResult = usePleaPosture();
 
@@ -47,8 +48,9 @@ export function useCourtroomScript(): CourtroomScriptView {
       chargeVerdicts,
       imposedSentence,
       aftermathNarrative,
+      spokenJudgeLines,
     });
-  }, [activeCase, activePleaNarrative, postureResult, currentPhase, pleaDecision, motionRulings, chargeVerdicts, imposedSentence, aftermathNarrative]);
+  }, [activeCase, activePleaNarrative, postureResult, currentPhase, pleaDecision, motionRulings, chargeVerdicts, imposedSentence, aftermathNarrative, spokenJudgeLines]);
 
   return useMemo(() => {
     const cursor = Math.min(beatCursor, script.length);

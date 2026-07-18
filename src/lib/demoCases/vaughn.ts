@@ -94,6 +94,12 @@ const rawVaughnPayload = {
           { speaker: 'DEFENSE', text: 'The defense thanks the court. Eight seconds of idle was never proof of flight.' },
         ],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'Eight seconds of idle before acceleration is a decision, not a stop sign. On the charge of felony hit-and-run causing injury, the court finds the defendant guilty.' },
+        { choice: 'GUILTY', lineText: 'The physical evidence is not in dispute, and the court is satisfied beyond a reasonable doubt that the defendant knew she had struck someone and drove on. Guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'A recording that heard the intersection but never saw it cannot establish beyond a reasonable doubt what the defendant knew. Not guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'The People have not excluded the reasonable possibility that eight seconds of idle was nothing more than a stop sign. Not guilty on this count.' },
+      ],
     },
     {
       id: 'charge-susp-license',
@@ -115,6 +121,12 @@ const rawVaughnPayload = {
           { speaker: 'DEFENSE', text: 'The defense thanks the court.' },
         ],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'The certified DMV record and the prior conviction for the same offense foreclose any argument the defendant did not know. Guilty.' },
+        { choice: 'GUILTY', lineText: 'On the charge of driving on a suspended license, the court finds the defendant guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'Notwithstanding the record, the court is not satisfied beyond a reasonable doubt on this count. Not guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'Not guilty on the charge of driving on a suspended license.' },
+      ],
     },
   ],
   statuteContexts: [
@@ -188,6 +200,12 @@ const rawVaughnPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The lab match is uncontested and goes directly to whether the defendant\'s vehicle was involved. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'No objection has been raised, and the exhibit is squarely relevant. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The court excludes this exhibit on its own initiative, unpersuaded the foundation has been adequately laid. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The paint transfer and bumper fragment are excluded.' },
+      ],
     },
     {
       id: 'ev-repair',
@@ -209,6 +227,12 @@ const rawVaughnPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The defendant\'s own morning-after actions are relevant to what she knew the night before. Admitted, in full.' },
+        { choice: 'ADMITTED', lineText: 'The form comes in as written — no deletion, no alteration. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The People\'s characterization of an ambiguous exhibit invites more prejudice than the form itself is worth. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The motion is granted; the repair-quote request is excluded.' },
+      ],
     },
     {
       id: 'ev-doorbell',
@@ -230,6 +254,12 @@ const rawVaughnPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor — that was the heart of the flight element.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'Eight seconds of idle before acceleration is relevant to the flight element, and its ambiguity goes to weight. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The jury may draw its own inference from what it hears. The audio is admitted.' },
+        { choice: 'EXCLUDED', lineText: 'An audio recording of an intersection it cannot see cannot tell this court what the driver saw or decided. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The foundation problems here are real, and the prejudice outweighs the value. The doorbell-camera audio is excluded.' },
+      ],
     },
     {
       id: 'ev-dmv',
@@ -251,6 +281,12 @@ const rawVaughnPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'A certified record with no objection is admitted as a matter of course.' },
+        { choice: 'ADMITTED', lineText: 'The record goes directly to knowledge of suspension and is admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The court excludes this exhibit on its own initiative, unpersuaded of its authentication. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The certified DMV record is excluded.' },
+      ],
     },
     {
       id: 'ev-cam-still',
@@ -272,6 +308,12 @@ const rawVaughnPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The still places the vehicle on the road that evening, and its limits go to weight. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The plate and timestamp are relevant to the driving element. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'A silhouette proves the car moved, not who moved it, and the People\'s inference invites the jury to fill the gap. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The motion is granted; the intersection camera still is excluded.' },
+      ],
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
@@ -303,6 +345,12 @@ const rawVaughnPleaNarrative = {
       { speaker: 'CLERK', text: 'The plea is withdrawn. The matter is set for trial. The parties will be heard on the admissibility of the People\'s evidence.' },
     ],
   },
+  pleaRulingOptions: [
+    { choice: 'ACCEPT', lineText: 'Two years, five months, and restitution to Mr. Pyle is a serious term honestly arrived at. The plea is accepted.' },
+    { choice: 'ACCEPT', lineText: 'Ms. Vaughn, the court will not pretend this comes free. But the agreement is fair and it is final. The plea is accepted; we proceed to sentencing.' },
+    { choice: 'REJECT', lineText: 'A struck cyclist, a suspended license driven a second time, and eight seconds unaccounted for — this disposition does not answer it. The plea is rejected. Set the matter for trial.' },
+    { choice: 'REJECT', lineText: 'The court is not satisfied this agreement serves the public interest. The plea is rejected. The People will prove their case, or they will not.' },
+  ],
 };
 
 // [LLM-FILL: Aftermath] — all four variants: the offer is pending (plea

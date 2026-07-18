@@ -75,6 +75,12 @@ const rawBoonePayload = {
           { speaker: 'DEFENSE', text: 'Mr. Boone is free to go. The defense thanks the court.' },
         ],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'Taken together, the identification, the physical evidence, and the defendant\'s access to the blind spot prove the People\'s case beyond a reasonable doubt. Guilty.' },
+        { choice: 'GUILTY', lineText: 'No single thread was strong alone, but together they only fit one man. On the charge of second-degree burglary, the court finds the defendant guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'A common shoe, an unconnected tool, and a witness who is only pretty sure do not add up to proof beyond a reasonable doubt. Not guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'Four people knew the blind spot and only one was ever asked about it. That is not how this court convicts. Not guilty.' },
+      ],
     },
   ],
   statuteContexts: [
@@ -136,6 +142,12 @@ const rawBoonePayload = {
           { speaker: 'CLERK', text: 'The photo array is withdrawn from the exhibit list.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'A two-year customer relationship is a legitimate basis for recognition, and the composition of the array goes to weight. The identification is admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court has looked at the array and will let the jury look at it too, uniform shirt and all. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'A six-pack where one photo alone shows the store\'s uniform is not an identification procedure; it is a suggestion dressed as one. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The suggestiveness here is not a matter for cross-examination to cure. The motion to suppress is granted.' },
+      ],
     },
     {
       id: 'ev-shoeprint',
@@ -157,6 +169,12 @@ const rawBoonePayload = {
           { speaker: 'PROSECUTION', text: 'The People will proceed without it, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'A common shoe is still relevant, however modestly. The weight of the evidence is for the jury to decide. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court will let it in for whatever it is worth, and counsel is free to argue it is worth very little.' },
+        { choice: 'EXCLUDED', lineText: 'A shoe worn by one man in eight tells this court nothing about which one. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The probative value here does not clear the bar. The shoe print cast is excluded.' },
+      ],
     },
     {
       id: 'ev-prybar',
@@ -178,6 +196,12 @@ const rawBoonePayload = {
           { speaker: 'DEFENSE', text: 'The defense is grateful, Your Honor. That tool was never tied to anyone.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The tool-mark consistency and the location of recovery are enough to clear foundation, thin as they are. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court will admit it, and the absence of prints or DNA is a matter for cross-examination, not exclusion.' },
+        { choice: 'EXCLUDED', lineText: 'An object with no fingerprints, no DNA, and no purchase history connects to no one in particular. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'This exhibit lacks the foundation to tie it to the defendant. The pry bar is excluded.' },
+      ],
     },
     {
       id: 'ev-cellsite',
@@ -199,6 +223,12 @@ const rawBoonePayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'A three-quarter-mile sector is imprecise, but imprecision goes to weight. The cell-site records are admitted.' },
+        { choice: 'ADMITTED', lineText: 'The jury may draw its own conclusions from a sector that includes both the scene and the alibi. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'A sector wide enough to include the defendant\'s own alibi location proves nothing about where he actually was. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'This exhibit is equally consistent with the defense\'s account as with the prosecution\'s. Excluded.' },
+      ],
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final

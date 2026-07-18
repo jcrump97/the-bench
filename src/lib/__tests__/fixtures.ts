@@ -47,6 +47,10 @@ export const rawValidCase = {
         GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
         NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict of the court.' }],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'On the count of second-degree burglary, the court finds the defendant guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'On the count of second-degree burglary, the court finds the defendant not guilty.' },
+      ],
     },
   ],
   statuteContexts: ['Cal. Penal Code § 459 — burglary.'],
@@ -87,6 +91,10 @@ export const rawValidCase = {
         ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People mark the print as Exhibit 1.' }],
         EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The print comes in. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The print stays out. Excluded.' },
+      ],
     },
     {
       id: 'e2',
@@ -102,6 +110,10 @@ export const rawValidCase = {
         ADMITTED: [{ speaker: 'DEFENSE', text: 'The defense renews its objection for the record.' }],
         EXCLUDED: [{ speaker: 'PROSECUTION', text: 'The People note their exception.' }],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The jury can weigh a grainy image. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'Too degraded to identify anyone. Excluded.' },
+      ],
     },
     {
       id: 'e3',
@@ -117,6 +129,10 @@ export const rawValidCase = {
         ADMITTED: [{ speaker: 'DEFENSE', text: 'The defense renews its objection for the record.' }],
         EXCLUDED: [{ speaker: 'CLERK', text: 'The crowbar is withdrawn from the exhibit list.' }],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'Weight, not admissibility. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'Nothing ties this tool to the defendant. Excluded.' },
+      ],
     },
   ],
   summary: 'Defendant allegedly broke into a closed electronics store.',

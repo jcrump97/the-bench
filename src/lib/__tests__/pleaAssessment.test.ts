@@ -39,6 +39,10 @@ const weakCase = CasePayloadSchema.parse({
         GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
         NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict.' }],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'The court finds the defendant guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+      ],
     },
   ],
   statuteContexts: ['Cal. Penal Code § 484 — petty theft.'],
@@ -47,9 +51,9 @@ const weakCase = CasePayloadSchema.parse({
     { id: 'ww2', name: 'Casey Vu', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Disputes the account.', credibilityScore: 1, directExamination: 'I dispute the account.', crossExamination: null },
   ],
   evidence: [
-    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a vague description.', defenseObjection: 'Objection — vague.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
-    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer an unrelated note.', defenseObjection: 'Objection — irrelevant.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
-    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a secondhand account.', defenseObjection: 'Objection — hearsay.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
+    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a vague description.', defenseObjection: 'Objection — vague.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, rulingOptions: [{ choice: 'ADMITTED', lineText: 'Admitted.' }, { choice: 'EXCLUDED', lineText: 'Excluded.' }], },
+    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer an unrelated note.', defenseObjection: 'Objection — irrelevant.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, rulingOptions: [{ choice: 'ADMITTED', lineText: 'Admitted.' }, { choice: 'EXCLUDED', lineText: 'Excluded.' }], },
+    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a secondhand account.', defenseObjection: 'Objection — hearsay.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, rulingOptions: [{ choice: 'ADMITTED', lineText: 'Admitted.' }, { choice: 'EXCLUDED', lineText: 'Excluded.' }], },
   ],
   summary: 'Alleged petty theft with minimal supporting evidence.',
   closingArguments: {

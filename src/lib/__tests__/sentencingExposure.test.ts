@@ -19,6 +19,10 @@ function charge(overrides: Partial<RawCharge>): z.infer<typeof ChargeSchema> {
       GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
       NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict.' }],
     },
+    verdictOptions: [
+      { choice: 'GUILTY', lineText: 'The court finds the defendant guilty.' },
+      { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+    ],
     ...overrides,
   });
 }

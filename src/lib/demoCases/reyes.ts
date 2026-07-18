@@ -70,6 +70,12 @@ const rawReyesPayload = {
           { speaker: 'DEFENSE', text: 'Mr. Reyes is free to go. The defense thanks the court.' },
         ],
       },
+      verdictOptions: [
+        { choice: 'GUILTY', lineText: 'A trained fighter is charged with knowing what his hands are, and the tape shows him choosing to stand and throw. On the charge of assault by means likely to produce great bodily injury, guilty.' },
+        { choice: 'GUILTY', lineText: 'Whatever happened in that hallway, it did not follow Mr. Merritt into the parking lot with its fists up. Guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'The People\'s own tape begins four seconds too late to rule out self-defense, and that gap is reasonable doubt. Not guilty.' },
+        { choice: 'NOT_GUILTY', lineText: 'A man advancing on a defendant and his sister, met with a single blow, does not prove unlawful force beyond a reasonable doubt. Not guilty.' },
+      ],
     },
   ],
   statuteContexts: [
@@ -141,6 +147,12 @@ const rawReyesPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The footage is authenticated and time-stamped, and no objection has been raised to it. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'Fourteen seconds of the incident itself is precisely what a finder of fact should see. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The court notes no objection was raised, but will exclude this exhibit on its own initiative — a recording that begins four seconds late cannot stand in for the whole encounter. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The court will not admit a partial frame as if it were the complete event. Excluded.' },
+      ],
     },
     {
       id: 'ev-medical',
@@ -162,6 +174,12 @@ const rawReyesPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'These are certified medical records going directly to the extent of the injury. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'No objection has been raised and none is warranted. The records and imaging are admitted.' },
+        { choice: 'EXCLUDED', lineText: 'The court excludes this exhibit on its own initiative, finding its clinical detail more prejudicial than probative on the question before it. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The imaging will not be shown to the jury. Excluded.' },
+      ],
     },
     {
       id: 'ev-texts',
@@ -183,6 +201,12 @@ const rawReyesPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception for the record.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The thread comes in whole, not the three words the People isolated. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The defendant\'s own contemporaneous words are probative regardless of how either side wishes to characterize them. Admitted, in full.' },
+        { choice: 'EXCLUDED', lineText: 'Offered for one meaning out of several plausible ones, the risk of unfair prejudice outweighs the value here. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The motion is granted; the text messages are excluded.' },
+      ],
     },
     {
       id: 'ev-hall-video',
@@ -204,6 +228,12 @@ const rawReyesPayload = {
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
         ],
       },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The clip is admitted for what it shows, not for the label either side puts on it. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The jury is entitled to see the twenty minutes before the parking lot. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'Offered as proof of motive on a foundation this thin, the clip is more prejudicial than probative. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The motion is granted; the interior hallway clip is excluded.' },
+      ],
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
