@@ -95,6 +95,20 @@ function addMinimumCeilingIssues(
   }
 }
 
+// One in-character line spoken in reaction to a ruling of the court. Reaction
+// *selection* is deterministic (closed records keyed by the decision enums
+// below); reaction *content* is narrative — the same color/structure split as
+// every other authored field. The court itself never reacts to its own
+// rulings, so COURT is not a reaction speaker.
+export const ReactionLineSchema = z.strictObject({
+  speaker: z.enum(['PROSECUTION', 'DEFENSE', 'CLERK']),
+  text: z.string().min(1).max(600),
+});
+
+// A short scripted exchange — one to four reaction lines played in order
+// after a ruling enters the record.
+export const ReactionBeatSchema = z.array(ReactionLineSchema).min(1).max(4);
+
 // Charges carry their own statutory range; case-level exposure is derived
 // deterministically from these in src/lib/sentencingExposure.ts.
 export const ChargeSchema = z.strictObject({
@@ -104,6 +118,12 @@ export const ChargeSchema = z.strictObject({
   elements: z.array(StatuteElementSchema).min(1),
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema).min(1),
+  // The courtroom's voiced reaction to each possible verdict on this charge,
+  // spoken immediately after the verdict enters the record.
+  verdictReactions: z.strictObject({
+    GUILTY: ReactionBeatSchema,
+    NOT_GUILTY: ReactionBeatSchema,
+  }),
 }).superRefine((charge, ctx) =>
   addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx)
 );
@@ -135,6 +155,12 @@ export const EvidenceSchema = z.strictObject({
   // counsel objects (or waives), and the judge rules on that exchange.
   prosecutionArgument: z.string().min(1).max(600).describe("The prosecutor's in-character offer of this exhibit to the court."),
   defenseObjection: z.string().min(1).max(600).nullable().describe("Defense counsel's in-character objection to this exhibit; null when the defense waives objection."),
+  // The courtroom's voiced reaction to each possible ruling on this exhibit,
+  // spoken immediately after the ruling enters the record.
+  rulingReactions: z.strictObject({
+    ADMITTED: ReactionBeatSchema,
+    EXCLUDED: ReactionBeatSchema,
+  }),
 }).superRefine((ev, ctx) => {
   // The objectionRisk score and the voiced objection must agree: a MEDIUM or
   // HIGH risk exhibit is one the defense fights, so waiving (null) is only
@@ -226,6 +252,13 @@ export const PleaNarrativeSchema = z.strictObject({
   // bench (PENDING_JUDICIAL_REVIEW) — defineDemoCase enforces that pairing
   // for authored cases, mirroring the defenseRationale convention above.
   allocution:           z.string().min(1).max(800).optional(),
+  // The courtroom's voiced reaction to the judge's ruling on the negotiated
+  // plea. Authored exactly when an offer reaches the bench — same pairing
+  // rule as allocution, enforced by defineDemoCase.
+  pleaReactions: z.strictObject({
+    ACCEPT: ReactionBeatSchema,
+    REJECT: ReactionBeatSchema,
+  }).optional(),
 });
 
 export const CaseSchema = z.strictObject({
@@ -399,3 +432,5 @@ export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
 export type FinalResult         = z.infer<typeof FinalResultSchema>;
 export type EvidenceRuling      = z.infer<typeof EvidenceRulingSchema>;
 export type VerdictValue        = z.infer<typeof VerdictValueSchema>;
+export type ReactionLine        = z.infer<typeof ReactionLineSchema>;
+export type ReactionBeat        = z.infer<typeof ReactionBeatSchema>;

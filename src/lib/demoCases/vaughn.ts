@@ -84,6 +84,16 @@ const rawVaughnPayload = {
         { type: 'PRISON', unit: 'YEARS', amount: 3 },
         { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
       ],
+      verdictReactions: {
+        GUILTY: [
+          { speaker: 'DEFENSE', text: 'The defense notes its exception on this count for the record, Your Honor.' },
+          { speaker: 'PROSECUTION', text: 'The People thank the court. Mr. Pyle has waited a long time for those eight seconds to count for something.' },
+        ],
+        NOT_GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People accept the verdict on this count, Your Honor, though Mr. Pyle is still on the walker.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. Eight seconds of idle was never proof of flight.' },
+        ],
+      },
     },
     {
       id: 'charge-susp-license',
@@ -95,6 +105,16 @@ const rawVaughnPayload = {
       ],
       mandatoryMinimums: [],
       maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+      verdictReactions: {
+        GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People thank the court. The DMV record was never seriously in dispute.' },
+          { speaker: 'DEFENSE', text: 'The defense has no exception on this count, Your Honor. We said as much in closing.' },
+        ],
+        NOT_GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor — the certified record was not contested.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court.' },
+        ],
+      },
     },
   ],
   statuteContexts: [
@@ -158,6 +178,16 @@ const rawVaughnPayload = {
       targetElementId: 'elem-hr-accident',
       prosecutionArgument: 'The People offer the paint transfer and the bumper fragment. The lab calls the fragment match "physical fit" — its highest confidence language. The defendant\'s sedan struck Mr. Pyle. The defense does not seriously contest it, and the exhibits close the question.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. That much has never been the fight.' },
+          { speaker: 'DEFENSE', text: 'The defense does not contest this exhibit, Your Honor — our case is about the eight seconds after it.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The paint transfer and bumper fragment are withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-repair',
@@ -169,6 +199,16 @@ const rawVaughnPayload = {
       targetElementId: 'elem-hr-knowledge',
       prosecutionArgument: 'The People offer the repair-quote request from the defendant\'s own phone, 7:04 the next morning: front-right bumper, headlamp, photos attached, cause of damage — "hit a deer." There are no deer on Alder Avenue, Your Honor. It is a confession with antlers: she knew that night she had hit something, and by sunrise she was writing the cover story.',
       defenseObjection: 'Objection to the People\'s characterization. This form is exactly what a person types when she believes she hit something, not someone — no deletion, no cash repair across town, her own name and number on the request. People conscious of guilt hide damage. Teresa Vaughn photographed hers and asked for a quote before breakfast. The exhibit is the defense\'s case, and the People know it.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'Then let the jury read the whole form, Your Honor — her own name, her own number, and "hit a deer."' },
+          { speaker: 'PROSECUTION', text: 'The People are glad to have it in, counsel, deer and all.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The repair-quote request is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-doorbell',
@@ -180,6 +220,16 @@ const rawVaughnPayload = {
       targetElementId: 'elem-hr-flee',
       prosecutionArgument: 'The People offer the doorbell-camera audio: the impact, then eight seconds of engine idle, then acceleration. Eight seconds, Your Honor. That is a driver looking in her mirror at a man in the bike lane and deciding. The idle is the decision; the acceleration is the crime.',
       defenseObjection: 'Objection — this is a soundtrack being offered as an eyewitness. The camera faces away from the intersection; it heard everything and saw nothing. There is a four-way stop at Alder and 9th, and eight seconds of idle is called "stopping at it." The People want the court to convict on the noise a stop sign makes. Speculation on top of foundation problems, and the prejudice is the whole point of the offer.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Eight seconds is eight seconds, and the jury is entitled to hear them.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. A stop sign makes the same sound.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The doorbell-camera audio is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor — that was the heart of the flight element.' },
+        ],
+      },
     },
     {
       id: 'ev-dmv',
@@ -191,6 +241,16 @@ const rawVaughnPayload = {
       targetElementId: 'elem-dsl-knowledge',
       prosecutionArgument: 'The People offer the certified DMV record: suspended since 2021, two renewal denials, mailed notice to an address the defendant wrote on the forms herself — and a 2023 conviction for driving on this very suspension. Knowledge is not an inference here. It is a prior conviction.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The license count rests on this exhibit and nothing else needs to be said about it.' },
+          { speaker: 'DEFENSE', text: 'The defense does not contest the record, Your Honor. We never have.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The DMV record is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-cam-still',
@@ -202,6 +262,16 @@ const rawVaughnPayload = {
       targetElementId: 'elem-dsl-drove',
       prosecutionArgument: 'The People offer the red-light camera still: the defendant\'s sedan, plate legible, two intersections north, four minutes after the collision. Her car, on that road, at that hour — and the only other person in it was eleven years old.',
       defenseObjection: 'Objection — the driver in this frame is a silhouette, and the People\'s argument for who it shows is "who else would it be." That is burden-shifting in a picture frame. The exhibit proves the car was on the road; it cannot put anyone behind the wheel, and offering it for that purpose invites exactly the inference the rules of evidence exist to police.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The plate and the timestamp speak for themselves.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection. A silhouette is not a driver.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The intersection camera still is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
+        ],
+      },
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
@@ -222,6 +292,17 @@ const rawVaughnPleaNarrative = {
   prosecutionRationale: 'The license count is arithmetic — certified record, mailed notice, a prior for the identical offense. On the felony, I have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a jury will not forgive. What I don\'t have is a monster: a sober woman, a missed custody exchange, a kid in the car. The offer prices all of it — she pleads to both counts at a real discount, Mr. Pyle gets restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
   defenseRationale: 'I can try the felony — the camera saw nothing, the deer is honest confusion, and June Castellanos\'s "breath or two" is a stop sign, not a getaway. But I cannot try the license count, and once a jury hears "suspended, again," the felony gets harder to win in the same room. Teresa has a prison prior; a trial loss means the full term and her son standing outside a locked gym for good this time. She wept when I explained the offer. Then she asked where to sign. I have advised the court she accepts.',
   allocution: 'I\'ve gone over those eight seconds every night since, Your Honor, and I want to be honest with the court even where it doesn\'t help me: I don\'t know what I knew. I felt the hit and I told myself it was a deer, and I have asked myself every day whether I told myself that because it was almost dark, or because my son was in the seat next to me and I couldn\'t afford for it to be anything else. I know I shouldn\'t have been driving at all. I knew it that night. Mr. Pyle was on the ground and whatever I believed, he stayed there after I didn\'t. I\'m sorry in a way I don\'t have better words for. Whatever the court decides, I\'ll carry those eight seconds longer than any sentence.',
+  pleaReactions: {
+    ACCEPT: [
+      { speaker: 'CLERK', text: 'The plea of guilty to both counts is entered and accepted. The matter proceeds to sentencing.' },
+      { speaker: 'DEFENSE', text: 'Thank you, Your Honor. We would ask the court to carry the restitution plan and Ms. Vaughn\'s three years of recovery into sentencing.' },
+    ],
+    REJECT: [
+      { speaker: 'PROSECUTION', text: 'Understood, Your Honor. Then the People will call Mr. Pyle after all.' },
+      { speaker: 'DEFENSE', text: 'My client understands the court\'s ruling. We are ready for trial, and we renew every objection to the People\'s evidence — starting with that doorbell audio.' },
+      { speaker: 'CLERK', text: 'The plea is withdrawn. The matter is set for trial. The parties will be heard on the admissibility of the People\'s evidence.' },
+    ],
+  },
 };
 
 // [LLM-FILL: Aftermath] — all four variants: the offer is pending (plea

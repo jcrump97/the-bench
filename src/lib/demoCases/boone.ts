@@ -65,6 +65,16 @@ const rawBoonePayload = {
       ],
       mandatoryMinimums: [],
       maximumPenalties: [{ type: 'JAIL', unit: 'YEARS', amount: 3 }],
+      verdictReactions: {
+        GUILTY: [
+          { speaker: 'DEFENSE', text: 'The defense notes its exception for the record, Your Honor, and asks the court to consider Mr. Boone\'s single prior at sentencing.' },
+          { speaker: 'PROSECUTION', text: 'The People thank the court. QuickCoin has been waiting a long time to hear that.' },
+        ],
+        NOT_GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People accept the verdict, Your Honor. The register is still short $2,300.' },
+          { speaker: 'DEFENSE', text: 'Mr. Boone is free to go. The defense thanks the court.' },
+        ],
+      },
     },
   ],
   statuteContexts: [
@@ -116,6 +126,16 @@ const rawBoonePayload = {
       targetElementId: 'elem-entry',
       prosecutionArgument: 'The People offer the photo array identification. Nine days after the burglary, Ms. Voss picked the defendant out of a six-pack in eleven seconds — a face she\'d seen across a counter every other week for two years. The identification was administered by a detective with no connection to the case.',
       defenseObjection: 'The defense moves to suppress, Your Honor. Look at the array: Mr. Boone\'s photo was pulled from QuickCoin\'s own staff page, and his is the only picture in the six where the man is wearing a QuickCoin uniform shirt. That is not an identification, it is a multiple-choice question with one answer in bold. Eleven seconds proves the suggestion worked, not that the memory was real.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Ms. Voss knew that face across a counter for two years — the jury is entitled to hear it.' },
+          { speaker: 'DEFENSE', text: 'The defense\'s objection stands for the record. We will be asking Ms. Voss about that uniform shirt at length.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. That array should never have left the detective\'s desk.' },
+          { speaker: 'CLERK', text: 'The photo array is withdrawn from the exhibit list.' },
+        ],
+      },
     },
     {
       id: 'ev-shoeprint',
@@ -127,6 +147,16 @@ const rawBoonePayload = {
       targetElementId: 'elem-entry',
       prosecutionArgument: 'The People offer the tread cast lifted from the mud inside the rear door: a size-10 Meridian trainer. The defendant wears a size 10. It places a matching shoe inside the point of entry on the night of the burglary.',
       defenseObjection: 'Objection — relevance dressed up as forensics. The Meridian is one of the most common shoes sold in this county, and size 10 fits roughly one man in eight. The People are offering the court a shoe that fits a hundred thousand people, none of whom have been shown to be my client, who does not own a pair.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'The People appreciate the ruling. It is a small piece, Your Honor, and we will not overstate it.' },
+          { speaker: 'DEFENSE', text: 'Noted. The jury will hear how many size-10 feet walk this county every day.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The shoe print cast is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People will proceed without it, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-prybar',
@@ -138,6 +168,16 @@ const rawBoonePayload = {
       targetElementId: null,
       prosecutionArgument: 'The People offer the pry bar recovered from a dumpster two blocks north of QuickCoin. The tool-mark examiner will say it is consistent with the marks on the rear door. It is the instrument of the entry, discarded on the natural walking route away from the scene.',
       defenseObjection: 'Objection — foundation, Your Honor. No prints, no DNA, no purchase record, no witness. The People\'s entire connection is that the dumpster is near a bus stop my client has used, which describes half the neighborhood. "Consistent with the tool marks" means consistent with every pry bar in every garage in this county.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. A pry bar with no fingerprints on it is not evidence of who held it.' },
+          { speaker: 'PROSECUTION', text: 'The exhibit speaks for itself, counsel — the marks and the distance from the door.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The pry bar is withdrawn from the exhibit list.' },
+          { speaker: 'DEFENSE', text: 'The defense is grateful, Your Honor. That tool was never tied to anyone.' },
+        ],
+      },
     },
     {
       id: 'ev-cellsite',
@@ -149,6 +189,16 @@ const rawBoonePayload = {
       targetElementId: null,
       prosecutionArgument: 'The People offer the carrier\'s cell-site records: the defendant\'s phone, inside the sector containing QuickCoin, from 1:40 to 2:15 in the morning — squarely bracketing the 1:52 alarm. His phone was where the burglary was, when the burglary was.',
       defenseObjection: 'Objection, and I\'d ask the court to look at the map before ruling. The sector is three-quarters of a mile wide and it contains his sister\'s apartment — the couch he sleeps on every night. This exhibit proves Curtis Boone was at home. The People are offering evidence of the defense\'s own alibi and asking the court to read it backwards.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People will let the jury look at the same map counsel just described.' },
+          { speaker: 'DEFENSE', text: 'So will the defense — the same sector that puts him on the couch.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The cell-site records are withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
+        ],
+      },
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final

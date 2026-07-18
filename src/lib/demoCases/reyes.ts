@@ -60,6 +60,16 @@ const rawReyesPayload = {
         { type: 'PRISON', unit: 'YEARS', amount: 4 },
         { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
       ],
+      verdictReactions: {
+        GUILTY: [
+          { speaker: 'DEFENSE', text: 'The defense notes its exception for the record, Your Honor, and asks the court to weigh Mr. Reyes\'s clean record at sentencing.' },
+          { speaker: 'PROSECUTION', text: 'The People thank the court. Mr. Merritt\'s family has waited a long time to hear that.' },
+        ],
+        NOT_GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People accept the verdict, Your Honor, though Mr. Merritt is still in speech therapy tonight.' },
+          { speaker: 'DEFENSE', text: 'Mr. Reyes is free to go. The defense thanks the court.' },
+        ],
+      },
     },
   ],
   statuteContexts: [
@@ -121,6 +131,16 @@ const rawReyesPayload = {
       targetElementId: 'elem-act',
       prosecutionArgument: 'The People offer the exterior camera footage: fourteen seconds, high definition, authenticated and time-stamped. The court will see the defendant stationary at the exit, the victim walking toward him, one blow, and a man on the pavement who does not move again. It is the act itself, on film.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People will let the tape speak for the fourteen seconds it has.' },
+          { speaker: 'DEFENSE', text: 'And the defense will spend its time on the four seconds the tape doesn\'t have.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The exterior camera footage is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception for the record, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-medical',
@@ -132,6 +152,16 @@ const rawReyesPayload = {
       targetElementId: 'elem-gbi',
       prosecutionArgument: 'The People offer Mr. Merritt\'s certified emergency records and CT imaging: a depressed skull fracture, a subdural bleed, three days in intensive care. The defense will say "one punch," and these exhibits are the answer — this is what one punch from a trained fighter does when the pavement finishes it.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The jury should know exactly what that curb did.' },
+          { speaker: 'DEFENSE', text: 'The defense does not dispute the injury, Your Honor — only whose fault it was.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The medical records are withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
+        ],
+      },
     },
     {
       id: 'ev-texts',
@@ -143,6 +173,16 @@ const rawReyesPayload = {
       targetElementId: 'elem-aware',
       prosecutionArgument: 'The People offer the defendant\'s own messages. Forty minutes after Mr. Merritt stopped moving, while he was in a scanner, the defendant typed: "caught him flush. he dropped." That is a fighter scoring a knockout — proof he knew exactly what his hands are and exactly what he had done with them.',
       defenseObjection: 'Objection — the People are offering three words shorn of every message around them. The same thread starts with "come get me" from his little sister and ends with him asking his coach what to do. Read whole, it is a scared twenty-six-year-old describing the worst second of his life to the closest thing he has to a father. Prejudice over probative value, Your Honor — unless it all comes in.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'If the thread comes in, Your Honor, it comes in whole — the jury will read "come get me" as well as the rest.' },
+          { speaker: 'PROSECUTION', text: 'The People are content to let the jury read every word, counsel.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The text messages are withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception for the record.' },
+        ],
+      },
     },
     {
       id: 'ev-hall-video',
@@ -154,6 +194,16 @@ const rawReyesPayload = {
       targetElementId: 'elem-act',
       prosecutionArgument: 'The People offer the interior hallway clip — and we offer it against the defendant. It shows him receiving his sister\'s account of this confrontation twenty minutes before the parking lot: it is why a trained fighter was waiting under that floodlight instead of driving away. It proves motive and it proves he chose the encounter.',
       defenseObjection: 'The defense objects to the People\'s framing, not the footage — this clip is the first chapter of their own story and they\'re offering it as a footnote. A man braced over a cornered young woman, a bouncer stepping in: that is the context for everything the parking-lot camera missed. If it comes in, it comes in as what it is, not as "motive."',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'Thank you, Your Honor. The jury will see exactly what happened in that hallway before it sees the parking lot.' },
+          { speaker: 'PROSECUTION', text: 'The People stand by the label, counsel — the jury can decide what to call it.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'CLERK', text: 'The interior hallway clip is withdrawn from the exhibit list.' },
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor.' },
+        ],
+      },
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final

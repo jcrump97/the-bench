@@ -91,6 +91,16 @@ const rawWebbPayload = {
       ],
       mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
       maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+      verdictReactions: {
+        GUILTY: [
+          { speaker: 'DEFENSE', text: 'Your honor, the defense asks the court to carry everything it heard today into sentencing — the repayments, the recovery, and the two boys waiting on a custody schedule.' },
+          { speaker: 'PROSECUTION', text: 'The People will be heard at sentencing as well, Your Honor. The trust account held real people\'s money.' },
+        ],
+        NOT_GUILTY: [
+          { speaker: 'PROSECUTION', text: 'The People accept the verdict, Your Honor. The money is still gone; someone still took it.' },
+          { speaker: 'DEFENSE', text: 'Mr. Webb is free to go, Your Honor. The defense thanks the court.' },
+        ],
+      },
     },
   ],
   statuteContexts: [
@@ -143,6 +153,16 @@ const rawWebbPayload = {
       targetElementId: 'elem-value',
       prosecutionArgument: 'The People offer the trust account records: eleven transfers, $14,200, every one landing in Mr. Webb\'s personal checking, nine of them within three days of a child-support deadline. These are the bank\'s own certified statements. The paper does not have a theory of the case, Your Honor. It just has the money.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People\'s case is the paper, and the paper is in.' },
+          { speaker: 'DEFENSE', text: 'Noted, Your Honor. Then the jury will also be hearing about every dollar that came back.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'Your Honor, the People\'s case just lost its spine. We would ask the court to note the People\'s objection for the record.' },
+          { speaker: 'DEFENSE', text: 'The record will reflect it, counsel. The defense thanks the court.' },
+        ],
+      },
     },
     {
       id: 'ev-email-chain',
@@ -154,6 +174,16 @@ const rawWebbPayload = {
       targetElementId: 'elem-intent',
       prosecutionArgument: 'The People offer Mr. Webb\'s emails to himself: a running tally of what he took, and the line that ends the intent argument — "audit is the 14th, needs to be whole by the 10th." That is consciousness of guilt in the defendant\'s own words, timed to the calendar of getting caught.',
       defenseObjection: 'Objection, Your Honor. The People want to read half the document. The same tally says "put back 800 of March" — these are the notes of a man keeping careful score of what he intended to return, and offering them as proof he intended to keep the money turns the writing on its head. If they come in, they come in whole.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People intend to read them exactly as written.' },
+          { speaker: 'DEFENSE', text: 'As will the defense, Your Honor — every word, including "put back."' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'The People note their objection. The court has just excluded the defendant\'s state of mind in his own handwriting.' },
+          { speaker: 'DEFENSE', text: 'The court has excluded a diary, Your Honor. The defense is grateful.' },
+        ],
+      },
     },
     {
       id: 'ev-forensic-report',
@@ -165,6 +195,16 @@ const rawWebbPayload = {
       targetElementId: 'elem-value',
       prosecutionArgument: 'The People offer the independent forensic reconciliation. It fixes the diversion at $14,200, well past the felony threshold, and it puts faces on the number: a widow\'s escrow, a landscaper\'s payroll. Ms. Whitfield answers to neither party, and her math has not been challenged.',
       defenseObjection: 'No objection to the arithmetic, Your Honor — but the defense objects to the report coming in without its own footnote: the examiner found the firm\'s controls so thin that any of three employees could have initiated a transfer. The People cannot offer her conclusions and leave her caveats on the table.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'Whole is all we asked, Your Honor. The defense welcomes the exhibit.' },
+          { speaker: 'PROSECUTION', text: 'The number is $14,200, counsel. Footnotes don\'t subtract.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'Understood, Your Honor.' },
+          { speaker: 'DEFENSE', text: 'The defense notes it has lost its best footnote along with the People\'s number, Your Honor. So be it.' },
+        ],
+      },
     },
     {
       id: 'ev-surveillance',
@@ -176,6 +216,16 @@ const rawWebbPayload = {
       targetElementId: 'elem-taking',
       prosecutionArgument: 'The People offer the keycard logs and hallway footage. For two of the eleven transfer windows they place Mr. Webb alone in that office — corroboration, in time and place, of what the bank records already show.',
       defenseObjection: 'Objection — foundation and completeness, Your Honor. This system was pulled by the landlord three weeks late, it had already overwritten part of the period, and nobody can account for every master keycard. Two windows out of eleven isn\'t corroboration; it\'s a gap wearing a timestamp, and the People want the court to hear the timestamp and forget the gap.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'DEFENSE', text: 'Then the jury will hear exactly how much of that footage no longer exists, Your Honor — hour by missing hour.' },
+          { speaker: 'PROSECUTION', text: 'And they will see who badged in for the hours that do, counsel.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'The People proceed on the paper, Your Honor. It has always been enough.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. The People are welcome to their paper.' },
+        ],
+      },
     },
   ],
   // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
@@ -197,6 +247,17 @@ const rawWebbPleaNarrative = {
   prosecutionRationale: 'The paper is unanswerable: the transfers, the destination account, the timing against his support deadlines, and his intent in his own words. I don\'t need the keycard footage — which is convenient, because it has problems. What I don\'t have is a villain. He paid a fifth of it back, and the firm\'s own expert will say the door was left standing open. That is why the offer exists: he pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
   defenseRationale: 'I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. The offer puts a floor under his life. He hates it. I have told him to take it.',
   allocution: 'I\'m not going to stand here and tell the court it wasn\'t stealing, because I kept the books and I know exactly what it was. I told myself it was a loan every single time I moved the money, and I put back what I could, and none of that makes it not stealing — it just means I knew better while I did it. Mr. Hollis gave me a chance nobody else would, and I spent it. The people whose money sat in that account never agreed to fund my emergency. I\'d ask the court to leave me able to work, because the restitution is mine to pay and I mean to pay all of it. That\'s all I have, Your Honor.',
+  pleaReactions: {
+    ACCEPT: [
+      { speaker: 'CLERK', text: 'The plea of guilty to count one is entered and accepted. The matter proceeds to sentencing.' },
+      { speaker: 'DEFENSE', text: 'Thank you, Your Honor. We would ask the court to remember, at sentencing, everything that made this offer possible — the repayments, the recovery, and the two boys who are waiting on him. Mr. Webb wants the court to know he intends to make every dollar of restitution whole.' },
+    ],
+    REJECT: [
+      { speaker: 'PROSECUTION', text: 'Understood, Your Honor. Then the People will call the widow after all.' },
+      { speaker: 'DEFENSE', text: 'My client understands the court\'s ruling. We are ready for trial — and we renew every objection to the People\'s evidence, starting with that footage.' },
+      { speaker: 'CLERK', text: 'The plea is withdrawn. The matter is set for trial. The parties will be heard on the admissibility of the People\'s evidence.' },
+    ],
+  },
 };
 
 // [LLM-FILL: Aftermath] — generated after sentencing from the full end-of-

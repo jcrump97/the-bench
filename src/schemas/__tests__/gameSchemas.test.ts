@@ -96,6 +96,43 @@ describe('WitnessSchema testimony fields', () => {
   });
 });
 
+describe('Reaction beats (choice-keyed courtroom reactions)', () => {
+  const rawCharge = rawValidCase.charges[0];
+  const rawEvidence = rawValidCase.evidence[0];
+  const line = { speaker: 'DEFENSE', text: 'The defense notes its exception.' };
+
+  it('rejects a charge missing verdictReactions entirely', () => {
+    const without: Record<string, unknown> = { ...rawCharge };
+    delete without.verdictReactions;
+    expect(ChargeSchema.safeParse(without).success).toBe(false);
+  });
+
+  it('rejects an exhibit missing rulingReactions entirely', () => {
+    const without: Record<string, unknown> = { ...rawEvidence };
+    delete without.rulingReactions;
+    expect(EvidenceSchema.safeParse(without).success).toBe(false);
+  });
+
+  it('bounds a reaction beat at 1–4 lines', () => {
+    const bounded = (lines: unknown[]) =>
+      EvidenceSchema.safeParse({
+        ...rawEvidence,
+        rulingReactions: { ADMITTED: lines, EXCLUDED: [line] },
+      }).success;
+    expect(bounded([])).toBe(false);
+    expect(bounded([line, line, line, line])).toBe(true);
+    expect(bounded([line, line, line, line, line])).toBe(false);
+  });
+
+  it('rejects a COURT reaction speaker — the court never reacts to its own ruling', () => {
+    const result = EvidenceSchema.safeParse({
+      ...rawEvidence,
+      rulingReactions: { ADMITTED: [{ speaker: 'COURT', text: 'So ordered.' }], EXCLUDED: [line] },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('PleaNarrativeSchema (1D)', () => {
   it('accepts prosecutionRationale alone (defenseRationale optional)', () => {
     expect(PleaNarrativeSchema.safeParse({ prosecutionRationale: 'Strong case.' }).success).toBe(true);
@@ -121,6 +158,23 @@ describe('PleaNarrativeSchema (1D)', () => {
     const base = { prosecutionRationale: 'Strong case.', defenseRationale: 'Take the deal.' };
     expect(PleaNarrativeSchema.safeParse({ ...base, allocution: 'I want to say I am sorry.' }).success).toBe(true);
     expect(PleaNarrativeSchema.safeParse({ ...base, allocution: 'x'.repeat(801) }).success).toBe(false);
+  });
+
+  it('accepts optional pleaReactions keyed by the closed plea decisions', () => {
+    const base = { prosecutionRationale: 'Strong case.', defenseRationale: 'Take the deal.' };
+    const result = PleaNarrativeSchema.safeParse({
+      ...base,
+      pleaReactions: {
+        ACCEPT: [{ speaker: 'CLERK', text: 'The plea is entered and accepted.' }],
+        REJECT: [{ speaker: 'PROSECUTION', text: 'Then the People will prove it.' }],
+      },
+    });
+    expect(result.success).toBe(true);
+    // A reaction set missing one of the closed decisions is rejected.
+    expect(PleaNarrativeSchema.safeParse({
+      ...base,
+      pleaReactions: { ACCEPT: [{ speaker: 'CLERK', text: 'Entered.' }] },
+    }).success).toBe(false);
   });
 });
 

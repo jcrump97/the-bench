@@ -43,6 +43,10 @@ export const rawValidCase = {
       ],
       mandatoryMinimums: [],
       maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
+      verdictReactions: {
+        GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
+        NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict of the court.' }],
+      },
     },
   ],
   statuteContexts: ['Cal. Penal Code § 459 — burglary.'],
@@ -79,6 +83,10 @@ export const rawValidCase = {
       targetElementId: 'el1',
       prosecutionArgument: 'The People offer the latent print lifted from the rear door.',
       defenseObjection: null,
+      rulingReactions: {
+        ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People mark the print as Exhibit 1.' }],
+        EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }],
+      },
     },
     {
       id: 'e2',
@@ -90,6 +98,10 @@ export const rawValidCase = {
       targetElementId: null,
       prosecutionArgument: 'The People offer the security camera still showing a figure at the door.',
       defenseObjection: 'Objection — the image is too degraded to identify anyone.',
+      rulingReactions: {
+        ADMITTED: [{ speaker: 'DEFENSE', text: 'The defense renews its objection for the record.' }],
+        EXCLUDED: [{ speaker: 'PROSECUTION', text: 'The People note their exception.' }],
+      },
     },
     {
       id: 'e3',
@@ -101,6 +113,10 @@ export const rawValidCase = {
       targetElementId: null,
       prosecutionArgument: 'The People offer the crowbar recovered a block from the scene.',
       defenseObjection: 'Objection — nothing connects this tool to the defendant.',
+      rulingReactions: {
+        ADMITTED: [{ speaker: 'DEFENSE', text: 'The defense renews its objection for the record.' }],
+        EXCLUDED: [{ speaker: 'CLERK', text: 'The crowbar is withdrawn from the exhibit list.' }],
+      },
     },
   ],
   summary: 'Defendant allegedly broke into a closed electronics store.',

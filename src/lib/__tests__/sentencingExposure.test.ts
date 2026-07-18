@@ -15,6 +15,10 @@ function charge(overrides: Partial<RawCharge>): z.infer<typeof ChargeSchema> {
     elements: [{ id: `c${nextId}-el`, description: 'An element.' }],
     mandatoryMinimums: [],
     maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+    verdictReactions: {
+      GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
+      NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict.' }],
+    },
     ...overrides,
   });
 }

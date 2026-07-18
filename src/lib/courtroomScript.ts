@@ -34,14 +34,17 @@ export type StatementEntryKind =
   | 'PLEA_OFFER'
   | 'PLEA_DEFENSE_RESPONSE'
   | 'PLEA_DECISION'
+  | 'PLEA_REACTION'
   | 'EXHIBIT_OFFERED'
   | 'EXHIBIT_OBJECTION'
   | 'MOTION_RULING'
+  | 'MOTION_REACTION'
   | 'TESTIMONY_DIRECT'
   | 'TESTIMONY_CROSS'
   | 'CLOSING_ARGUMENT'
   | 'ALLOCUTION'
   | 'VERDICT'
+  | 'VERDICT_REACTION'
   | 'SENTENCE_IMPOSED'
   | 'AFTERMATH';
 
@@ -105,6 +108,12 @@ export const PHASE_RANK: Record<GamePhase, number> = {
   END_STATE: 4,
   ERROR_STATE: -1,
 };
+
+const REACTION_HEADINGS = {
+  PROSECUTION: 'The People Respond',
+  DEFENSE: 'The Defense Responds',
+  CLERK: 'The Clerk Notes the Record',
+} as const;
 
 function describeOffer(
   caseData: CasePayload,
@@ -234,6 +243,23 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         : 'With no plea before the bench, the court orders the case to trial.',
   });
 
+  // The parties' voiced reaction to the plea ruling. Only a ruled-on offer
+  // draws one (pleaReactions is authored exactly when the posture puts an
+  // offer before the bench); the offer-less trial order passes in silence.
+  const pleaReaction = pleaDecision !== null
+    ? input.pleaNarrative?.pleaReactions?.[pleaDecision]
+    : undefined;
+  pleaReaction?.forEach((line, index) => {
+    pushStatement({
+      id: `plea-reaction-${index}`,
+      entryKind: 'PLEA_REACTION',
+      phase: 'ACT_1_INTAKE',
+      speaker: line.speaker,
+      heading: REACTION_HEADINGS[line.speaker],
+      body: line.text,
+    });
+  });
+
   if (pleaDecision === 'ACCEPT') {
     // ---- Act 3, plea path: allocution, then sentencing ----------------------
     const allocution = input.pleaNarrative?.allocution;
@@ -283,6 +309,16 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         speaker: 'COURT',
         heading: 'Ruling of the Court',
         body: `${evidence.name}: ${enumLabel(ruling.ruling)}`,
+      });
+      evidence.rulingReactions[ruling.ruling].forEach((line, index) => {
+        pushStatement({
+          id: `motion-reaction-${evidence.id}-${index}`,
+          entryKind: 'MOTION_REACTION',
+          phase: 'ACT_2_MOTIONS',
+          speaker: line.speaker,
+          heading: REACTION_HEADINGS[line.speaker],
+          body: line.text,
+        });
       });
     }
 
@@ -345,6 +381,16 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         speaker: 'COURT',
         heading: 'Verdict of the Court',
         body: `${chargeVerdict.chargeName} (${enumLabel(chargeVerdict.classification)}): ${enumLabel(chargeVerdict.verdict)}`,
+      });
+      charge.verdictReactions[chargeVerdict.verdict].forEach((line, index) => {
+        pushStatement({
+          id: `verdict-reaction-${charge.id}-${index}`,
+          entryKind: 'VERDICT_REACTION',
+          phase: 'ACT_3_VERDICT',
+          speaker: line.speaker,
+          heading: REACTION_HEADINGS[line.speaker],
+          body: line.text,
+        });
       });
     }
   }

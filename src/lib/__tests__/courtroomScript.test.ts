@@ -246,6 +246,82 @@ describe('buildCourtroomScript — accepted-plea path', () => {
   });
 });
 
+describe('buildCourtroomScript — choice-keyed reaction beats', () => {
+  const trialInput: BuildCourtroomScriptInput = {
+    ...baseInput,
+    pleaPosture: rejectedPosture,
+    currentPhase: 'ACT_2_MOTIONS',
+  };
+
+  it('an admitted exhibit draws its ADMITTED reaction, right after the ruling', () => {
+    const beats = buildCourtroomScript({
+      ...trialInput,
+      motionRulings: [{ evidenceId: 'e1', ruling: 'ADMITTED' }],
+    });
+    const rulingIndex = beats.findIndex((b) => b.kind === 'STATEMENT' && b.entryKind === 'MOTION_RULING');
+    const reaction = beats[rulingIndex + 1];
+    expect(reaction?.kind === 'STATEMENT' && reaction.entryKind).toBe('MOTION_REACTION');
+    expect(reaction?.kind === 'STATEMENT' && reaction.speaker).toBe('PROSECUTION');
+    expect(reaction?.kind === 'STATEMENT' && reaction.body).toBe('The People mark the print as Exhibit 1.');
+  });
+
+  it('the same exhibit excluded draws the EXCLUDED reaction instead', () => {
+    const beats = buildCourtroomScript({
+      ...trialInput,
+      motionRulings: [{ evidenceId: 'e1', ruling: 'EXCLUDED' }],
+    });
+    const reaction = statements(beats).find((b) => b.entryKind === 'MOTION_REACTION');
+    expect(reaction?.speaker).toBe('DEFENSE');
+    expect(reaction?.body).toBe('The defense thanks the court.');
+  });
+
+  it('a verdict draws its charge\'s keyed reaction after the verdict beat', () => {
+    const beats = buildCourtroomScript({
+      ...trialInput,
+      currentPhase: 'ACT_3_VERDICT',
+      motionRulings: [
+        { evidenceId: 'e1', ruling: 'ADMITTED' },
+        { evidenceId: 'e2', ruling: 'ADMITTED' },
+        { evidenceId: 'e3', ruling: 'ADMITTED' },
+      ],
+      chargeVerdicts: [
+        { chargeId: 'c1', chargeName: 'Second-degree burglary', classification: 'FELONY', verdict: 'NOT_GUILTY' },
+      ],
+    });
+    const verdictIndex = beats.findIndex((b) => b.kind === 'STATEMENT' && b.entryKind === 'VERDICT');
+    const reaction = beats[verdictIndex + 1];
+    expect(reaction?.kind === 'STATEMENT' && reaction.entryKind).toBe('VERDICT_REACTION');
+    expect(reaction?.kind === 'STATEMENT' && reaction.body).toBe('The People accept the verdict of the court.');
+  });
+
+  it('a ruled-on plea draws the matching plea reaction; the offer-less trial order draws none', () => {
+    const pleaReactions = {
+      ACCEPT: [
+        { speaker: 'DEFENSE' as const, text: 'Thank you, Your Honor.' },
+        { speaker: 'CLERK' as const, text: 'The plea is entered and accepted.' },
+      ],
+      REJECT: [{ speaker: 'PROSECUTION' as const, text: 'Then the People will prove it.' }],
+    };
+    const accepted = buildCourtroomScript({
+      ...baseInput,
+      pleaNarrative: { prosecutionRationale: 'p', defenseRationale: 'd', allocution: 'a', pleaReactions },
+      pleaPosture: pendingPosture,
+      currentPhase: 'ACT_3_VERDICT',
+      pleaDecision: 'ACCEPT',
+    });
+    const reactions = statements(accepted).filter((b) => b.entryKind === 'PLEA_REACTION');
+    expect(reactions.map((b) => b.body)).toEqual(['Thank you, Your Honor.', 'The plea is entered and accepted.']);
+
+    const noOffer = buildCourtroomScript({
+      ...baseInput,
+      pleaNarrative: { prosecutionRationale: 'p' },
+      pleaPosture: noOfferPosture,
+      currentPhase: 'ACT_2_MOTIONS',
+    });
+    expect(kinds(noOffer)).not.toContain('PLEA_REACTION');
+  });
+});
+
 describe('buildCourtroomScript — robustness and purity', () => {
   it('attributes every statement to a courtroom speaker, never an omniscient narrator', () => {
     const beats = buildCourtroomScript({

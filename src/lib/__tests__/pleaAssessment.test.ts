@@ -35,6 +35,10 @@ const weakCase = CasePayloadSchema.parse({
       elements: [{ id: 'wel1', description: 'Taking of property of another.' }],
       mandatoryMinimums: [],
       maximumPenalties: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+      verdictReactions: {
+        GUILTY: [{ speaker: 'DEFENSE', text: 'The defense gives notice of appeal.' }],
+        NOT_GUILTY: [{ speaker: 'PROSECUTION', text: 'The People accept the verdict.' }],
+      },
     },
   ],
   statuteContexts: ['Cal. Penal Code § 484 — petty theft.'],
@@ -43,9 +47,9 @@ const weakCase = CasePayloadSchema.parse({
     { id: 'ww2', name: 'Casey Vu', role: 'CHARACTER', bias: 'DEFENSE', statement: 'Disputes the account.', credibilityScore: 1, directExamination: 'I dispute the account.', crossExamination: null },
   ],
   evidence: [
-    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a vague description.', defenseObjection: 'Objection — vague.' },
-    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer an unrelated note.', defenseObjection: 'Objection — irrelevant.' },
-    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a secondhand account.', defenseObjection: 'Objection — hearsay.' },
+    { id: 'we1', name: 'Vague description', type: 'CIRCUMSTANTIAL', description: 'A vague description.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a vague description.', defenseObjection: 'Objection — vague.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
+    { id: 'we2', name: 'Unrelated note', type: 'DOCUMENTARY', description: 'An unrelated note.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer an unrelated note.', defenseObjection: 'Objection — irrelevant.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
+    { id: 'we3', name: 'Secondhand rumor', type: 'CIRCUMSTANTIAL', description: 'A secondhand rumor.', relevanceScore: 1, objectionRisk: 'HIGH', targetElementId: null, prosecutionArgument: 'The People offer a secondhand account.', defenseObjection: 'Objection — hearsay.', rulingReactions: { ADMITTED: [{ speaker: 'PROSECUTION', text: 'The People thank the court.' }], EXCLUDED: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }] }, },
   ],
   summary: 'Alleged petty theft with minimal supporting evidence.',
   closingArguments: {
