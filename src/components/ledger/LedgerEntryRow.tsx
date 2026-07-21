@@ -44,12 +44,23 @@ const REACTION_KINDS = new Set<StatementEntryKind>([
 
 // A name-led beat's heading repeats the name it leads with; caption it with
 // concise stage direction instead. Every beat carrying a speakerName is one of
-// these kinds.
+// these kinds. TESTIMONY_DIRECT is handled separately (see nameLedCaption)
+// since its caption also carries which side called the witness.
 const NAME_LED_CAPTIONS: Partial<Record<StatementEntryKind, string>> = {
-  TESTIMONY_DIRECT: 'Direct examination',
   TESTIMONY_CROSS: 'Cross-examination',
   ALLOCUTION: 'Allocution',
 };
+
+// TESTIMONY_DIRECT's caption is the one name-led case that isn't a static
+// string: the heading it stands in for named which side called the witness
+// (derived from bias), and that fact has nowhere else to live once the
+// heading is demoted.
+function nameLedCaption(entry: StatementBeat): string | undefined {
+  if (entry.entryKind === 'TESTIMONY_DIRECT') {
+    return `Direct examination — called by ${entry.calledByDefense ? 'the defense' : 'the prosecution'}`;
+  }
+  return NAME_LED_CAPTIONS[entry.entryKind];
+}
 
 // One beat of the court record, rendered as courtroom speech rather than a
 // summary card: the speaker leads the line, the editorial heading is demoted to
@@ -101,7 +112,7 @@ export function LedgerEntryRow({ entry, isNewest }: { entry: StatementBeat; isNe
   // repeats the name it leads with (name-led testimony/allocution).
   const speaker = entry.speakerName ?? SPEAKER_LABELS[entry.speaker];
   const caption = entry.speakerName !== undefined
-    ? NAME_LED_CAPTIONS[entry.entryKind]
+    ? nameLedCaption(entry)
     : REACTION_KINDS.has(entry.entryKind)
       ? undefined
       : entry.heading;

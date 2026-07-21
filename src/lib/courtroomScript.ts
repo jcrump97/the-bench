@@ -64,6 +64,11 @@ export interface StatementBeat {
   // witness on the stand, the defendant allocuting. The transcript leads the
   // utterance with this name; absent, the party label (speaker) speaks.
   speakerName?: string;
+  // Set only on TESTIMONY_DIRECT: which side called this witness (derived
+  // from bias). The transcript's caption still needs this even though the
+  // speaker leads with the witness's own name — it's the only place that
+  // side is visible once the heading is demoted.
+  calledByDefense?: boolean;
   // Monotonic sequence index, NOT a wall-clock timestamp — the script is a
   // pure projection and must never call Date.now().
   order: number;
@@ -361,6 +366,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         phase: 'ACT_3_VERDICT',
         speaker: 'WITNESS',
         speakerName: witness.name,
+        calledByDefense,
         heading: `${calledByDefense ? 'The Defense Calls' : 'The People Call'} ${witness.name}`,
         body: witness.directExamination,
       });

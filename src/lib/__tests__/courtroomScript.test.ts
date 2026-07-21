@@ -180,6 +180,9 @@ describe('buildCourtroomScript — Act 3 trial path', () => {
     // The transcript leads the utterance with the witness's own name, not the
     // generic WITNESS role.
     expect(direct?.speakerName).toBe('Alex Reed');
+    // Called by the prosecution (bias: 'PROSECUTION') — the caption still
+    // needs this once the heading is demoted in the rendered transcript.
+    expect(direct?.calledByDefense).toBe(false);
     const cross = statements(beats).find((b) => b.entryKind === 'TESTIMONY_CROSS');
     expect(cross?.speakerName).toBe('Alex Reed');
   });
