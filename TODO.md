@@ -202,6 +202,58 @@ variants multiply voice, never the state space.
       Verified headless across the full docket (ALL CHECKS PASSED, clean
       console) plus a visual sweep of the plea/trial branches.
 
+## Transcript rendering follow-ups (code review, 2026-07-21)
+
+A `/code-review` pass over the transcript-rendering push (U6 + per-speaker
+voice) surfaced six findings. The most severe — losing which side called a
+witness once the heading was demoted — is fixed; the rest are recorded here
+so they aren't lost.
+
+- [x] **Which side called the witness, dropped from the transcript.** Fixed:
+      `calledByDefense` is now a structured field on the `TESTIMONY_DIRECT`
+      beat (`StatementBeat.calledByDefense`, set from `witness.bias` in
+      `courtroomScript.ts`), and `LedgerEntryRow`'s caption reads it back
+      ("Direct examination — called by the defense/prosecution") instead of
+      silently losing it to the generic name-led caption.
+- [ ] **Blank-name schema gap.** `WitnessSchema.name` and
+      `CharacterSchema.firstName`/`lastName` have no `.min(1)`, so a
+      schema-valid empty string would render a blank speaker line in
+      `LedgerEntryRow` (`entry.speakerName ?? SPEAKER_LABELS[...]` only
+      catches null/undefined). Latent today (demo cases are hardcoded
+      non-empty); worth a `.min(1)` before the LLM pipeline can produce
+      names. **Tier: lower-tier, schema-only.**
+- [ ] **Heading semantics lost for screen readers.** ~13 of 18
+      `StatementEntryKind`s dropped their `<h3>` for a plain `<p>` caption in
+      the utterance-style rewrite, narrowing heading-based screen-reader
+      navigation of the record (partially offset by the surrounding
+      `<ol aria-label="Court record">` list semantics). Worth revisiting if
+      an accessibility pass happens.
+- [ ] **`LedgerEntryRow`'s kind-classification isn't exhaustive.**
+      `OUTCOME_KINDS`/`HEAVY_KINDS`/`REACTION_KINDS` (Sets) and
+      `NAME_LED_CAPTIONS` (`Partial<Record>`) don't cover
+      `StatementEntryKind` exhaustively, unlike `SPEAKER_LABELS`/
+      `SPEAKER_ACCENT` (full `Record`s) in the same file — a future new beat
+      kind would silently fall through to the wrong render branch with no
+      compile error. **Tier: lower-tier, would want a design decision on
+      how new beat kinds should default (flowing speech seems the safe
+      default).**
+- [ ] **Duplicated `<li>` wrapper shell across the three render branches** —
+      modest cleanup opportunity, not a bug.
+- [ ] **`LedgerEntryRow` is unmemoized** — every revealed row re-renders on
+      each beat advance. Negligible at the app's actual scale (dozens of
+      beats, user-paced clicks); not worth doing unless the record grows
+      much longer.
+- [ ] **Idea (not yet scoped): call order/emphasis driven by witness
+      quality, not just side.** Raised alongside the caption fix — instead
+      of (or alongside) `calledByDefense`, derive something like call order,
+      or how much weight the transcript gives a witness's testimony, from a
+      witness-credibility signal (bias strength / OCEAN traits / a new
+      schema field) rather than purely which side called them. Interesting
+      but underspecified — no schema field carries "quality" today, and it's
+      unclear whether this belongs in the projection (deterministic) or the
+      authored case data (LLM color). Needs a design pass before it's
+      buildable, not a small follow-up.
+
 ## Deferred MVP items (from plan §7)
 
 - [ ] `GameService` + the 4-stage LLM generation pipeline
