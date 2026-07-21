@@ -34,6 +34,17 @@
   --classification-misdemeanor: #fbbf24;
   --classification-infraction: #9ca3af;
 
+  /* Per-speaker voice: the accent that leads each party's utterances in the
+     court record. Chosen to sit apart from the status hues above (green/red
+     carry admitted/excluded and guilty/not-guilty) so a speaker's color is
+     never read as a verdict. The bench speaks in the app accent. */
+  --speaker-clerk: #94a3b8;
+  --speaker-prosecution: #60a5fa;
+  --speaker-defense: #fbbf24;
+  --speaker-witness: #a3a3a3;
+  --speaker-court: #c084fc;
+  --speaker-press: #d6d3d1;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;

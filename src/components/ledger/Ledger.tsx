@@ -22,7 +22,7 @@ export function Ledger({ entries }: { entries: StatementBeat[] }) {
 
   return (
     <>
-      <ol aria-label="Court record" className="space-y-3">
+      <ol aria-label="Court record" className="space-y-2.5">
         {entries.map((entry) => (
           <LedgerEntryRow key={entry.id} entry={entry} isNewest={entry.id === newestId} />
         ))}
