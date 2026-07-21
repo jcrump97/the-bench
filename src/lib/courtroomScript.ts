@@ -60,6 +60,10 @@ export interface StatementBeat {
   entryKind: StatementEntryKind;
   phase: GamePhase;
   speaker: LedgerSpeaker;
+  // The individual speaking, when the party role isn't identity enough: the
+  // witness on the stand, the defendant allocuting. The transcript leads the
+  // utterance with this name; absent, the party label (speaker) speaks.
+  speakerName?: string;
   // Monotonic sequence index, NOT a wall-clock timestamp — the script is a
   // pure projection and must never call Date.now().
   order: number;
@@ -291,6 +295,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'ALLOCUTION',
         phase: 'ACT_3_VERDICT',
         speaker: 'DEFENSE',
+        speakerName: `${caseData.defendant.firstName} ${caseData.defendant.lastName}`,
         heading: `Allocution of ${caseData.defendant.firstName} ${caseData.defendant.lastName}`,
         body: allocution,
       });
@@ -355,6 +360,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'TESTIMONY_DIRECT',
         phase: 'ACT_3_VERDICT',
         speaker: 'WITNESS',
+        speakerName: witness.name,
         heading: `${calledByDefense ? 'The Defense Calls' : 'The People Call'} ${witness.name}`,
         body: witness.directExamination,
       });
@@ -364,6 +370,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
           entryKind: 'TESTIMONY_CROSS',
           phase: 'ACT_3_VERDICT',
           speaker: 'WITNESS',
+          speakerName: witness.name,
           heading: `Cross-Examination of ${witness.name}`,
           body: witness.crossExamination,
         });
