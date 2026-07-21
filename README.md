@@ -86,7 +86,11 @@ flowchart LR
         PLEA["buildPleaPosture (plea structure)"]
         EXPO["deriveSentencingExposure (per-charge ranges → case exposure)"]
         MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
-        SCRIPT["buildCourtroomScript (beat sequence, cursor-revealed)"]
+        SCRIPT["buildCourtroomScript (statement + decision beats; spokenJudgeLines voice record; choice-keyed reaction beats)"]
+    end
+
+    subgraph ViewState["View State (useUIStore, unvalidated)"]
+        CURSOR["beatCursor (forward-only reveal)"]
     end
 
     subgraph GamePhases["Game Phases"]
@@ -111,12 +115,13 @@ flowchart LR
     EXPO -->|"Statutory Floor and Ceiling"| A3
     A3 -->|"Sentence Entered"| END
     END -->|"Trigger Final Snapshot"| GS
-    SCRIPT -->|"One beat at a time"| GamePhases
+    SCRIPT -->|"Ordered beats, truncated at first unresolved decision"| CURSOR
+    CURSOR -->|"Reveal one beat at a time"| GamePhases
 ```
 
 The LLM provides color; deterministic code provides structure. Plea structure, case-level sentencing exposure (aggregated from per-charge statutory ranges), and the Act 2 → Act 3 penalty modifier are all pure functions of validated data — the LLM's only plea contribution is narrative strings (rationales, arguments, testimony, allocution).
 
-The case plays out **one beat at a time**: `buildCourtroomScript` projects validated state into an ordered screenplay of speaker-attributed statements and decision points, truncated at the first unresolved decision (no spoilers) and prefix-stable (resolving a decision never rewrites the past). A reveal cursor in the view-state slice paces the courtroom — the prosecutor offers each exhibit, the defense objects or waives, witnesses testify, and the judge rules from the bench at every pause. The judge's rulings are *voiced*: each decision point presents authored bench lines bound to the closed decision enums (variants multiply voice, never the state space), the chosen words enter the record verbatim, and the courtroom reacts in character to every ruling.
+The case plays out **one beat at a time**: `buildCourtroomScript` projects validated state into an ordered screenplay of speaker-attributed statements and decision points, truncated at the first unresolved decision (no spoilers) and prefix-stable (resolving a decision never rewrites the past). A reveal cursor in the view-state slice paces the courtroom — the prosecutor offers each exhibit, the defense objects or waives, witnesses testify, and the judge rules from the bench at every pause. The judge's rulings are *voiced*: each decision point presents authored bench lines bound to the closed decision enums (variants multiply voice, never the state space), the chosen words enter the record verbatim, and the courtroom reacts in character to every ruling. The record itself reads as a spoken transcript — every line led by the party speaking (witnesses and the allocuting defendant by name), each party in its own accent, with the court's rulings and the press aftermath set apart from the flowing testimony.
 
 ## Status
 

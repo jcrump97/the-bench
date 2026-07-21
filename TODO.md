@@ -1,5 +1,21 @@
 # TODO
 
+## Mobile sentencing input snapping to floor/ceiling (user bug report, 2026-07-21 — FIXED)
+
+Reported on Android Chrome: adjusting the sentencing amount would only let
+the player land on the far min or max of the range, not values in between.
+Root cause: `SentencePicker`'s number input clamped the value on every
+keystroke and re-rendered with the clamped result; on a numeric keypad,
+typing a second digit landed on top of that just-clamped extreme instead of
+the number the player meant to build (e.g. typing "1" then "8" toward "18"
+in a 1–3 range clamps to 3 after the first extra digit, and every further
+digit re-clamps to the same extreme). Fixed by editing against a local
+draft string in a new `SentenceAmountField`: only a complete in-range
+number propagates live, and blur reconciles the draft to whatever ended up
+committed. Verified with a scripted digit-by-digit typing repro (Playwright,
+touch-emulated viewport) confirming the draft no longer snaps mid-edit, plus
+the full `run-the-bench` docket (unaffected).
+
 ## Beat-by-beat courtroom loop redesign (2026-07-16 — DONE)
 
 The static form-dump loop was replaced by a click-to-advance courtroom
@@ -121,10 +137,11 @@ shipped with it, and the driver advances beat-by-beat via `advanceTo()`
 (no `?instant=1` escape hatch ever proved necessary). Still open, both pure
 view-layer polish:
 
-- [ ] **Per-speaker visual voice in `LedgerEntryRow`** — accent left-border
-      keyed on `entry.speaker`, heavier headings for verdict/sentence
-      `entryKind`s, press Aftermath styled as a clipping. Pure CSS on fields
-      that already exist. **Tier: lower-tier.**
+- [x] **Per-speaker visual voice in `LedgerEntryRow`** — done, landed with U6
+      below (they were paired): a per-speaker accent left-border keyed on
+      `entry.speaker` (new `--speaker-*` tokens in `index.css`, chosen apart
+      from the status hues), heavier headings for the verdict/sentence outcome
+      beats, and the press Aftermath rendered as a clipping.
 - [ ] **Act title cards on phase transition** — brief interstitial overlay
       ("Act 2 — Evidentiary Motions · The parties will be heard on
       admissibility"), rendered as UI chrome, not a courtroom beat, so the
@@ -179,27 +196,79 @@ variants multiply voice, never the state space.
       (`2318e93`): `driver.mjs` selects options by `data-choice` and asserts
       the new ruling headings + reaction beats; CLAUDE.md/README/AGENTS.md
       synced. **Tier: lower-tier.**
-- [ ] **U5 — README Mermaid refresh.** Both architecture diagrams predate
-      the unified design: update them to show `buildCourtroomScript` as the
-      single projection (beats + decisions, spokenJudgeLines voice record,
-      reaction beats), `beatCursor` reveal in the UI slice, and the retired
-      `buildLedger` removed. Verify the diagrams against the actual module
-      graph (`src/lib/courtroomScript.ts`, `src/hooks/useCourtroomScript.ts`,
-      the three stores) before editing. **Tier: lower-tier, frontier review.**
-- [ ] **U6 — make the record read as a spoken transcript** (user-reported,
-      2026-07-18). Despite speaker attribution, the courtroom record still
-      reads as a stack of headed summary cards, not dialogue between named
-      parties — each beat renders as a boxed entry with an editorial heading
-      ("The People's Offer", "Ruling of the Court — …") above a paragraph,
-      which is case-review chrome, not courtroom speech. Explore
-      utterance-style rendering in `Ledger`/`LedgerEntryRow`: the speaker's
-      name leads the line (witnesses resolved to their actual names, not the
-      WITNESS role), headings demoted to small procedural stage direction or
-      dropped where the line speaks for itself, less box chrome so exchanges
-      flow. View-layer only — `buildCourtroomScript` already carries
-      `speaker`/`heading`/`body` per beat; pair with the open per-speaker
-      visual-voice item above. **Tier: frontier design, lower-tier
-      implementation once the treatment is chosen.**
+- [x] **U5 — README Mermaid refresh.** Done. The retired `buildLedger`/
+      `DialogueScript` were already scrubbed from both diagrams; the remaining
+      work was additive. The `buildCourtroomScript` node now names its outputs
+      (statement + decision beats, the `spokenJudgeLines` voice record, the
+      choice-keyed reaction beats), and a new `View State (useUIStore)` node
+      represents the forward-only `beatCursor` reveal between the projection
+      and the game phases. Prose note added on the spoken-transcript record.
+- [x] **U6 — make the record read as a spoken transcript** (user-reported,
+      2026-07-18). Done. `LedgerEntryRow` now renders each beat as courtroom
+      speech: the speaker leads the line (witnesses and the allocuting
+      defendant by their own name via the new `speakerName` on `StatementBeat`,
+      commit `feat(lib)`), the editorial heading is demoted to small stage
+      direction or dropped where the speaker already says it (reactions), and a
+      per-speaker accent runs down the margin so exchanges flow instead of
+      stacking as boxes. Two beats stay set apart: the court's rulings keep a
+      heading-led panel (the structural outcome stays visible, heavier for
+      verdict/sentence) and the press aftermath renders as a clipping. Rows
+      carry `data-speaker`/`data-entry-kind` for structural selection
+      independent of the visible copy; the driver was retargeted onto them.
+      Verified headless across the full docket (ALL CHECKS PASSED, clean
+      console) plus a visual sweep of the plea/trial branches.
+
+## Transcript rendering follow-ups (code review, 2026-07-21)
+
+A `/code-review` pass over the transcript-rendering push (U6 + per-speaker
+voice) surfaced six findings. The most severe — losing which side called a
+witness once the heading was demoted — is fixed; the rest are recorded here
+so they aren't lost.
+
+- [x] **Which side called the witness, dropped from the transcript.** Fixed:
+      `calledByDefense` is now a structured field on the `TESTIMONY_DIRECT`
+      beat (`StatementBeat.calledByDefense`, set from `witness.bias` in
+      `courtroomScript.ts`), and `LedgerEntryRow`'s caption reads it back
+      ("Direct examination — called by the defense/prosecution") instead of
+      silently losing it to the generic name-led caption.
+- [ ] **Blank-name schema gap.** `WitnessSchema.name` and
+      `CharacterSchema.firstName`/`lastName` have no `.min(1)`, so a
+      schema-valid empty string would render a blank speaker line in
+      `LedgerEntryRow` (`entry.speakerName ?? SPEAKER_LABELS[...]` only
+      catches null/undefined). Latent today (demo cases are hardcoded
+      non-empty); worth a `.min(1)` before the LLM pipeline can produce
+      names. **Tier: lower-tier, schema-only.**
+- [ ] **Heading semantics lost for screen readers.** ~13 of 18
+      `StatementEntryKind`s dropped their `<h3>` for a plain `<p>` caption in
+      the utterance-style rewrite, narrowing heading-based screen-reader
+      navigation of the record (partially offset by the surrounding
+      `<ol aria-label="Court record">` list semantics). Worth revisiting if
+      an accessibility pass happens.
+- [ ] **`LedgerEntryRow`'s kind-classification isn't exhaustive.**
+      `OUTCOME_KINDS`/`HEAVY_KINDS`/`REACTION_KINDS` (Sets) and
+      `NAME_LED_CAPTIONS` (`Partial<Record>`) don't cover
+      `StatementEntryKind` exhaustively, unlike `SPEAKER_LABELS`/
+      `SPEAKER_ACCENT` (full `Record`s) in the same file — a future new beat
+      kind would silently fall through to the wrong render branch with no
+      compile error. **Tier: lower-tier, would want a design decision on
+      how new beat kinds should default (flowing speech seems the safe
+      default).**
+- [ ] **Duplicated `<li>` wrapper shell across the three render branches** —
+      modest cleanup opportunity, not a bug.
+- [ ] **`LedgerEntryRow` is unmemoized** — every revealed row re-renders on
+      each beat advance. Negligible at the app's actual scale (dozens of
+      beats, user-paced clicks); not worth doing unless the record grows
+      much longer.
+- [ ] **Idea (not yet scoped): call order/emphasis driven by witness
+      quality, not just side.** Raised alongside the caption fix — instead
+      of (or alongside) `calledByDefense`, derive something like call order,
+      or how much weight the transcript gives a witness's testimony, from a
+      witness-credibility signal (bias strength / OCEAN traits / a new
+      schema field) rather than purely which side called them. Interesting
+      but underspecified — no schema field carries "quality" today, and it's
+      unclear whether this belongs in the projection (deterministic) or the
+      authored case data (LLM color). Needs a design pass before it's
+      buildable, not a small follow-up.
 
 ## Deferred MVP items (from plan §7)
 

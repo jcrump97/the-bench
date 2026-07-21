@@ -69,8 +69,12 @@ async function gotoWithRetry(page, url, attempts = 20) {
   throw new Error(`dev server not reachable at ${url} — is \`npm run dev\` running?`);
 }
 
+// Read the structural speaker of each revealed beat from its data-speaker
+// attribute — the enum (CLERK/PROSECUTION/…/WITNESS/COURT/PRESS), not the
+// visible name the transcript leads with. Witness rows show the witness's own
+// name but stay data-speaker="WITNESS".
 async function ledgerSpeakers(page) {
-  return page.locator('li p.uppercase').allInnerTexts();
+  return page.locator('li[data-speaker]').evaluateAll((els) => els.map((el) => el.dataset.speaker));
 }
 
 // The continue-flavored buttons a statement beat can present, in the order
@@ -141,7 +145,12 @@ async function finishCase(page, label, buttonName = 'Impose Sentence') {
   await advanceTo(page, page.getByRole('button', { name: 'New Case' }), `${label} case closed`);
 }
 
-const browser = await chromium.launch();
+// PW_EXECUTABLE_PATH lets an environment with a pre-installed browser (a
+// different build than this Playwright would download) point the driver at it
+// instead. Unset, Playwright resolves its own bundled browser as usual.
+const browser = await chromium.launch(
+  process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {},
+);
 
 // ---------- Run 1: Webb, accepted-plea path, desktop ----------
 {
@@ -164,7 +173,7 @@ const browser = await chromium.launch();
   await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Webb plea ruling');
   const act1 = await ledgerSpeakers(page);
   check('Webb Act1: beats are clerk, clerk (charge read), people, defense',
-    JSON.stringify(act1) === JSON.stringify(['CLERK OF THE COURT', 'CLERK OF THE COURT', 'THE PEOPLE', 'DEFENSE COUNSEL']),
+    JSON.stringify(act1) === JSON.stringify(['CLERK', 'CLERK', 'PROSECUTION', 'DEFENSE']),
     JSON.stringify(act1));
   check('Webb Act1: charge read as Count 1',
     (await page.locator('text=Count 1: Grand Theft').count()) === 1);
@@ -191,14 +200,14 @@ const browser = await chromium.launch();
   await choiceButton(page, 'ACCEPT').click();
   await advanceTo(page, page.getByRole('button', { name: 'Impose Sentence' }), 'Webb plea sentencing');
   check('Webb plea path: allocution beat revealed before sentencing',
-    (await page.locator('text=Allocution of Marcus Webb').count()) === 1);
+    (await page.locator('li[data-entry-kind="ALLOCUTION"]', { hasText: 'Marcus Webb' }).count()) === 1);
   const seeded = Number(await page.locator('input[type="number"]').inputValue());
   check('Webb plea sentencing: seeded within statutory range', seeded >= 1 && seeded <= 3, `value=${seeded}`);
   await page.getByRole('button', { name: 'Impose Sentence' }).click();
   await advanceTo(page, page.getByRole('button', { name: 'New Case' }), 'Webb plea case closed');
   const end = await ledgerSpeakers(page);
   check('Webb end(plea): record ends COURT (sentence), PRESS (aftermath)',
-    JSON.stringify(end.slice(-2)) === JSON.stringify(['THE COURT', 'PRESS']),
+    JSON.stringify(end.slice(-2)) === JSON.stringify(['COURT', 'PRESS']),
     JSON.stringify(end));
   check('Webb end(plea): plea-accepted aftermath variant shown',
     (await page.locator('text=never had to board a plane').count()) === 1);
@@ -220,16 +229,14 @@ const browser = await chromium.launch();
   check('Webb Act2: rulings carry the structural outcome in the heading',
     (await page.locator('text=Ruling of the Court —').count()) === 4);
   check('Webb Act2: the courtroom reacted to at least one ruling',
-    (await page.locator('text=The People Respond').count())
-      + (await page.locator('text=The Defense Responds').count())
-      + (await page.locator('text=The Clerk Notes the Record').count()) >= 1);
+    (await page.locator('li[data-entry-kind="MOTION_REACTION"]').count()) >= 1);
   await page.screenshot({ path: path.join(SHOTS, '05-act2-ruling-mobile.png') });
 
   await callCharge(page, 'GUILTY', 'Webb verdict');
-  check('Webb Act3: witness testimony beats played',
-    (await page.locator('text=The People Call Detective Ray Alvarez').count()) === 1);
+  check('Webb Act3: witness testimony beats played, led by the witness\'s name',
+    (await page.locator('li[data-entry-kind="TESTIMONY_DIRECT"]', { hasText: 'Detective Ray Alvarez' }).count()) === 1);
   check('Webb Act3: cross-examination beat played',
-    (await page.locator('text=Cross-Examination of Dana Whitfield').count()) === 1);
+    (await page.locator('li[data-entry-kind="TESTIMONY_CROSS"]', { hasText: 'Dana Whitfield' }).count()) === 1);
   check('Webb Act3: closing arguments played',
     (await page.locator('text=Closing Argument — The People').count()) === 1);
   await finishCase(page, 'Webb trial');
@@ -237,7 +244,7 @@ const browser = await chromium.launch();
   check('Webb end(trial): witness beats attributed to WITNESS',
     speakers.filter((s) => s === 'WITNESS').length === 6, JSON.stringify(speakers));
   check('Webb end(trial): trial order + 4 rulings + verdict + sentence are THE COURT',
-    speakers.filter((s) => s === 'THE COURT').length === 7, JSON.stringify(speakers));
+    speakers.filter((s) => s === 'COURT').length === 7, JSON.stringify(speakers));
   check('Webb end(trial): convicted aftermath variant shown',
     (await page.locator('text=came back in under a day').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '06-endstate-trial-mobile.png'), fullPage: true });
@@ -292,7 +299,7 @@ const browser = await chromium.launch();
   check('Reyes skip: landed on the first verdict decision',
     await choiceButton(page, 'GUILTY').isVisible());
   check('Reyes skip: skipped testimony still entered the record',
-    (await page.locator('text=Cross-Examination of Elena Reyes').count()) === 1);
+    (await page.locator('li[data-entry-kind="TESTIMONY_CROSS"]', { hasText: 'Elena Reyes' }).count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '10-reyes-after-skip.png'), fullPage: true });
 
   await callCharge(page, 'GUILTY', 'Reyes verdict');

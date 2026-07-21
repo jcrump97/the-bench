@@ -177,6 +177,14 @@ describe('buildCourtroomScript — Act 3 trial path', () => {
     const direct = statements(beats).find((b) => b.entryKind === 'TESTIMONY_DIRECT');
     expect(direct?.speaker).toBe('WITNESS');
     expect(direct?.heading).toBe('The People Call Alex Reed');
+    // The transcript leads the utterance with the witness's own name, not the
+    // generic WITNESS role.
+    expect(direct?.speakerName).toBe('Alex Reed');
+    // Called by the prosecution (bias: 'PROSECUTION') — the caption still
+    // needs this once the heading is demoted in the rendered transcript.
+    expect(direct?.calledByDefense).toBe(false);
+    const cross = statements(beats).find((b) => b.entryKind === 'TESTIMONY_CROSS');
+    expect(cross?.speakerName).toBe('Alex Reed');
   });
 
   it('a guilty verdict leads to a sentencing decision with anyGuilty=true', () => {
@@ -233,6 +241,10 @@ describe('buildCourtroomScript — accepted-plea path', () => {
     ]);
     const allocution = statements(beats).find((b) => b.entryKind === 'ALLOCUTION');
     expect(allocution?.heading).toBe('Allocution of Jordan Vance');
+    // The defendant allocutes in their own name, though the beat is voiced by
+    // the defense.
+    expect(allocution?.speaker).toBe('DEFENSE');
+    expect(allocution?.speakerName).toBe('Jordan Vance');
   });
 
   it('sentencing resolves into sentence beats and the aftermath at END_STATE', () => {
