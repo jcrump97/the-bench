@@ -121,10 +121,11 @@ shipped with it, and the driver advances beat-by-beat via `advanceTo()`
 (no `?instant=1` escape hatch ever proved necessary). Still open, both pure
 view-layer polish:
 
-- [ ] **Per-speaker visual voice in `LedgerEntryRow`** — accent left-border
-      keyed on `entry.speaker`, heavier headings for verdict/sentence
-      `entryKind`s, press Aftermath styled as a clipping. Pure CSS on fields
-      that already exist. **Tier: lower-tier.**
+- [x] **Per-speaker visual voice in `LedgerEntryRow`** — done, landed with U6
+      below (they were paired): a per-speaker accent left-border keyed on
+      `entry.speaker` (new `--speaker-*` tokens in `index.css`, chosen apart
+      from the status hues), heavier headings for the verdict/sentence outcome
+      beats, and the press Aftermath rendered as a clipping.
 - [ ] **Act title cards on phase transition** — brief interstitial overlay
       ("Act 2 — Evidentiary Motions · The parties will be heard on
       admissibility"), rendered as UI chrome, not a courtroom beat, so the
@@ -179,27 +180,27 @@ variants multiply voice, never the state space.
       (`2318e93`): `driver.mjs` selects options by `data-choice` and asserts
       the new ruling headings + reaction beats; CLAUDE.md/README/AGENTS.md
       synced. **Tier: lower-tier.**
-- [ ] **U5 — README Mermaid refresh.** Both architecture diagrams predate
-      the unified design: update them to show `buildCourtroomScript` as the
-      single projection (beats + decisions, spokenJudgeLines voice record,
-      reaction beats), `beatCursor` reveal in the UI slice, and the retired
-      `buildLedger` removed. Verify the diagrams against the actual module
-      graph (`src/lib/courtroomScript.ts`, `src/hooks/useCourtroomScript.ts`,
-      the three stores) before editing. **Tier: lower-tier, frontier review.**
-- [ ] **U6 — make the record read as a spoken transcript** (user-reported,
-      2026-07-18). Despite speaker attribution, the courtroom record still
-      reads as a stack of headed summary cards, not dialogue between named
-      parties — each beat renders as a boxed entry with an editorial heading
-      ("The People's Offer", "Ruling of the Court — …") above a paragraph,
-      which is case-review chrome, not courtroom speech. Explore
-      utterance-style rendering in `Ledger`/`LedgerEntryRow`: the speaker's
-      name leads the line (witnesses resolved to their actual names, not the
-      WITNESS role), headings demoted to small procedural stage direction or
-      dropped where the line speaks for itself, less box chrome so exchanges
-      flow. View-layer only — `buildCourtroomScript` already carries
-      `speaker`/`heading`/`body` per beat; pair with the open per-speaker
-      visual-voice item above. **Tier: frontier design, lower-tier
-      implementation once the treatment is chosen.**
+- [x] **U5 — README Mermaid refresh.** Done. The retired `buildLedger`/
+      `DialogueScript` were already scrubbed from both diagrams; the remaining
+      work was additive. The `buildCourtroomScript` node now names its outputs
+      (statement + decision beats, the `spokenJudgeLines` voice record, the
+      choice-keyed reaction beats), and a new `View State (useUIStore)` node
+      represents the forward-only `beatCursor` reveal between the projection
+      and the game phases. Prose note added on the spoken-transcript record.
+- [x] **U6 — make the record read as a spoken transcript** (user-reported,
+      2026-07-18). Done. `LedgerEntryRow` now renders each beat as courtroom
+      speech: the speaker leads the line (witnesses and the allocuting
+      defendant by their own name via the new `speakerName` on `StatementBeat`,
+      commit `feat(lib)`), the editorial heading is demoted to small stage
+      direction or dropped where the speaker already says it (reactions), and a
+      per-speaker accent runs down the margin so exchanges flow instead of
+      stacking as boxes. Two beats stay set apart: the court's rulings keep a
+      heading-led panel (the structural outcome stays visible, heavier for
+      verdict/sentence) and the press aftermath renders as a clipping. Rows
+      carry `data-speaker`/`data-entry-kind` for structural selection
+      independent of the visible copy; the driver was retargeted onto them.
+      Verified headless across the full docket (ALL CHECKS PASSED, clean
+      console) plus a visual sweep of the plea/trial branches.
 
 ## Deferred MVP items (from plan §7)
 
