@@ -1,5 +1,21 @@
 # TODO
 
+## Mobile sentencing input snapping to floor/ceiling (user bug report, 2026-07-21 — FIXED)
+
+Reported on Android Chrome: adjusting the sentencing amount would only let
+the player land on the far min or max of the range, not values in between.
+Root cause: `SentencePicker`'s number input clamped the value on every
+keystroke and re-rendered with the clamped result; on a numeric keypad,
+typing a second digit landed on top of that just-clamped extreme instead of
+the number the player meant to build (e.g. typing "1" then "8" toward "18"
+in a 1–3 range clamps to 3 after the first extra digit, and every further
+digit re-clamps to the same extreme). Fixed by editing against a local
+draft string in a new `SentenceAmountField`: only a complete in-range
+number propagates live, and blur reconciles the draft to whatever ended up
+committed. Verified with a scripted digit-by-digit typing repro (Playwright,
+touch-emulated viewport) confirming the draft no longer snaps mid-edit, plus
+the full `run-the-bench` docket (unaffected).
+
 ## Beat-by-beat courtroom loop redesign (2026-07-16 — DONE)
 
 The static form-dump loop was replaced by a click-to-advance courtroom
