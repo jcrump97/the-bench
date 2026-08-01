@@ -482,8 +482,26 @@ export async function runInterrogationGen(
 // ============================================================================
 // Stage 5 — EvidenceGen
 // ============================================================================
+// Gemini's structured-output mode materializes an optional-nullable field
+// (interrogation is marked `nullable: true` in the schema below, since
+// there's no way to express "omit this field" in Gemini's response schema)
+// as an explicit `null` on every item that doesn't have one — but
+// EvidenceSchema's `interrogation` is optional (undefined), not nullable.
+// Normalize null → undefined before the real schema validates it.
+function dropNullInterrogation(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((item) => {
+    if (item !== null && typeof item === 'object' && 'interrogation' in item && item.interrogation === null) {
+      const rest = { ...(item as Record<string, unknown>) };
+      delete rest.interrogation;
+      return rest;
+    }
+    return item;
+  });
+}
+
 const EvidenceGenSchema = z.object({
-  evidence: z.array(EvidenceSchema).min(3),
+  evidence: z.preprocess(dropNullInterrogation, z.array(EvidenceSchema).min(3)),
   witnesses: z.array(WitnessSchema).min(2),
 });
 
@@ -657,13 +675,21 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   const initial = CaseSchema.safeParse(assembled);
   if (initial.success) return initial.data;
 
+  // The repair round re-generates the whole case from scratch, so its raw
+  // evidence array needs the same null→undefined normalization as EvidenceGen.
+  const RepairCaseSchema = z.preprocess((value) => {
+    if (value === null || typeof value !== 'object' || !('evidence' in value)) return value;
+    const obj = value as Record<string, unknown>;
+    return { ...obj, evidence: dropNullInterrogation(obj.evidence) };
+  }, CaseSchema);
+
   return generateValidated(
     apiKey,
     model,
     REPAIR_SYSTEM,
     (feedback) => buildRepairContents(assembled, initial.error, feedback),
     FULL_CASE_GEMINI_SCHEMA,
-    CaseSchema,
+    RepairCaseSchema,
     2,
   );
 }

@@ -78,4 +78,54 @@ describe('selectModel', () => {
 
     await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-lite-latest');
   });
+
+  it('prefers a -latest alias over a pinned numeric build in the same tier', async () => {
+    // Regression case: a live run once picked "gemini-2.0-flash-lite-001" —
+    // a build ListModels still listed as generateContent-capable but that
+    // had actually been retired (generateContent 404'd) — ahead of
+    // "gemini-flash-lite-latest", which Google keeps pointing at a working
+    // model. Deliberately listed in the retirement-prone order first.
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        models: [
+          { name: 'models/gemini-2.0-flash-lite-001', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.0-flash-lite', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] },
+        ],
+      }),
+    );
+
+    await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-lite-latest');
+  });
+
+  it('deprioritizes preview and dated-snapshot builds behind a plain or -latest name', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        models: [
+          { name: 'models/gemini-3-flash-preview', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.5-computer-use-preview-10-2025', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+        ],
+      }),
+    );
+
+    await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-2.5-flash');
+  });
+
+  it('excludes specialist non-text families even when the name contains "flash"', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        models: [
+          { name: 'models/gemini-3.1-flash-lite-image', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.5-flash-preview-tts', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-flash-latest', supportedGenerationMethods: ['generateContent'] },
+        ],
+      }),
+    );
+
+    await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-latest');
+  });
 });

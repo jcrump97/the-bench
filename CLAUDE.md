@@ -9,11 +9,14 @@ npm run dev        # Start Vite dev server with HMR
 npm run build      # Type-check (tsc -b) then bundle for GitHub Pages
 npm run lint       # ESLint across the project
 npm run preview    # Serve the dist/ build locally
-npm test           # Run the Vitest suite once
+npm test           # Run the Vitest suite once (hermetic — no network calls)
 npm run test:watch # Vitest in watch mode
+npm run test:live  # Live Gemini API tests — needs GEMINI_API_KEY, costs real calls
 ```
 
 Before marking any task complete, run `npm run lint`, `npm test`, and `npm run build`. The app must build and type-check cleanly — it deploys to GitHub Pages as a static bundle. Note that `npm run build` enforces the `@ts-expect-error` type-negative gates but does not execute the Vitest suites; only `npm test` does.
+
+`npm test` never touches the real Gemini API — `src/lib/llm/`'s ordinary suite stubs `fetch`. Live coverage of the actual API lives in `src/lib/llm/__tests__/live/` (a separate `vitest.live.config.ts`, excluded from the default suite via `vite.config.ts`'s `test.exclude` regardless of whether a key is present) and only runs via `npm run test:live`. It reads `GEMINI_API_KEY` from a repo-root `.env` (gitignored, never committed) or the shell environment, and skips cleanly via `describe.skipIf` when no key is available — it never fails a normal `npm test`/CI run for lacking one. A live run once caught a real gap `test`'s mocks couldn't: `selectModel` picked a pinned model build (`gemini-2.0-flash-lite-001`) that `ListModels` still listed as `generateContent`-capable but that had actually been retired — fixed by preferring `-latest` aliases over dated/pinned/preview names in `modelSelection.ts`'s ranking. It also caught Gemini's structured-output mode materializing the optional `interrogation` field as an explicit `null` rather than omitting it — fixed with a `z.preprocess` normalization in `stages.ts` before the real `EvidenceSchema`/`CaseSchema` validate.
 
 UI changes are verified with the committed `run-the-bench` skill (`.claude/skills/run-the-bench/`) — a headless Playwright playthrough of the full demo docket (five cases, both branches, including per-charge verdicts). Playwright is deliberately not a project dependency; the skill installs it in a throwaway prefix.
 

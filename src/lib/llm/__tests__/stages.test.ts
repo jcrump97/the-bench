@@ -126,6 +126,15 @@ describe('runEvidenceGen', () => {
     expect(result.witnesses).toHaveLength(witnesses.length);
   });
 
+  it('normalizes an explicit null interrogation field to undefined (Gemini structured-output quirk)', async () => {
+    const evidenceWithExplicitNulls = evidence.map((item) => ({ ...item, interrogation: null }));
+    mockCallsWith(JSON.stringify({ evidence: evidenceWithExplicitNulls, witnesses }));
+
+    const result = await runEvidenceGen(API_KEY, MODEL, [charge], environment, defendant, null);
+    expect(result.evidence).toHaveLength(evidence.length);
+    expect(result.evidence.every((item) => item.interrogation === undefined)).toBe(true);
+  });
+
   it('overrides the interrogation echo fields on the INTERROGATION exhibit', async () => {
     const wrongEchoEvidence = {
       ...rawInterrogationEvidence,
