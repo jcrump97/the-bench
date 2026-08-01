@@ -51,8 +51,7 @@ function stripModelsPrefix(name: string): string {
   return name.startsWith('models/') ? name.slice('models/'.length) : name;
 }
 
-// Discovers the cheapest model this key can call. Memoize the result per
-// API key in the caller (GameService) so this only runs once per session.
+// Discovers the cheapest model this key can call.
 export async function selectModel(apiKey: string): Promise<string> {
   try {
     const models = await listModels(apiKey);
@@ -70,4 +69,29 @@ export async function selectModel(apiKey: string): Promise<string> {
   } catch {
     return FALLBACK_MODEL;
   }
+}
+
+// Module-scoped cache, not instance-scoped: the app can end up creating more
+// than one GameService for the same key within a session (WelcomeScreen's
+// generateCase and SentencingControl's later generateAftermath each build
+// their own instance via useCaseSource/createGameService), and a fresh React
+// component's local memoization wouldn't survive WelcomeScreen unmounting
+// once Act 1 starts. Caching here instead means every GameService for the
+// same key reuses the one resolved model instead of re-querying ListModels
+// (and risking a different pick) partway through a single playthrough.
+const modelCache = new Map<string, Promise<string>>();
+
+export function getOrSelectModel(apiKey: string): Promise<string> {
+  let cached = modelCache.get(apiKey);
+  if (cached === undefined) {
+    cached = selectModel(apiKey);
+    modelCache.set(apiKey, cached);
+  }
+  return cached;
+}
+
+// Test-only: clears the module-scoped cache so tests reusing the same
+// literal API key don't leak a resolved model between cases.
+export function clearModelCache(): void {
+  modelCache.clear();
 }

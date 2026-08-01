@@ -1,7 +1,7 @@
 import { assessProsecution } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource';
-import { selectModel } from './modelSelection';
+import { getOrSelectModel } from './modelSelection';
 import {
   runStatuteSelection,
   runEnvironmentGen,
@@ -22,17 +22,9 @@ import {
 // GameService's job is orchestration and model selection, not validation —
 // that lives in stages.ts.
 export function createGameService(apiKey: string): CaseSource {
-  // Model discovery runs once per BYOK session and is reused by every stage
-  // call and by generateAftermath.
-  let modelPromise: Promise<string> | null = null;
-  function getModel(): Promise<string> {
-    modelPromise ??= selectModel(apiKey);
-    return modelPromise;
-  }
-
   return {
     async generateCase(): Promise<GeneratedCase> {
-      const model = await getModel();
+      const model = await getOrSelectModel(apiKey);
 
       const { charges, statuteContexts } = await runStatuteSelection(apiKey, model);
       const environment = await runEnvironmentGen(apiKey, model, charges);
@@ -66,7 +58,7 @@ export function createGameService(apiKey: string): CaseSource {
     },
 
     async generateAftermath(ctx: AftermathContext): Promise<string> {
-      const model = await getModel();
+      const model = await getOrSelectModel(apiKey);
       return runAftermath(apiKey, model, ctx);
     },
   };

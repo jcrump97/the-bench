@@ -3,7 +3,7 @@ import { createGameService } from '../gameService';
 import { validCase } from '../../__tests__/fixtures';
 import { CaseSchema, PleaNarrativeSchema } from '../../../schemas/gameSchemas';
 
-vi.mock('../modelSelection', () => ({ selectModel: vi.fn() }));
+vi.mock('../modelSelection', () => ({ getOrSelectModel: vi.fn() }));
 vi.mock('../stages', () => ({
   runStatuteSelection: vi.fn(),
   runEnvironmentGen: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('../stages', () => ({
   runAftermath: vi.fn(),
 }));
 
-import { selectModel } from '../modelSelection';
+import { getOrSelectModel } from '../modelSelection';
 import {
   runStatuteSelection,
   runEnvironmentGen,
@@ -33,7 +33,7 @@ const MODEL = 'gemini-flash-lite-latest';
 const pleaNarrative = PleaNarrativeSchema.parse({ prosecutionRationale: 'The People offer a negotiated plea.' });
 
 beforeEach(() => {
-  vi.mocked(selectModel).mockReset().mockResolvedValue(MODEL);
+  vi.mocked(getOrSelectModel).mockReset().mockResolvedValue(MODEL);
   vi.mocked(runStatuteSelection).mockReset().mockResolvedValue({
     charges: validCase.charges,
     statuteContexts: validCase.statuteContexts,
@@ -58,7 +58,7 @@ describe('createGameService().generateCase', () => {
     expect(CaseSchema.safeParse(result.payload).success).toBe(true);
     expect(PleaNarrativeSchema.safeParse(result.pleaNarrative).success).toBe(true);
 
-    expect(selectModel).toHaveBeenCalledWith(API_KEY);
+    expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
     expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL);
     expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
     expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
@@ -87,7 +87,13 @@ describe('createGameService().generateCase', () => {
     expect(runPleaNarrative).toHaveBeenCalledWith(API_KEY, MODEL, validCase, 'MODERATE');
   });
 
-  it('discovers the model only once even across generateCase + generateAftermath', async () => {
+  it('asks getOrSelectModel (not the raw discovery call) for the model on every stage that needs one', async () => {
+    // The "only resolved once per session" guarantee now lives in
+    // getOrSelectModel's own module-scoped cache (modelSelection.test.ts),
+    // not here — a fresh GameService instance (e.g. a later
+    // generateAftermath call from a different component) still delegates
+    // through getOrSelectModel each time, relying on its cache rather than
+    // any instance-local memoization.
     const service = createGameService(API_KEY);
     await service.generateCase();
     await service.generateAftermath({
@@ -97,7 +103,7 @@ describe('createGameService().generateCase', () => {
       imposedSentence: [],
     });
 
-    expect(selectModel).toHaveBeenCalledTimes(1);
+    expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
   });
 
   it('propagates a stage failure without swallowing it', async () => {

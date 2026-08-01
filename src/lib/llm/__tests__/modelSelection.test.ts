@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { selectModel } from '../modelSelection';
+import { selectModel, getOrSelectModel, clearModelCache } from '../modelSelection';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -127,5 +127,64 @@ describe('selectModel', () => {
     );
 
     await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-latest');
+  });
+});
+
+describe('getOrSelectModel', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+    clearModelCache();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearModelCache();
+  });
+
+  it('discovers the model only once for the same key across separate calls', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
+      }),
+    );
+
+    const key = 'AIzaTestKey1234567890123456789';
+    const first = await getOrSelectModel(key);
+    const second = await getOrSelectModel(key);
+
+    expect(first).toBe('gemini-flash-lite-latest');
+    expect(second).toBe('gemini-flash-lite-latest');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('discovers independently per distinct API key', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
+      }),
+    );
+
+    await getOrSelectModel('AIzaKeyOne1234567890123456789');
+    await getOrSelectModel('AIzaKeyTwo1234567890123456789');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('discovers again after clearModelCache', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
+      }),
+    );
+
+    const key = 'AIzaTestKey1234567890123456789';
+    await getOrSelectModel(key);
+    clearModelCache();
+    await getOrSelectModel(key);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
