@@ -22,8 +22,16 @@ export function WelcomeScreen() {
   const isAuthenticated = useSecurityStore((state) => state.isAuthenticated);
 
   // Shared by both the demo bundles and a live BYOK generation — either way,
-  // the store's Zod setters are the validation boundary.
+  // the store's Zod setters are the validation boundary. The `generating`
+  // guard also blocks a second case from starting while a BYOK generation
+  // (several seconds, multiple real Gemini calls) is still in flight: without
+  // it, clicking a demo case mid-generation lets the demo path resolve first
+  // and enter ACT_1_INTAKE, then the earlier BYOK generateCase() resolves
+  // into a phase that no longer allows case rehydration and forces
+  // ERROR_STATE — destroying the game the player already started.
   const startCase = (source: CaseSource) => {
+    if (generating) return;
+    setGenerating(true);
     void source
       .generateCase()
       .then(({ payload, pleaNarrative }) => {
@@ -39,8 +47,7 @@ export function WelcomeScreen() {
   const handlePlayDemo = (bundle: DemoCaseBundle) => startCase(demoCaseSource(bundle));
 
   const handlePlayGenerated = () => {
-    if (vault === null || vault.isDemo || generating) return;
-    setGenerating(true);
+    if (vault === null || vault.isDemo) return;
     startCase(createGameService(vault.apiKey));
   };
 
@@ -71,8 +78,9 @@ export function WelcomeScreen() {
             <li key={bundle.id}>
               <button
                 type="button"
+                disabled={generating}
                 onClick={() => handlePlayDemo(bundle)}
-                className="min-h-11 w-full rounded-md border border-(--border-strong) px-4 py-3 text-left hover:bg-(--bg-elevated)"
+                className="min-h-11 w-full rounded-md border border-(--border-strong) px-4 py-3 text-left hover:bg-(--bg-elevated) disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="block text-xs text-(--text-muted)">
                   No. {bundle.id} &middot; {bundle.payload.charges.map((charge) => charge.name).join(' · ')}
