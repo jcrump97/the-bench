@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
 import { enumLabel } from '../../lib/format';
+import { useRevealState } from '../../hooks/useRevealState';
 import type { CasePayload } from '../../schemas/gameSchemas';
 
 const OBJECTION_RISK_TONE = { LOW: 'good', MEDIUM: 'warn', HIGH: 'bad' } as const;
@@ -16,9 +17,26 @@ export function EvidenceDetailModal({ evidenceId }: EvidenceDetailModalProps) {
   const activeCase = useGameStore((state) => state.activeCase);
   const motionRulings = useGameStore((state) => state.motionRulings);
   const closeModal = useUIStore((state) => state.closeModal);
+  const reveal = useRevealState();
 
   const evidence = activeCase?.evidence.find((e) => e.id === evidenceId);
   if (!activeCase || !evidence) return null;
+
+  // Defense in depth: an item that never entered the record has no detail
+  // view at all, and a merely disclosed item shows only counsel's summary.
+  const tier = reveal.evidence.get(evidence.id);
+  if (tier === undefined) return null;
+  if (tier === 'DISCLOSED') {
+    return (
+      <Modal title={evidence.name} onClose={closeModal}>
+        <Badge tone="neutral">{enumLabel(evidence.type)}</Badge>
+        <p className="mt-4 text-(--text)">{evidence.disclosureSummary}</p>
+        <p className="mt-4 text-sm text-(--text-muted)">
+          Disclosed in discovery — not yet presented to the court.
+        </p>
+      </Modal>
+    );
+  }
 
   const targetElement =
     evidence.targetElementId === null

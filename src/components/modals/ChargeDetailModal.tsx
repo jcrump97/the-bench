@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
 import { SentenceList } from '../common/SentenceList';
+import { useRevealState } from '../../hooks/useRevealState';
 import { enumLabel } from '../../lib/format';
 import type { CasePayload, MotionRuling } from '../../schemas/gameSchemas';
 
@@ -27,9 +28,12 @@ export function ChargeDetailModal({ chargeId }: ChargeDetailModalProps) {
   const activeCase = useGameStore((state) => state.activeCase);
   const motionRulings = useGameStore((state) => state.motionRulings);
   const closeModal = useUIStore((state) => state.closeModal);
+  const reveal = useRevealState();
 
   const charge = activeCase?.charges.find((c) => c.id === chargeId);
   if (!activeCase || !charge) return null;
+  // Defense in depth: a charge the clerk has not read has no detail view.
+  if (!reveal.charges.has(charge.id)) return null;
 
   return (
     <Modal title={charge.name} onClose={closeModal}>

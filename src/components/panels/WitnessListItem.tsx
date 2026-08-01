@@ -1,11 +1,12 @@
 import { useUIStore } from '../../store/useUIStore';
 import { Badge } from '../common/Badge';
 import { enumLabel } from '../../lib/format';
+import type { RevealTier } from '../../lib/reveal';
 import type { CasePayload } from '../../schemas/gameSchemas';
 
 type Witness = CasePayload['witnesses'][number];
 
-export function WitnessListItem({ witness }: { witness: Witness }) {
+export function WitnessListItem({ witness, tier }: { witness: Witness; tier: RevealTier }) {
   const openModal = useUIStore((state) => state.openModal);
 
   return (
@@ -19,7 +20,11 @@ export function WitnessListItem({ witness }: { witness: Witness }) {
           <span className="block truncate text-(--text)">{witness.name}</span>
           <span className="block text-sm text-(--text-muted)">{enumLabel(witness.role)}</span>
         </span>
-        <Badge tone={witness.role === 'VICTIM' ? 'bad' : 'neutral'}>{enumLabel(witness.bias)}</Badge>
+        {tier === 'PRESENTED' ? (
+          <Badge tone={witness.role === 'VICTIM' ? 'bad' : 'neutral'}>{enumLabel(witness.bias)}</Badge>
+        ) : (
+          <Badge tone="neutral">Disclosed</Badge>
+        )}
       </button>
     </li>
   );

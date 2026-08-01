@@ -1,13 +1,22 @@
 import { useUIStore } from '../../store/useUIStore';
 import { Badge } from '../common/Badge';
 import { enumLabel } from '../../lib/format';
+import type { RevealTier } from '../../lib/reveal';
 import type { CasePayload, MotionRuling } from '../../schemas/gameSchemas';
 
 type Evidence = CasePayload['evidence'][number];
 
 const RULING_TONE = { ADMITTED: 'good', EXCLUDED: 'bad' } as const;
 
-export function EvidenceListItem({ evidence, ruling }: { evidence: Evidence; ruling: MotionRuling['ruling'] | null }) {
+export function EvidenceListItem({
+  evidence,
+  tier,
+  ruling,
+}: {
+  evidence: Evidence;
+  tier: RevealTier;
+  ruling: MotionRuling['ruling'] | null;
+}) {
   const openModal = useUIStore((state) => state.openModal);
 
   return (
@@ -21,7 +30,11 @@ export function EvidenceListItem({ evidence, ruling }: { evidence: Evidence; rul
           <span className="block truncate text-(--text)">{evidence.name}</span>
           <span className="block text-sm text-(--text-muted)">{enumLabel(evidence.type)}</span>
         </span>
-        <Badge tone={ruling ? RULING_TONE[ruling] : 'warn'}>{ruling ? enumLabel(ruling) : 'Pending'}</Badge>
+        {tier === 'PRESENTED' ? (
+          <Badge tone={ruling ? RULING_TONE[ruling] : 'warn'}>{ruling ? enumLabel(ruling) : 'Pending'}</Badge>
+        ) : (
+          <Badge tone="neutral">Disclosed</Badge>
+        )}
       </button>
     </li>
   );

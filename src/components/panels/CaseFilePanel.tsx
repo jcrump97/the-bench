@@ -1,15 +1,23 @@
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
+import { useRevealState } from '../../hooks/useRevealState';
 import { ChargeListItem } from './ChargeListItem';
 import { enumLabel } from '../../lib/format';
 
+// The judge holds the case file, so the defendant and the scene are always
+// visible — but charges appear only as the clerk reads them, and the victim
+// shortcut only once that witness has been disclosed in discovery.
 export function CaseFilePanel() {
   const activeCase = useGameStore((state) => state.activeCase);
   const openModal = useUIStore((state) => state.openModal);
+  const reveal = useRevealState();
 
   if (!activeCase) return null;
 
-  const victim = activeCase.witnesses.find((w) => w.role === 'VICTIM');
+  const readCharges = activeCase.charges.filter((c) => reveal.charges.has(c.id));
+  const victim = activeCase.witnesses.find(
+    (w) => w.role === 'VICTIM' && reveal.witnesses.has(w.id),
+  );
 
   return (
     <nav aria-label="Case file" className="flex flex-col gap-5 p-4">
@@ -20,11 +28,15 @@ export function CaseFilePanel() {
 
       <div>
         <h2 className="text-sm font-medium text-(--text-muted)">Charges</h2>
-        <ul className="mt-1">
-          {activeCase.charges.map((charge) => (
-            <ChargeListItem key={charge.id} charge={charge} />
-          ))}
-        </ul>
+        {readCharges.length === 0 ? (
+          <p className="mt-1 text-sm text-(--text-muted)">No charges have been read.</p>
+        ) : (
+          <ul className="mt-1">
+            {readCharges.map((charge) => (
+              <ChargeListItem key={charge.id} charge={charge} />
+            ))}
+          </ul>
+        )}
       </div>
 
       <div>

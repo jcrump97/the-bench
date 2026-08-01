@@ -174,6 +174,13 @@ const browser = await chromium.launch(
   await page.getByRole('button', { name: 'Call the Case', exact: true }).click();
   await page.waitForSelector('text=Case Called');
 
+  // Progressive reveal: at the case call nothing has been disclosed yet.
+  check('Webb reveal: discovery panel empty at the case call',
+    (await page.locator('text=No discovery has been entered.').count()) === 1 &&
+    (await page.locator('text=No witnesses have been disclosed.').count()) === 1);
+  check('Webb reveal: no charges listed before the clerk reads them',
+    (await page.locator('text=No charges have been read.').count()) === 1);
+
   // Advance to the plea ruling and verify the Act 1 beats arrived in order:
   // call, charge, arraignment, statement of facts, 5 exhibit disclosures,
   // 3 witness disclosures (People, People, Defense), offer, response.
@@ -194,6 +201,12 @@ const browser = await chromium.launch(
     act1Kinds.filter((k) => k === 'DISCOVERY_EXHIBIT').length === 5 &&
     act1Kinds.indexOf('PLEA_OFFER') > act1Kinds.lastIndexOf('DISCOVERY_WITNESS'),
     JSON.stringify(act1Kinds));
+  // By plea-ruling time discovery has filled both panel sections.
+  const panelRows = await page.locator('nav[aria-label="Evidence and testimony"] li').count();
+  check('Webb reveal: discovery panel populated by the plea ruling (5 exhibits + 3 witnesses)',
+    panelRows === 8, `got ${panelRows}`);
+  check('Webb reveal: disclosed exhibits carry the Disclosed badge, not a ruling',
+    (await page.locator('nav[aria-label="Evidence and testimony"] >> text=Disclosed').count()) === 8);
   await page.screenshot({ path: path.join(SHOTS, '01-act1-plea-ruling.png'), fullPage: true });
 
   // Defendant dossier → OceanTraitsMeter
