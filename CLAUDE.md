@@ -20,6 +20,8 @@ Before marking any task complete, run `npm run lint`, `npm test`, and `npm run b
 
 UI changes are verified with the committed `run-the-bench` skill (`.claude/skills/run-the-bench/`) — a headless Playwright playthrough of the full demo docket (five cases, both branches, including per-charge verdicts). Playwright is deliberately not a project dependency; the skill installs it in a throwaway prefix.
 
+Neither `run-the-bench` (fixed demo data) nor `test:live` (schema-shape only) reads what the live Gemini pipeline actually *writes* the way a human would — that gap is exactly how a jury reference (this is always a bench trial; the judge alone decides) once slipped into generated dialogue unnoticed. The `qa-agent` skill (`.claude/skills/qa-agent/`) closes it: it drives a real BYOK-generated case with Playwright and, at every beat, asks a second, independent Gemini call — playing a technically literate human QA tester — to judge the content for realism/verbiage/UI issues and to choose its own actions, then writes a Markdown findings report. It spends real API quota twice over (case generation and per-beat judgment) and is manual-only, like `test:live` — never wire it into `npm test`/lint/build/CI.
+
 ## Vision
 
 **The Bench** is a single-page California criminal court judge simulation. The player is the judge. A generated case lands on their desk and unfolds **one beat at a time** — a click-to-advance courtroom where every statement is spoken into the record by a party (clerk, counsel, witness, press; never an omniscient narrator) and the action bar pauses at each decision:

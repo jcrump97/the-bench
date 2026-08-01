@@ -350,6 +350,20 @@ so they aren't lost.
       `EvidenceSchema` (EvidenceGen) and `CaseSchema` (finalizeCasePayload's
       repair round). Both fixes are also covered by new mocked regression
       tests; `npm run test:live` passes 6/6 against the real API.
+- [x] **`qa-agent` skill — Gemini-powered live QA playtester** (2026-08-01 —
+      DONE). Neither `run-the-bench` (fixed demo data) nor `test:live`
+      (schema-shape assertions only) reads what the live pipeline actually
+      *writes* the way a human would — that gap is exactly how a jury
+      reference (this is always a bench trial; the judge alone decides) once
+      slipped into generated dialogue unnoticed. `.claude/skills/qa-agent/`
+      drives a real BYOK-generated case with Playwright end-to-end and, at
+      every beat, asks a second, independent Gemini call — playing a
+      technically literate human QA tester — to judge the just-revealed
+      content for realism/verbiage/UI issues (screenshot included) and to
+      choose its own next action, then writes a Markdown findings report.
+      Manual-only, like `test:live`: spends real API quota on both case
+      generation and every judgment call, and must never run in
+      `npm test`/lint/build/CI.
 - [ ] `ResultGenerator` + `FinalResult` localStorage persistence. END_STATE
       currently renders only in-memory state via the ledger; nothing survives
       a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived
