@@ -248,6 +248,18 @@ const browser = await chromium.launch(
     (await page.locator('text=Ruling of the Court —').count()) === 5);
   check('Webb Act2: the courtroom reacted to at least one ruling',
     (await page.locator('li[data-entry-kind="MOTION_REACTION"]').count()) >= 1);
+  // The tape is played into the record between its offer and the
+  // suppression objection — 10 lines, voiced by the detective and Webb.
+  const playbackCount = await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]').count();
+  check('Webb Act2: interrogation tape played line by line', playbackCount === 10, `got ${playbackCount}`);
+  check('Webb Act2: playback led by the detective and the defendant by name',
+    (await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]', { hasText: 'Detective Ray Alvarez' }).count()) === 5 &&
+    (await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]', { hasText: 'Marcus Webb' }).count()) === 5);
+  const act2Kinds = await ledgerKinds(page);
+  check('Webb Act2: playback sits between the offer and the objection',
+    act2Kinds[act2Kinds.indexOf('INTERROGATION_PLAYBACK') - 1] === 'EXHIBIT_OFFERED' &&
+    act2Kinds[act2Kinds.lastIndexOf('INTERROGATION_PLAYBACK') + 1] === 'EXHIBIT_OBJECTION',
+    JSON.stringify(act2Kinds.slice(act2Kinds.indexOf('INTERROGATION_PLAYBACK') - 1, act2Kinds.lastIndexOf('INTERROGATION_PLAYBACK') + 2)));
   await page.screenshot({ path: path.join(SHOTS, '05-act2-ruling-mobile.png') });
 
   await callCharge(page, 'GUILTY', 'Webb verdict');
@@ -259,8 +271,8 @@ const browser = await chromium.launch(
     (await page.locator('text=Closing Argument — The People').count()) === 1);
   await finishCase(page, 'Webb trial');
   const speakers = await ledgerSpeakers(page);
-  check('Webb end(trial): witness beats attributed to WITNESS',
-    speakers.filter((s) => s === 'WITNESS').length === 6, JSON.stringify(speakers));
+  check('Webb end(trial): testimony (6) + detective playback (5) attributed to WITNESS',
+    speakers.filter((s) => s === 'WITNESS').length === 11, JSON.stringify(speakers));
   check('Webb end(trial): trial order + 5 rulings + verdict + sentence are THE COURT',
     speakers.filter((s) => s === 'COURT').length === 8, JSON.stringify(speakers));
   check('Webb end(trial): convicted aftermath variant shown',

@@ -46,9 +46,13 @@ const REACTION_KINDS = new Set<StatementEntryKind>([
 // concise stage direction instead. Every beat carrying a speakerName is one of
 // these kinds. TESTIMONY_DIRECT is handled separately (see nameLedCaption)
 // since its caption also carries which side called the witness.
+// INTERROGATION_PLAYBACK is name-led too — the tape's voices speak under
+// their own names, captioned as playback so they never read as live
+// testimony.
 const NAME_LED_CAPTIONS: Partial<Record<StatementEntryKind, string>> = {
   TESTIMONY_CROSS: 'Cross-examination',
   ALLOCUTION: 'Allocution',
+  INTERROGATION_PLAYBACK: 'From the recording',
 };
 
 // TESTIMONY_DIRECT's caption is the one name-led case that isn't a static

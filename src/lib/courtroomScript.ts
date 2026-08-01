@@ -40,6 +40,7 @@ export type StatementEntryKind =
   | 'PLEA_DECISION'
   | 'PLEA_REACTION'
   | 'EXHIBIT_OFFERED'
+  | 'INTERROGATION_PLAYBACK'
   | 'EXHIBIT_OBJECTION'
   | 'MOTION_RULING'
   | 'MOTION_REACTION'
@@ -387,6 +388,28 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         subject: { type: 'EVIDENCE', id: evidence.id },
         body: evidence.prosecutionArgument,
       });
+      // An INTERROGATION exhibit is played into the record line by line
+      // between the offer and the objection: the judge hears the contested
+      // exchange itself before ruling on the motion to suppress. Detective
+      // lines speak as WITNESS under the detective's name; the defendant's
+      // lines follow the ALLOCUTION attribution (DEFENSE, led by the
+      // defendant's own name).
+      const interrogation = evidence.interrogation;
+      if (interrogation !== undefined) {
+        interrogation.lines.forEach((line, index) => {
+          const isDetective = line.speaker === 'DETECTIVE';
+          pushStatement({
+            id: `playback-${evidence.id}-${index}`,
+            entryKind: 'INTERROGATION_PLAYBACK',
+            phase: 'ACT_2_MOTIONS',
+            speaker: isDetective ? 'WITNESS' : 'DEFENSE',
+            speakerName: isDetective ? interrogation.detectiveName : defendantName,
+            subject: { type: 'EVIDENCE', id: evidence.id },
+            heading: 'From the Recording',
+            body: line.text,
+          });
+        });
+      }
       pushStatement({
         id: `objection-${evidence.id}`,
         entryKind: 'EXHIBIT_OBJECTION',

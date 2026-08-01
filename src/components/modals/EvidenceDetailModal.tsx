@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
 import { enumLabel } from '../../lib/format';
+import type { CasePayload } from '../../schemas/gameSchemas';
 
 const OBJECTION_RISK_TONE = { LOW: 'good', MEDIUM: 'warn', HIGH: 'bad' } as const;
 const RULING_TONE = { ADMITTED: 'good', EXCLUDED: 'bad' } as const;
@@ -36,6 +37,37 @@ export function EvidenceDetailModal({ evidenceId }: EvidenceDetailModalProps) {
       <p className="mt-4 text-(--text-muted)">
         Target element: {targetElement ? targetElement.description : 'None'}
       </p>
+      {evidence.interrogation !== undefined && (
+        <InterrogationTranscript
+          interrogation={evidence.interrogation}
+          defendantName={`${activeCase.defendant.firstName} ${activeCase.defendant.lastName}`}
+        />
+      )}
     </Modal>
+  );
+}
+
+// The full interview transcript, rendered as the recording's own dialogue.
+function InterrogationTranscript({
+  interrogation,
+  defendantName,
+}: {
+  interrogation: NonNullable<CasePayload['evidence'][number]['interrogation']>;
+  defendantName: string;
+}) {
+  return (
+    <div>
+      <h3 className="mt-5 text-sm font-medium text-(--text-h)">Interview Transcript</h3>
+      <ul className="mt-2 space-y-2">
+        {interrogation.lines.map((line, index) => (
+          <li key={index}>
+            <p className="text-xs font-semibold text-(--text-muted)">
+              {line.speaker === 'DETECTIVE' ? interrogation.detectiveName : defendantName}
+            </p>
+            <p className="text-(--text)">{line.text}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

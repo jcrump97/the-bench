@@ -5,7 +5,7 @@ import {
   type ScriptBeat,
   type StatementBeat,
 } from '../courtroomScript';
-import { validCase } from './fixtures';
+import { validCase, validCaseWithInterrogation } from './fixtures';
 import { DEMO_CASES } from '../demoCases';
 import { computePleaPostureForCase } from '../pleaAssessment';
 import type { PleaPosture, MotionRuling, ChargeVerdict } from '../../schemas/gameSchemas';
@@ -451,6 +451,58 @@ describe('buildCourtroomScript — voiced judge lines', () => {
 
     const fallback = buildCourtroomScript(base);
     expect(statements(fallback).find((b) => b.entryKind === 'PLEA_DECISION')?.body).toBe('The deal is fair and final. Accepted.');
+  });
+});
+
+describe('buildCourtroomScript — interrogation playback', () => {
+  // validCaseWithInterrogation appends the tape as e4; rule the first three
+  // exhibits so the script reaches it.
+  const playbackInput: BuildCourtroomScriptInput = {
+    ...baseInput,
+    caseData: validCaseWithInterrogation,
+    pleaPosture: rejectedPosture,
+    currentPhase: 'ACT_2_MOTIONS',
+    motionRulings: [
+      { evidenceId: 'e1', ruling: 'ADMITTED' },
+      { evidenceId: 'e2', ruling: 'ADMITTED' },
+      { evidenceId: 'e3', ruling: 'ADMITTED' },
+    ],
+  };
+
+  it('plays the tape line by line between the offer and the suppression objection', () => {
+    const beats = buildCourtroomScript(playbackInput);
+    // The tail: offer, 4 playback lines, objection, pending ruling.
+    expect(kinds(beats).slice(-7)).toEqual([
+      'EXHIBIT_OFFERED',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'EXHIBIT_OBJECTION',
+      'DECISION:MOTION_RULING',
+    ]);
+  });
+
+  it('attributes detective lines to the detective and defendant lines to the defendant', () => {
+    const beats = buildCourtroomScript(playbackInput);
+    const playback = statements(beats).filter((b) => b.entryKind === 'INTERROGATION_PLAYBACK');
+    expect(playback.map((b) => b.speakerName)).toEqual([
+      'Sam Okafor', 'Jordan Vance', 'Sam Okafor', 'Jordan Vance',
+    ]);
+    expect(playback.map((b) => b.speaker)).toEqual(['WITNESS', 'DEFENSE', 'WITNESS', 'DEFENSE']);
+    // Every playback beat presents the tape exhibit.
+    expect(playback.every((b) => b.subject?.type === 'EVIDENCE' && b.subject.id === 'e4')).toBe(true);
+    // Bodies are the transcript, in order.
+    expect(playback[0]?.body).toBe('You understand the rights as I read them to you?');
+  });
+
+  it('emits no playback for cases without an interrogation exhibit', () => {
+    const beats = buildCourtroomScript({
+      ...baseInput,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_2_MOTIONS',
+    });
+    expect(kinds(beats)).not.toContain('INTERROGATION_PLAYBACK');
   });
 });
 
