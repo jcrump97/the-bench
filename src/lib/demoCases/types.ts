@@ -5,6 +5,7 @@ import {
   type PleaNarrative,
 } from '../../schemas/gameSchemas';
 import { computePleaPostureForCase } from '../pleaAssessment';
+import { deriveInterrogationProfile } from '../interrogation';
 
 // How the player's run of a case can end. The real Aftermath LLM call will be
 // conditioned on this same end-of-game state; demo bundles author one
@@ -104,6 +105,38 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
       `Demo case ${payload.caseId}: aftermath.PLEA_ACCEPTED must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
     );
   }
+  // Interrogation exhibits are echo-validated against the deterministic
+  // profile derived from this defendant's traits and priors: the authored
+  // transcript may only dramatize what deriveInterrogationProfile says
+  // happened in that room. (The schema already ties the block to the
+  // INTERROGATION type and forces a non-null defenseObjection.)
+  const tapes = payload.evidence.filter((e) => e.type === 'INTERROGATION');
+  if (tapes.length > 1) {
+    throw new Error(
+      `Demo case ${payload.caseId}: at most one INTERROGATION exhibit — a defendant sits for one custodial interview`
+    );
+  }
+  const tape = tapes[0]?.interrogation;
+  if (tape !== undefined) {
+    const profile = deriveInterrogationProfile(payload.defendant);
+    if (profile.outcome === 'INVOKED_COUNSEL') {
+      throw new Error(
+        `Demo case ${payload.caseId}: this defendant's derived interrogation profile is INVOKED_COUNSEL — no usable tape exists, so no INTERROGATION exhibit may be authored`
+      );
+    }
+    if (tape.outcome !== profile.outcome || tape.challengeGround !== profile.challengeGround) {
+      throw new Error(
+        `Demo case ${payload.caseId}: interrogation echo fields (${tape.outcome}/${tape.challengeGround}) must match the derived profile (${profile.outcome}/${profile.challengeGround})`
+      );
+    }
+    const investigator = payload.witnesses.find((w) => w.role === 'INVESTIGATOR');
+    if (investigator !== undefined && tape.detectiveName !== investigator.name) {
+      throw new Error(
+        `Demo case ${payload.caseId}: interrogation detectiveName "${tape.detectiveName}" must match the INVESTIGATOR witness "${investigator.name}"`
+      );
+    }
+  }
+
   const splitReachable = payload.charges.length > 1;
   if (splitReachable !== (raw.aftermath.SPLIT !== undefined)) {
     throw new Error(

@@ -4,7 +4,7 @@ import { defineDemoCase } from './types';
 // + Driving on a Suspended License (VC § 14601.1(a)). The docket's
 // multi-charge case: it exercises deriveSentencingExposure's cross-charge
 // aggregation (prison + jail + fine), verdicts entered one charge at a
-// time, and the SPLIT aftermath. Tuned MODERATE (score ~63) with
+// time, and the SPLIT aftermath. Tuned MODERATE (score ~61) with
 // a defendant built to accept: heavy priors (including a felony prison
 // term), high neuroticism, low openness — the anxious mirror of Reyes. The
 // texture: one count is a paper certainty, the other turns entirely on eight
@@ -188,6 +188,7 @@ const rawVaughnPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-hr-accident',
+      disclosureSummary: 'The People disclose the crime lab\'s report matching paint transfer on the victim\'s bicycle to the defendant\'s sedan, with a bumper fragment recovered at the scene.',
       prosecutionArgument: 'The People offer the paint transfer and the bumper fragment. The lab calls the fragment match "physical fit" — its highest confidence language. The defendant\'s sedan struck Mr. Pyle. The defense does not seriously contest it, and the exhibits close the question.',
       defenseObjection: null,
       rulingReactions: {
@@ -215,6 +216,7 @@ const rawVaughnPayload = {
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-hr-knowledge',
+      disclosureSummary: 'The People disclose an online repair-quote request opened from the defendant\'s phone on the morning after the collision.',
       prosecutionArgument: 'The People offer the repair-quote request from the defendant\'s own phone, 7:04 the next morning: front-right bumper, headlamp, photos attached, cause of damage — "hit a deer." There are no deer on Alder Avenue, Your Honor. It is a confession with antlers: she knew that night she had hit something, and by sunrise she was writing the cover story.',
       defenseObjection: 'Objection to the People\'s characterization. This form is exactly what a person types when she believes she hit something, not someone — no deletion, no cash repair across town, her own name and number on the request. People conscious of guilt hide damage. Teresa Vaughn photographed hers and asked for a quote before breakfast. The exhibit is the defense\'s case, and the People know it.',
       rulingReactions: {
@@ -242,6 +244,7 @@ const rawVaughnPayload = {
       relevanceScore: 5,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-hr-flee',
+      disclosureSummary: 'The People disclose audio from a residential doorbell camera near the intersection, covering the moment of the collision.',
       prosecutionArgument: 'The People offer the doorbell-camera audio: the impact, then eight seconds of engine idle, then acceleration. Eight seconds, Your Honor. That is a driver looking in her mirror at a man in the bike lane and deciding. The idle is the decision; the acceleration is the crime.',
       defenseObjection: 'Objection — this is a soundtrack being offered as an eyewitness. The camera faces away from the intersection; it heard everything and saw nothing. There is a four-way stop at Alder and 9th, and eight seconds of idle is called "stopping at it." The People want the court to convict on the noise a stop sign makes. Speculation on top of foundation problems, and the prejudice is the whole point of the offer.',
       rulingReactions: {
@@ -269,6 +272,7 @@ const rawVaughnPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-dsl-knowledge',
+      disclosureSummary: 'The People disclose the defendant\'s certified DMV driving record, including the suspension history and proof of mailed notice.',
       prosecutionArgument: 'The People offer the certified DMV record: suspended since 2021, two renewal denials, mailed notice to an address the defendant wrote on the forms herself — and a 2023 conviction for driving on this very suspension. Knowledge is not an inference here. It is a prior conviction.',
       defenseObjection: null,
       rulingReactions: {
@@ -296,6 +300,7 @@ const rawVaughnPayload = {
       relevanceScore: 5,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-dsl-drove',
+      disclosureSummary: 'The People disclose a single frame from a red-light camera two intersections north of the scene, time-stamped four minutes after the collision.',
       prosecutionArgument: 'The People offer the red-light camera still: the defendant\'s sedan, plate legible, two intersections north, four minutes after the collision. Her car, on that road, at that hour — and the only other person in it was eleven years old.',
       defenseObjection: 'Objection — the driver in this frame is a silhouette, and the People\'s argument for who it shows is "who else would it be." That is burden-shifting in a picture frame. The exhibit proves the car was on the road; it cannot put anyone behind the wheel, and offering it for that purpose invites exactly the inference the rules of evidence exist to police.',
       rulingReactions: {
@@ -315,10 +320,62 @@ const rawVaughnPayload = {
         { choice: 'EXCLUDED', lineText: 'The motion is granted; the intersection camera still is excluded.' },
       ],
     },
+    {
+      // [LLM-FILL: InterrogationGen] — the recorded interview. The structure
+      // is derived from Vaughn's traits by deriveInterrogationProfile —
+      // neuroticism 9 talks, and three priors' worth of learned caution
+      // doesn't stop her — and the transcript dramatizes exactly that: she
+      // admits feeling the impact and checking, while holding to the deer.
+      id: 'ev-interrogation',
+      name: 'Recorded custodial interview',
+      type: 'INTERROGATION',
+      description: 'Recording of Vaughn\'s mid-morning interview with Sgt. Kirby, hours after officers first knocked before dawn. She talks for half an hour — the deer, the streetlights, her son. The People read it as knowledge; the defense reads it as a frightened woman repeating what she believed.',
+      relevanceScore: 7,
+      objectionRisk: 'HIGH',
+      targetElementId: 'elem-hr-knowledge',
+      disclosureSummary: 'The People disclose a recorded interview of the defendant, conducted by Sgt. Kirby on the morning after the collision.',
+      prosecutionArgument: 'The People offer the defendant\'s recorded interview. Asked about the intersection, she said — her words — "I felt it, and I looked, and I told myself it was a deer." She looked, Your Honor. The tape is the eight seconds, narrated by the person who sat through them.',
+      defenseObjection: 'The defense moves to suppress. Officers knocked on a three-years-sober single mother\'s door before dawn, and by mid-morning she was in an interview room while her eleven-year-old waited at a neighbor\'s — and the sergeant told her, on the tape, that helping him "matters when people decide where Caleb sleeps." Every word she said after that sentence answers the threat, not the question. The statement is not voluntary, and the court should not hear it.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. "I needed it to be a deer" — the People will let that sentence do its own work.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection, Your Honor, and the jury will hear what the sergeant promised her first.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'The People note their exception. The court has excluded the only account of those eight seconds in the defendant\'s own voice.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. What was said in that room answered a threat, not a question.' },
+        ],
+      },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'She was advised, she signed, and she spoke. The sergeant\'s remark was ill-chosen, but on this record it does not overbear the will. The interview is admitted.' },
+        { choice: 'ADMITTED', lineText: 'The tape comes in — and counsel may play the sergeant\'s promise to the jury as loudly as the People play her answers. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'An officer tied this interview to where her child sleeps. Everything said after that sentence is the answer to a threat. The interview is suppressed.' },
+        { choice: 'EXCLUDED', lineText: 'Taken from her doorstep at dawn, her son at a neighbor\'s, a promise about custody on the tape — the totality is coercion. The motion is granted.' },
+      ],
+      interrogation: {
+        detectiveName: 'Sgt. Dale Kirby',
+        outcome: 'PARTIAL_ADMISSION',
+        challengeGround: 'VOLUNTARINESS',
+        lines: [
+          { speaker: 'DETECTIVE', text: 'You\'ve been advised of your rights and you signed the card. Tell me about last evening, Teresa. Alder and 9th.' },
+          { speaker: 'DEFENDANT', text: 'I was taking Caleb home. His father missed the exchange again, it was getting dark, and I know — I know I shouldn\'t have been driving. I have never pretended the license part.' },
+          { speaker: 'DETECTIVE', text: 'Tell me about the intersection.' },
+          { speaker: 'DEFENDANT', text: 'There was a — I felt something. A thump. It was almost dark, the streetlights weren\'t on, they are never on that week. I thought it was a deer. I told my sponsor that same night. A deer.' },
+          { speaker: 'DETECTIVE', text: 'You stopped. The engine sat for eight seconds. What were you looking at?' },
+          { speaker: 'DEFENDANT', text: 'I checked Caleb. I felt it, and I looked, and I told myself it was a deer. You check the seat next to you first — that\'s what you do. Then the mirror. It was dark. I couldn\'t see anything.' },
+          { speaker: 'DETECTIVE', text: 'A man was lying in the bike lane behind you, Teresa. Look — you help me this morning, and it matters when people decide where Caleb sleeps. So help me.' },
+          { speaker: 'DEFENDANT', text: 'If I had seen a person I would have stopped. You have to believe that. I\'m trying to help you. I am helping you.' },
+          { speaker: 'DETECTIVE', text: 'Then help me with the morning. The repair quote — 7:04, photos attached. "Hit a deer."' },
+          { speaker: 'DEFENDANT', text: 'Because that\'s what I believed. You write down what you believe. I looked, and I told myself it was a deer. I needed it to be a deer.' },
+        ],
+      },
+    },
   ],
-  // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
-  // assembly call with all four stage outputs in context.
-  summary: 'At 6:40 on an October evening, a sedan clipped Gordon Pyle in the Alder Avenue bike lane, idled for roughly eight seconds, and drove on. Pyle, 58, got a shattered pelvis and two surgeries. The car was Teresa Vaughn\'s — paint transfer and a fitted bumper fragment put that beyond argument — and her license has been suspended since a felony DUI in 2021, a fact she has already been convicted of ignoring once. At 7:04 the next morning her phone opened a repair-quote form: "hit a deer." Vaughn, 41 and three years sober, was driving her son home because her ex missed the custody exchange again. One count is paper: she drove, and she knew she couldn\'t. The other is those eight seconds of engine idle on a doorbell camera that saw nothing — the distance between a woman who hit a deer and a mother who looked in the mirror, saw a man in the bike lane, and chose the child in the passenger seat over the stranger on the ground.',
+  // [LLM-FILL: CasePayload] — the dry docket synopsis (case-file modal) and
+  // the People's spoken statement of the case. The synopsis is
+  // allegations-only; the narrative color lives in statementOfFacts.
+  summary: 'The People charge Teresa Vaughn, 41, with felony hit-and-run causing injury (Cal. Vehicle Code § 20001(a)) and misdemeanor driving on a suspended license (Cal. Vehicle Code § 14601.1(a)). The complaint alleges that at approximately 6:40 p.m. her sedan struck cyclist Gordon Pyle in the Alder Avenue bike lane, causing major injury, and that she failed to stop, identify herself, or render aid; and further that her driving privilege was suspended following a 2021 felony DUI conviction, with notice mailed and a 2023 conviction for the same offense. Vaughn has three prior convictions. The matter comes before the court for arraignment and plea.',
+  statementOfFacts: 'Your Honor, the People\'s statement of the case. At 6:40 on an October evening, the defendant\'s sedan struck Gordon Pyle in the Alder Avenue bike lane hard enough to shatter his pelvis, idled for roughly eight seconds, and drove on. The car is not in dispute — paint transfer and a fitted bumper fragment put it beyond argument. Her license has been suspended since a felony DUI in 2021, and she has already been convicted once of driving on that suspension. At 7:04 the next morning, her phone opened a body-shop quote form describing the damage as "hit a deer." The People will prove that she drove, that she could not lawfully drive, that she knew she had struck a person, and that she left him in the road.',
   // [LLM-FILL: CasePayload] — closing arguments, written by the final
   // assembly call once the evidence and witness stages are complete.
   closingArguments: {
@@ -331,8 +388,8 @@ const rawVaughnPayload = {
 // here the defense recommends taking the deal, and the offer reaches the
 // bench for judicial review.
 const rawVaughnPleaNarrative = {
-  prosecutionRationale: 'The license count is arithmetic — certified record, mailed notice, a prior for the identical offense. On the felony, I have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a jury will not forgive. What I don\'t have is a monster: a sober woman, a missed custody exchange, a kid in the car. The offer prices all of it — she pleads to both counts at a real discount, Mr. Pyle gets restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
-  defenseRationale: 'I can try the felony — the camera saw nothing, the deer is honest confusion, and June Castellanos\'s "breath or two" is a stop sign, not a getaway. But I cannot try the license count, and once a jury hears "suspended, again," the felony gets harder to win in the same room. Teresa has a prison prior; a trial loss means the full term and her son standing outside a locked gym for good this time. She wept when I explained the offer. Then she asked where to sign. I have advised the court she accepts.',
+  prosecutionRationale: 'Your Honor, the People\'s position on the agreement. The license count is arithmetic — certified record, mailed notice, a prior conviction for the identical offense. On the felony, the People have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a jury will not forgive. What the People do not have is a monster: a sober woman, a missed custody exchange, a child in the car. The offer prices all of it. She pleads to both counts at a real discount, Mr. Pyle receives restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
+  defenseRationale: 'Your Honor, Ms. Vaughn has authorized me to advise the court that she accepts the People\'s offer. The defense believes the felony is triable — the camera saw nothing, the deer is honest confusion, and "a breath or two" at a four-way stop is a stop sign, not a getaway — but the license count has no answer, and my client will not pretend otherwise. She has a prison prior; a loss at trial means the full term, and her son standing outside a locked gym for good this time. The agreement is hard, it is honest about what the paper proves, and she asks the court to accept it.',
   allocution: 'I\'ve gone over those eight seconds every night since, Your Honor, and I want to be honest with the court even where it doesn\'t help me: I don\'t know what I knew. I felt the hit and I told myself it was a deer, and I have asked myself every day whether I told myself that because it was almost dark, or because my son was in the seat next to me and I couldn\'t afford for it to be anything else. I know I shouldn\'t have been driving at all. I knew it that night. Mr. Pyle was on the ground and whatever I believed, he stayed there after I didn\'t. I\'m sorry in a way I don\'t have better words for. Whatever the court decides, I\'ll carry those eight seconds longer than any sentence.',
   pleaReactions: {
     ACCEPT: [

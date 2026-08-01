@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling, type Verdict } from '../../schemas/gameSchemas';
 import { assessProsecution, buildPleaPosture, computePleaPostureForCase, sentencingModifierFromRulings } from '../pleaAssessment';
 import { deriveSentencingExposure } from '../sentencingExposure';
+import { deriveInterrogationProfile } from '../interrogation';
 import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
 import { webbCase } from '../demoCases/webb';
@@ -48,6 +49,25 @@ describe('demo case registry', () => {
       const { posture } = computePleaPostureForCase(bundle.payload, bundle.pleaNarrative);
       expect(bundle.aftermath.PLEA_ACCEPTED !== undefined).toBe(posture.status === 'PENDING_JUDICIAL_REVIEW');
       expect(bundle.aftermath.SPLIT !== undefined).toBe(bundle.payload.charges.length > 1);
+    }
+  );
+
+  it.each(DEMO_CASES.map((b) => [b.id, b] as const))(
+    '%s interrogation exhibits (if any) echo the derived profile',
+    (_id, bundle) => {
+      const tapes = bundle.payload.evidence.filter((e) => e.type === 'INTERROGATION');
+      expect(tapes.length).toBeLessThanOrEqual(1);
+      for (const tapeExhibit of tapes) {
+        const profile = deriveInterrogationProfile(bundle.payload.defendant);
+        // A defendant who invoked counsel produced no usable tape.
+        expect(profile.outcome).not.toBe('INVOKED_COUNSEL');
+        if (profile.outcome !== 'INVOKED_COUNSEL') {
+          expect(tapeExhibit.interrogation?.outcome).toBe(profile.outcome);
+          expect(tapeExhibit.interrogation?.challengeGround).toBe(profile.challengeGround);
+        }
+        // The tape is always challenged.
+        expect(tapeExhibit.defenseObjection).not.toBeNull();
+      }
     }
   );
 });
@@ -105,8 +125,17 @@ describe('vaughnCase (People v. Teresa Vaughn)', () => {
   it('assessProsecution bands the case MODERATE with full element coverage across both charges', () => {
     const strength = assessProsecution(vaughnCase.payload);
     expect(strength.band).toBe('MODERATE');
-    expect(strength.score).toBe(63);
+    expect(strength.score).toBe(61);
     expect(strength.elementCoverage).toBe(1);
+  });
+
+  it('carries the interrogation tape its talker profile derives, taken by the INVESTIGATOR witness', () => {
+    expect(deriveInterrogationProfile(vaughnCase.payload.defendant)).toEqual({
+      outcome: 'PARTIAL_ADMISSION',
+      challengeGround: 'VOLUNTARINESS',
+    });
+    const tape = vaughnCase.payload.evidence.find((e) => e.type === 'INTERROGATION');
+    expect(tape?.interrogation?.detectiveName).toBe('Sgt. Dale Kirby');
   });
 
   it('computePleaPostureForCase yields PENDING_JUDICIAL_REVIEW from the anxious, prior-heavy profile', () => {
@@ -168,8 +197,19 @@ describe('webbCase (People v. Marcus Webb)', () => {
   it('assessProsecution bands the case MODERATE', () => {
     const strength = assessProsecution(webbCase.payload);
     expect(strength.band).toBe('MODERATE');
-    expect(strength.score).toBe(64);
+    expect(strength.score).toBe(61);
     expect(strength.elementCoverage).toBe(1);
+  });
+
+  it('carries the interrogation tape its talker profile derives (neuroticism 9 outranks four priors)', () => {
+    expect(deriveInterrogationProfile(webbCase.payload.defendant)).toEqual({
+      outcome: 'PARTIAL_ADMISSION',
+      challengeGround: 'VOLUNTARINESS',
+    });
+    const tape = webbCase.payload.evidence.find((e) => e.type === 'INTERROGATION');
+    expect(tape?.interrogation?.detectiveName).toBe('Detective Ray Alvarez');
+    // The transcript ends the way Detective Alvarez testifies it ended.
+    expect(tape?.interrogation?.lines.at(-1)).toEqual({ speaker: 'DEFENDANT', text: 'I want a lawyer.' });
   });
 
   it('buildPleaPosture with the MODERATE band offers PENDING_JUDICIAL_REVIEW', () => {

@@ -63,7 +63,7 @@ export function sentenceDayEquivalent(s: z.infer<typeof SentenceSchema>): number
   return null;
 }
 
-export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL']);
+export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL', 'INTERROGATION']);
 export const WitnessRoleEnum = z.enum(['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR']);
 export const BiasIndicatorEnum = z.enum(['PROSECUTION', 'DEFENSE', 'NEUTRAL']);
 
@@ -164,6 +164,30 @@ export const ChargeSchema = z.strictObject({
   addChoiceCoverageIssues(charge.verdictOptions, VerdictValueSchema.options, ctx);
 });
 
+// One line of a recorded custodial interview — the tape is played into the
+// record line by line when the exhibit is offered, so each line is a spoken
+// beat, not document prose.
+export const InterrogationLineSchema = z.strictObject({
+  speaker: z.enum(['DETECTIVE', 'DEFENDANT']),
+  text: z.string().min(1).max(400),
+});
+
+// The recorded custodial interview behind an INTERROGATION exhibit. The
+// structural facts — what the interview produced and how the defense attacks
+// it — are decided deterministically by deriveInterrogationProfile
+// (src/lib/interrogation.ts) from the defendant's OCEAN traits and priors;
+// `outcome` and `challengeGround` are echo fields the author (later, the
+// InterrogationGen pipeline stage) must declare to match, enforced by
+// defineDemoCase. INVOKED_COUNSEL is deliberately absent from the outcome
+// vocabulary: a defendant who lawyered up produced no usable tape, so no
+// INTERROGATION exhibit can exist for one.
+export const InterrogationSchema = z.strictObject({
+  detectiveName: z.string().min(1).max(101).describe("The interviewing detective — must match the case's INVESTIGATOR witness when one exists."),
+  outcome: z.enum(['FULL_CONFESSION', 'PARTIAL_ADMISSION', 'DENIAL']).describe("Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome."),
+  challengeGround: z.enum(['MIRANDA', 'VOLUNTARINESS']).describe("Echo of the derived profile: the ground on which the defense moves to suppress the tape."),
+  lines: z.array(InterrogationLineSchema).min(4).max(24),
+});
+
 export const WitnessSchema = z.strictObject({
   id: z.string().min(1).max(40),
   name: z.string().max(101).describe("Full fictional name. Do not include race or protected demographics."),
@@ -183,6 +207,11 @@ export const EvidenceSchema = z.strictObject({
   name: z.string().min(3).max(100),
   type: EvidenceTypeEnum,
   description: z.string().max(600).describe("A purely factual, objective description of the item."),
+  // Tier-1 discovery text: what counsel says about the item when disclosing
+  // it in Act 1, before anything is verified or presented. Brief and
+  // counsel-voiced — the full detail stays hidden until the exhibit is
+  // actually offered.
+  disclosureSummary: z.string().min(1).max(400).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
   relevanceScore: z.number().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
   objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
@@ -199,6 +228,9 @@ export const EvidenceSchema = z.strictObject({
   }),
   // The judge's selectable ruling lines for this exhibit.
   rulingOptions: z.array(judgeLineOption(EvidenceRulingSchema)).min(2).max(6),
+  // The recorded interview itself — present exactly when type is
+  // INTERROGATION (enforced below).
+  interrogation: InterrogationSchema.optional(),
 }).superRefine((ev, ctx) => {
   addChoiceCoverageIssues(ev.rulingOptions, EvidenceRulingSchema.options, ctx);
   // The objectionRisk score and the voiced objection must agree: a MEDIUM or
@@ -208,6 +240,21 @@ export const EvidenceSchema = z.strictObject({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: `Evidence ${ev.id} has ${ev.objectionRisk} objectionRisk but no defenseObjection — the defense only waives on LOW-risk exhibits`,
+    });
+  }
+  // An INTERROGATION exhibit is the tape and nothing else: the transcript
+  // block travels with the type, and the defense always moves against a
+  // custodial interview (the challengeGround names how).
+  if ((ev.type === 'INTERROGATION') !== (ev.interrogation !== undefined)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Evidence ${ev.id}: the interrogation block must be present exactly when type is INTERROGATION`,
+    });
+  }
+  if (ev.type === 'INTERROGATION' && ev.defenseObjection === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Evidence ${ev.id}: an INTERROGATION exhibit is always challenged — defenseObjection cannot be null`,
     });
   }
 });
@@ -284,8 +331,8 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
 // because WEAK/NO_OFFER cases never use it; the "required-when-offering"
 // constraint is enforced by buildPleaPosture's discriminated PleaPostureInput.
 export const PleaNarrativeSchema = z.strictObject({
-  prosecutionRationale: z.string().min(1).max(1000),
-  defenseRationale:     z.string().min(1).max(1000).optional(),
+  prosecutionRationale: z.string().min(1).max(1000).describe("The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation."),
+  defenseRationale:     z.string().min(1).max(1000).optional().describe("Defense counsel's plea position as spoken to the court on the record — never privileged advice to the client."),
   // The defendant's own statement to the court on the accepted-plea path,
   // spoken before sentencing. Only meaningful when an offer can reach the
   // bench (PENDING_JUDICIAL_REVIEW) — defineDemoCase enforces that pairing
@@ -318,7 +365,12 @@ export const CaseSchema = z.strictObject({
   witnesses: z.array(WitnessSchema).min(2),
   evidence: z.array(EvidenceSchema).min(3),
 
-  summary: z.string().max(1500),
+  summary: z.string().max(1500).describe("A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts."),
+
+  // The People's in-character statement of the case, spoken into the record
+  // at a dedicated Act 1 beat. Facts always come from a party — the clerk
+  // only calls the case and reads the charges.
+  statementOfFacts: z.string().min(1).max(1500).describe("The People's statement of the case as spoken to the court on the record, in character."),
 
   // Voiced closing arguments, delivered after testimony and before the
   // per-charge verdicts on the trial path.
@@ -472,3 +524,5 @@ export type EvidenceRuling      = z.infer<typeof EvidenceRulingSchema>;
 export type VerdictValue        = z.infer<typeof VerdictValueSchema>;
 export type ReactionLine        = z.infer<typeof ReactionLineSchema>;
 export type ReactionBeat        = z.infer<typeof ReactionBeatSchema>;
+export type InterrogationLine   = z.infer<typeof InterrogationLineSchema>;
+export type Interrogation       = z.infer<typeof InterrogationSchema>;

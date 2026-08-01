@@ -135,6 +135,7 @@ const rawReyesPayload = {
       relevanceScore: 9,
       objectionRisk: 'LOW',
       targetElementId: 'elem-act',
+      disclosureSummary: 'The People disclose fourteen seconds of exterior camera footage from the Golden Spur parking lot, authenticated and time-stamped, covering the incident.',
       prosecutionArgument: 'The People offer the exterior camera footage: fourteen seconds, high definition, authenticated and time-stamped. The court will see the defendant stationary at the exit, the victim walking toward him, one blow, and a man on the pavement who does not move again. It is the act itself, on film.',
       defenseObjection: null,
       rulingReactions: {
@@ -162,6 +163,7 @@ const rawReyesPayload = {
       relevanceScore: 8,
       objectionRisk: 'LOW',
       targetElementId: 'elem-gbi',
+      disclosureSummary: 'The People disclose the victim\'s certified emergency department records and CT imaging from the night of the incident.',
       prosecutionArgument: 'The People offer Mr. Merritt\'s certified emergency records and CT imaging: a depressed skull fracture, a subdural bleed, three days in intensive care. The defense will say "one punch," and these exhibits are the answer — this is what one punch from a trained fighter does when the pavement finishes it.',
       defenseObjection: null,
       rulingReactions: {
@@ -189,6 +191,7 @@ const rawReyesPayload = {
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-aware',
+      disclosureSummary: 'The People disclose text messages recovered from the defendant\'s phone, sent on the night of the incident.',
       prosecutionArgument: 'The People offer the defendant\'s own messages. Forty minutes after Mr. Merritt stopped moving, while he was in a scanner, the defendant typed: "caught him flush. he dropped." That is a fighter scoring a knockout — proof he knew exactly what his hands are and exactly what he had done with them.',
       defenseObjection: 'Objection — the People are offering three words shorn of every message around them. The same thread starts with "come get me" from his little sister and ends with him asking his coach what to do. Read whole, it is a scared twenty-six-year-old describing the worst second of his life to the closest thing he has to a father. Prejudice over probative value, Your Honor — unless it all comes in.',
       rulingReactions: {
@@ -216,6 +219,7 @@ const rawReyesPayload = {
       relevanceScore: 6,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-act',
+      disclosureSummary: 'The People disclose an eight-second interior hallway clip from the bar\'s camera, recorded roughly twenty minutes before the incident.',
       prosecutionArgument: 'The People offer the interior hallway clip — and we offer it against the defendant. It shows him receiving his sister\'s account of this confrontation twenty minutes before the parking lot: it is why a trained fighter was waiting under that floodlight instead of driving away. It proves motive and it proves he chose the encounter.',
       defenseObjection: 'The defense objects to the People\'s framing, not the footage — this clip is the first chapter of their own story and they\'re offering it as a footnote. A man braced over a cornered young woman, a bouncer stepping in: that is the context for everything the parking-lot camera missed. If it comes in, it comes in as what it is, not as "motive."',
       rulingReactions: {
@@ -236,9 +240,11 @@ const rawReyesPayload = {
       ],
     },
   ],
-  // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
-  // assembly call with all four stage outputs in context.
-  summary: 'Fourteen seconds of video show Dominic Reyes, 26, an amateur middleweight with no record of any kind, drop Kyle Merritt with one punch outside the Golden Spur. Merritt\'s head hit a painted curb; he spent three days in intensive care and his cognitive testing is still pending. The video does not show the twenty minutes before: Merritt following Reyes\'s sister to the restroom hallway, the bouncer stepping in, her text — "come get me" — and, per the sister, a shove from Merritt that the camera missed by four seconds. The People say a trained fighter waited under a floodlight and threw a blow he of all people knew could kill. Reyes says he came for his sister and defended himself against a bigger, drunker man. The tape, both sides agree, is devastating. They disagree about what it is devastating to.',
+  // [LLM-FILL: CasePayload] — the dry docket synopsis (case-file modal) and
+  // the People's spoken statement of the case. The synopsis is
+  // allegations-only; the narrative color lives in statementOfFacts.
+  summary: 'The People charge Dominic Reyes, 26, with one count of assault by means of force likely to produce great bodily injury (Cal. Penal Code § 245(a)(4)). The complaint alleges that in the parking lot of the Golden Spur bar Reyes struck Kyle Merritt once in the face, causing Merritt to fall and strike his head on a curb, resulting in a depressed skull fracture and subdural hemorrhage requiring a three-day intensive-care admission. Reyes is a competitive amateur boxer. He has no prior criminal record. The matter comes before the court for arraignment and plea.',
+  statementOfFacts: 'Your Honor, the People\'s statement of the case. Fourteen seconds of authenticated video show the defendant — an amateur middleweight — stationary under the floodlight outside the Golden Spur as Kyle Merritt walks toward him, and one blow that puts Mr. Merritt on the pavement. His head struck a painted curb. He spent three days in intensive care with a depressed skull fracture, and his cognitive testing is still pending. Forty minutes after the blow, the defendant\'s own phone sent the words "caught him flush. he dropped." The People will prove the act, the force, and that a trained fighter — of all people — knew what that force could do.',
   // [LLM-FILL: CasePayload] — closing arguments, written by the final
   // assembly call once the evidence and witness stages are complete.
   closingArguments: {
@@ -251,8 +257,8 @@ const rawReyesPayload = {
 // here the defense's is a rejection, voiced before the case ever reaches
 // the bench.
 const rawReyesPleaNarrative = {
-  prosecutionRationale: 'I have the punch in high definition, the fracture on film, and his own thumbs typing "caught him flush" while the victim was in a scanner. A trained fighter is charged with knowing what his hands are; that is the whole theory and the tape proves it twice. The offer reflects a case I do not expect to lose: he pleads to the count and takes the term — I strike the fine and spare his family the exhibits. I am not paying for the first twenty minutes. Whatever happened in that hallway, it did not follow Merritt into the parking lot with its fists up.',
-  defenseRationale: 'They\'ve offered him four years for pleading against four years for losing — that is not an offer, it is an invoice for skipping the trial. Dominic has never been arrested in his life. The bouncer — their kind of witness, neutral as they come — puts Merritt on top of Elena twenty minutes before the tape begins, and the tape itself starts four seconds too late, which I intend to make the most expensive four seconds in the county. He wants a jury. On these terms, so do I.',
+  prosecutionRationale: 'Your Honor, the People\'s position on the offer. The People have the punch in high definition, the fracture on film, and the defendant\'s own thumbs typing "caught him flush" while the victim was in a scanner. A trained fighter is charged with knowing what his hands are; that is the whole theory, and the tape proves it twice. The offer reflects a case the People do not expect to lose: he pleads to the count and takes the term, the People strike the fine, and his family is spared the exhibits. The People are not paying for the first twenty minutes. Whatever happened in that hallway, it did not follow Mr. Merritt into the parking lot with its fists up.',
+  defenseRationale: 'Your Honor, the defense declines the People\'s offer, and Mr. Reyes has asked me to say why on the record. They have offered him four years for pleading against four years for losing — that is not an offer, it is an invoice for skipping the trial. Dominic Reyes has never been arrested in his life. The bouncer — a neutral witness if ever there was one — puts Mr. Merritt over the defendant\'s sister twenty minutes before the tape begins, and the tape itself starts four seconds too late. The defense intends to try those four seconds. Mr. Reyes wants a jury. On these terms, so does his counsel.',
 };
 
 // [LLM-FILL: Aftermath] — CONVICTED and ACQUITTED only: the defense rejected

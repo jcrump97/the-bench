@@ -85,6 +85,7 @@ export const rawValidCase = {
       relevanceScore: 5,
       objectionRisk: 'LOW',
       targetElementId: 'el1',
+      disclosureSummary: 'The People disclose a latent fingerprint lifted from the rear door handle, pending confirmation.',
       prosecutionArgument: 'The People offer the latent print lifted from the rear door.',
       defenseObjection: null,
       rulingReactions: {
@@ -104,6 +105,7 @@ export const rawValidCase = {
       relevanceScore: 3,
       objectionRisk: 'MEDIUM',
       targetElementId: null,
+      disclosureSummary: 'The People disclose a still frame from the store\'s security camera, taken the night of the entry.',
       prosecutionArgument: 'The People offer the security camera still showing a figure at the door.',
       defenseObjection: 'Objection — the image is too degraded to identify anyone.',
       rulingReactions: {
@@ -123,6 +125,7 @@ export const rawValidCase = {
       relevanceScore: 2,
       objectionRisk: 'HIGH',
       targetElementId: null,
+      disclosureSummary: 'The People disclose a crowbar recovered near the scene; forensic connection is pending.',
       prosecutionArgument: 'The People offer the crowbar recovered a block from the scene.',
       defenseObjection: 'Objection — nothing connects this tool to the defendant.',
       rulingReactions: {
@@ -136,6 +139,7 @@ export const rawValidCase = {
     },
   ],
   summary: 'Defendant allegedly broke into a closed electronics store.',
+  statementOfFacts: 'Your Honor, the People will show that the defendant forced the rear door of the store after hours and entered intending to steal.',
   closingArguments: {
     prosecution: 'The print on the door is the defendant\'s. That is the case.',
     defense: 'A print proves presence at a public door, not entry and not intent.',
@@ -145,3 +149,45 @@ export const rawValidCase = {
 // Parsed + validated at module load. Throws here if the fixture ever drifts
 // out of schema, failing every dependent test loudly.
 export const validCase: CasePayload = CasePayloadSchema.parse(rawValidCase);
+
+// An INTERROGATION exhibit consistent with the fixture defendant: Jordan
+// Vance (all-MID traits, no priors) derives to DENIAL / MIRANDA, and the
+// detective matches the INVESTIGATOR witness w2 (Sam Okafor).
+export const rawInterrogationEvidence = {
+  id: 'e4',
+  name: 'Recorded custodial interview',
+  type: 'INTERROGATION',
+  description: 'Recording of the defendant\'s stationhouse interview the morning after the arrest.',
+  relevanceScore: 4,
+  objectionRisk: 'HIGH',
+  targetElementId: 'el2',
+  disclosureSummary: 'The People disclose a recorded interview of the defendant, conducted the morning after the arrest.',
+  prosecutionArgument: 'The People offer the recorded interview of the defendant.',
+  defenseObjection: 'The defense moves to suppress — the waiver was neither knowing nor voluntary.',
+  rulingReactions: {
+    ADMITTED: [{ speaker: 'DEFENSE', text: 'The defense renews its objection to the waiver for the record.' }],
+    EXCLUDED: [{ speaker: 'PROSECUTION', text: 'The People note their exception.' }],
+  },
+  rulingOptions: [
+    { choice: 'ADMITTED', lineText: 'The waiver stands and the tape comes in. Admitted.' },
+    { choice: 'EXCLUDED', lineText: 'The waiver does not survive scrutiny. The interview is suppressed.' },
+  ],
+  interrogation: {
+    detectiveName: 'Sam Okafor',
+    outcome: 'DENIAL',
+    challengeGround: 'MIRANDA',
+    lines: [
+      { speaker: 'DETECTIVE', text: 'You understand the rights as I read them to you?' },
+      { speaker: 'DEFENDANT', text: 'Sure. I have nothing to hide.' },
+      { speaker: 'DETECTIVE', text: 'Your prints are on the rear door handle.' },
+      { speaker: 'DEFENDANT', text: 'I have told you already. I was never inside that store.' },
+    ],
+  },
+};
+
+// The fixture case with the tape appended — used by the interrogation
+// playback script tests.
+export const validCaseWithInterrogation: CasePayload = CasePayloadSchema.parse({
+  ...rawValidCase,
+  evidence: [...rawValidCase.evidence, rawInterrogationEvidence],
+});

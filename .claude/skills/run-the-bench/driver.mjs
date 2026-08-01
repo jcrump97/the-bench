@@ -223,11 +223,12 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Webb plea ruling');
   await choiceButton(page, 'REJECT').click();
-  await ruleAllMotions(page, 4, 'Webb Act2', { excludeLast: true });
+  // 5 exhibits; excludeLast suppresses the interrogation tape.
+  await ruleAllMotions(page, 5, 'Webb Act2', { excludeLast: true });
   check('Webb Act2: LOW-risk exhibit drew the derived waiver line',
     (await page.locator('text=No objection from the defense.').count()) === 1);
   check('Webb Act2: rulings carry the structural outcome in the heading',
-    (await page.locator('text=Ruling of the Court —').count()) === 4);
+    (await page.locator('text=Ruling of the Court —').count()) === 5);
   check('Webb Act2: the courtroom reacted to at least one ruling',
     (await page.locator('li[data-entry-kind="MOTION_REACTION"]').count()) >= 1);
   await page.screenshot({ path: path.join(SHOTS, '05-act2-ruling-mobile.png') });
@@ -243,8 +244,8 @@ const browser = await chromium.launch(
   const speakers = await ledgerSpeakers(page);
   check('Webb end(trial): witness beats attributed to WITNESS',
     speakers.filter((s) => s === 'WITNESS').length === 6, JSON.stringify(speakers));
-  check('Webb end(trial): trial order + 4 rulings + verdict + sentence are THE COURT',
-    speakers.filter((s) => s === 'COURT').length === 7, JSON.stringify(speakers));
+  check('Webb end(trial): trial order + 5 rulings + verdict + sentence are THE COURT',
+    speakers.filter((s) => s === 'COURT').length === 8, JSON.stringify(speakers));
   check('Webb end(trial): convicted aftermath variant shown',
     (await page.locator('text=came back in under a day').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '06-endstate-trial-mobile.png'), fullPage: true });
@@ -318,7 +319,7 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Vaughn plea ruling');
   await choiceButton(page, 'REJECT').click();
-  await ruleAllMotions(page, 5, 'Vaughn Act2');
+  await ruleAllMotions(page, 6, 'Vaughn Act2');
 
   await callCharge(page, 'GUILTY', 'Vaughn count 1');
   check('Vaughn Act3: per-charge verdict counter reached count 2',
