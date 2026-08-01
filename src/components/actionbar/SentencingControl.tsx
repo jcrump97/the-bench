@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { usePleaPosture } from '../../hooks/usePleaPosture';
 import { useCaseSource } from '../../hooks/useCaseSource';
 import { sentencingModifierFromRulings } from '../../lib/pleaAssessment';
+import { describeDemeanor } from '../../lib/demeanorNotes';
 import { SentencePicker } from './SentencePicker';
 import { buildSentences, floorAmountFor } from '../../lib/sentenceBounds';
 import { deriveSentencingExposure } from '../../lib/sentencingExposure';
@@ -106,10 +107,16 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
           Admitted-evidence weight: {Math.round(sentencingModifierFromRulings(activeCase, motionRulings) * 100)}%
           of the prosecution&apos;s case
           &middot; Prior convictions: {defendant.pastConvictions.length}
-          &middot; Conscientiousness {defendant.oceanTraits.conscientiousness}/10, Neuroticism{' '}
-          {defendant.oceanTraits.neuroticism}/10
         </p>
       )}
+
+      {/* The traits themselves stay invisible (they drive behavior, not
+          display); the judge reads the probation officer's qualitative
+          account instead, on both sentencing paths. */}
+      <div>
+        <h3 className="text-sm font-medium text-(--text-h)">Probation Department — Demeanor Notes</h3>
+        <p className="mt-0.5 text-sm text-(--text-muted)">{describeDemeanor(defendant.oceanTraits)}</p>
+      </div>
 
       <SentencePicker
         maximums={exposure.maximumPenalties}

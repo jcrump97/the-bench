@@ -209,13 +209,14 @@ const browser = await chromium.launch(
     (await page.locator('nav[aria-label="Evidence and testimony"] >> text=Disclosed').count()) === 8);
   await page.screenshot({ path: path.join(SHOTS, '01-act1-plea-ruling.png'), fullPage: true });
 
-  // Defendant dossier → OceanTraitsMeter
+  // Defendant dossier — OCEAN stays invisible (traits drive behavior, never
+  // display; the judge reads demeanor notes at sentencing instead).
   await page.getByRole('button', { name: /Marcus Webb/ }).first().click();
-  await page.waitForSelector('text=Personality (OCEAN)');
-  check('Webb dossier: 5 meter bars render', (await page.locator('[role="meter"]').count()) === 5);
-  check('Webb dossier: neuroticism meter aria-valuenow=9',
-    (await page.locator('[role="meter"][aria-label="Neuroticism"]').getAttribute('aria-valuenow')) === '9');
-  await page.screenshot({ path: path.join(SHOTS, '02-dossier-meter.png') });
+  await page.waitForSelector('text=Past Convictions');
+  check('Webb dossier: OCEAN traits are not rendered',
+    (await page.locator('text=Personality (OCEAN)').count()) === 0 &&
+    (await page.locator('[role="meter"]').count()) === 0);
+  await page.screenshot({ path: path.join(SHOTS, '02-dossier.png') });
   await page.keyboard.press('Escape');
 
   // Charge modal → per-charge sentencing range
@@ -233,6 +234,11 @@ const browser = await chromium.launch(
     (await page.locator('li[data-entry-kind="ALLOCUTION"]', { hasText: 'Marcus Webb' }).count()) === 1);
   const seeded = Number(await page.locator('input[type="number"]').inputValue());
   check('Webb plea sentencing: seeded within statutory range', seeded >= 1 && seeded <= 3, `value=${seeded}`);
+  const sentencingText = await page.locator('main').innerText();
+  check('Webb sentencing: probation demeanor notes shown, raw trait digits gone',
+    sentencingText.includes('Probation Department — Demeanor Notes') &&
+    sentencingText.includes('Visibly anxious under questioning') &&
+    !sentencingText.includes('/10'));
   await page.getByRole('button', { name: 'Impose Sentence' }).click();
   await advanceTo(page, page.getByRole('button', { name: 'New Case' }), 'Webb plea case closed');
   const end = await ledgerSpeakers(page);
