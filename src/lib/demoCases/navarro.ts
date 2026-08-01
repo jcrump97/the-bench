@@ -180,7 +180,7 @@ const rawNavarroPayload = {
       rulingReactions: {
         ADMITTED: [
           { speaker: 'DEFENSE', text: 'The defense renews its objection for the record, Your Honor, and Ms. Okada will tell the court exactly whose paint that is.' },
-          { speaker: 'PROSECUTION', text: 'The People welcome that testimony, counsel. The jury can decide what the sketchbook was for.' },
+          { speaker: 'PROSECUTION', text: 'The People welcome that testimony, counsel. The court can decide what the sketchbook was for.' },
         ],
         EXCLUDED: [
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor. The design studies were the malice element.' },

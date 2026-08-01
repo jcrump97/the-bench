@@ -541,7 +541,7 @@ const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['evidence', 'witnesses'],
 };
 
-const EVIDENCE_GEN_SYSTEM = `You are generating the evidence exhibits and witnesses for a California criminal court simulation. Produce at least 3 evidence items and at least 2 witnesses. Each evidence item's targetElementId must reference one of the given valid element ids, or be null. Every id must be unique across evidence and witnesses.`;
+const EVIDENCE_GEN_SYSTEM = `You are generating the evidence exhibits and witnesses for a California criminal court simulation. Produce at least 3 evidence items and at least 2 witnesses. Each evidence item's targetElementId must reference one of the given valid element ids, or be null. Every id must be unique across evidence and witnesses. This is a bench trial: the judge alone rules on every objection and decides every verdict. There is no jury. Never write dialogue that refers to a jury, jurors, or "the jury" deciding or hearing anything — parties argue to the court.`;
 
 function buildEvidenceGenContents(
   charges: Charge[],
@@ -652,7 +652,7 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
   ],
 };
 
-const FINALIZE_SYSTEM = `You are assembling the final narrative fields of a California criminal case file: a case number, a dry allegations-only docket summary, the People's in-character statement of facts, and both sides' closing arguments. No editorializing in the summary; the statementOfFacts and closingArguments are voiced, in-character.`;
+const FINALIZE_SYSTEM = `You are assembling the final narrative fields of a California criminal case file: a case number, a dry allegations-only docket summary, the People's in-character statement of facts, and both sides' closing arguments. No editorializing in the summary; the statementOfFacts and closingArguments are voiced, in-character. This is a bench trial: the judge alone decides the verdict. There is no jury — closing arguments are addressed to the court, never to a jury.`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
   const base = `Charges: ${parts.charges.map((c) => c.name).join(', ')}. Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}. Environment: ${parts.environment.description}`;
@@ -768,7 +768,7 @@ const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   required: ['prosecutionRationale', 'defenseRationale', 'allocution', 'pleaReactions', 'pleaRulingOptions'],
 };
 
-const PLEA_NARRATIVE_SYSTEM = `You are writing the plea-negotiation narrative for a California criminal court simulation, spoken on the record by each party — never privileged strategy or internal deliberation.`;
+const PLEA_NARRATIVE_SYSTEM = `You are writing the plea-negotiation narrative for a California criminal court simulation, spoken on the record by each party — never privileged strategy or internal deliberation. This is a bench trial: if the case goes to trial, the judge alone hears it and decides the verdict. There is no jury — never write a party asking for, wanting, or referencing a jury trial.`;
 
 function buildPleaNarrativeContents(payload: CasePayload, feedback: string | undefined): string {
   const base = `Case: ${payload.charges.map((c) => c.name).join(', ')}. Defendant: ${payload.defendant.firstName} ${payload.defendant.lastName}.`;

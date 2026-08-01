@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+// The Bench is always a bench trial: the judge (the player) alone rules on
+// every objection and decides every verdict. There is no jury anywhere in the
+// state machine, so no party's in-character dialogue may reference one — a
+// live Gemini run once produced exactly that ("the jury is entitled to hear
+// it"), which a Zod string-length check can't catch on its own. Applied to
+// every voiced/narrative string field below; failing this sends the LLM
+// pipeline's retry-with-feedback loop the concrete correction instead of
+// silently letting anachronistic dialogue into the record.
+const JURY_PATTERN = /\bjur(?:y|ies|or|ors)\b/i;
+function noJury<T extends z.ZodString>(schema: T) {
+  return schema.refine((text) => !JURY_PATTERN.test(text), {
+    message: 'must not reference a jury or jurors — this is a bench trial; the judge alone rules and decides the verdict',
+  });
+}
+
 // ==========================================
 // 1. SECURITY PERIMETER
 // ==========================================
@@ -110,7 +125,7 @@ export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
 // rulings, so COURT is not a reaction speaker.
 export const ReactionLineSchema = z.strictObject({
   speaker: z.enum(['PROSECUTION', 'DEFENSE', 'CLERK']),
-  text: z.string().min(1).max(600),
+  text: noJury(z.string().min(1).max(600)),
 });
 
 // A short scripted exchange — one to four reaction lines played in order
@@ -123,7 +138,7 @@ export const ReactionBeatSchema = z.array(ReactionLineSchema).min(1).max(4);
 function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
   return z.strictObject({
     choice,
-    lineText: z.string().min(1).max(300),
+    lineText: noJury(z.string().min(1).max(300)),
   });
 }
 
@@ -193,13 +208,13 @@ export const WitnessSchema = z.strictObject({
   name: z.string().max(101).describe("Full fictional name. Do not include race or protected demographics."),
   role: WitnessRoleEnum,
   bias: BiasIndicatorEnum,
-  statement: z.string().max(1000).describe("A summary of their expected testimony."),
+  statement: noJury(z.string().max(1000)).describe("A summary of their expected testimony."),
   credibilityScore: z.number().min(1).max(10),
   // Voiced testimony beats for the trial phase. Which side conducts direct
   // (and which crosses) is derived from `bias` — PROSECUTION/NEUTRAL
   // witnesses are the People's, DEFENSE witnesses are the defense's.
-  directExamination: z.string().min(1).max(1200).describe("The witness's testimony on direct examination, first person, as spoken from the stand."),
-  crossExamination: z.string().min(1).max(1200).nullable().describe("The witness's testimony under cross-examination, first person; null when opposing counsel declines to cross."),
+  directExamination: noJury(z.string().min(1).max(1200)).describe("The witness's testimony on direct examination, first person, as spoken from the stand."),
+  crossExamination: noJury(z.string().min(1).max(1200)).nullable().describe("The witness's testimony under cross-examination, first person; null when opposing counsel declines to cross."),
 });
 
 export const EvidenceSchema = z.strictObject({
@@ -211,15 +226,15 @@ export const EvidenceSchema = z.strictObject({
   // it in Act 1, before anything is verified or presented. Brief and
   // counsel-voiced — the full detail stays hidden until the exhibit is
   // actually offered.
-  disclosureSummary: z.string().min(1).max(400).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
+  disclosureSummary: noJury(z.string().min(1).max(400)).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
   relevanceScore: z.number().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
   objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
   isAdmitted: z.boolean().optional().transform((): boolean => false).describe("Always initialized to false. Mutated by player action during the trial phase."),
   // Voiced motion-hearing beats: the prosecutor offers the exhibit, defense
   // counsel objects (or waives), and the judge rules on that exchange.
-  prosecutionArgument: z.string().min(1).max(600).describe("The prosecutor's in-character offer of this exhibit to the court."),
-  defenseObjection: z.string().min(1).max(600).nullable().describe("Defense counsel's in-character objection to this exhibit; null when the defense waives objection."),
+  prosecutionArgument: noJury(z.string().min(1).max(600)).describe("The prosecutor's in-character offer of this exhibit to the court."),
+  defenseObjection: noJury(z.string().min(1).max(600)).nullable().describe("Defense counsel's in-character objection to this exhibit; null when the defense waives objection."),
   // The courtroom's voiced reaction to each possible ruling on this exhibit,
   // spoken immediately after the ruling enters the record.
   rulingReactions: z.strictObject({
@@ -331,13 +346,13 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
 // because WEAK/NO_OFFER cases never use it; the "required-when-offering"
 // constraint is enforced by buildPleaPosture's discriminated PleaPostureInput.
 export const PleaNarrativeSchema = z.strictObject({
-  prosecutionRationale: z.string().min(1).max(1000).describe("The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation."),
-  defenseRationale:     z.string().min(1).max(1000).optional().describe("Defense counsel's plea position as spoken to the court on the record — never privileged advice to the client."),
+  prosecutionRationale: noJury(z.string().min(1).max(1000)).describe("The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation."),
+  defenseRationale:     noJury(z.string().min(1).max(1000)).optional().describe("Defense counsel's plea position as spoken to the court on the record — never privileged advice to the client."),
   // The defendant's own statement to the court on the accepted-plea path,
   // spoken before sentencing. Only meaningful when an offer can reach the
   // bench (PENDING_JUDICIAL_REVIEW) — defineDemoCase enforces that pairing
   // for authored cases, mirroring the defenseRationale convention above.
-  allocution:           z.string().min(1).max(800).optional(),
+  allocution:           noJury(z.string().min(1).max(800)).optional(),
   // The courtroom's voiced reaction to the judge's ruling on the negotiated
   // plea. Authored exactly when an offer reaches the bench — same pairing
   // rule as allocution, enforced by defineDemoCase.
@@ -365,18 +380,18 @@ export const CaseSchema = z.strictObject({
   witnesses: z.array(WitnessSchema).min(2),
   evidence: z.array(EvidenceSchema).min(3),
 
-  summary: z.string().max(1500).describe("A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts."),
+  summary: noJury(z.string().max(1500)).describe("A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts."),
 
   // The People's in-character statement of the case, spoken into the record
   // at a dedicated Act 1 beat. Facts always come from a party — the clerk
   // only calls the case and reads the charges.
-  statementOfFacts: z.string().min(1).max(1500).describe("The People's statement of the case as spoken to the court on the record, in character."),
+  statementOfFacts: noJury(z.string().min(1).max(1500)).describe("The People's statement of the case as spoken to the court on the record, in character."),
 
   // Voiced closing arguments, delivered after testimony and before the
   // per-charge verdicts on the trial path.
   closingArguments: z.strictObject({
-    prosecution: z.string().min(1).max(1200).describe("The People's closing argument, in character."),
-    defense: z.string().min(1).max(1200).describe("The defense's closing argument, in character."),
+    prosecution: noJury(z.string().min(1).max(1200)).describe("The People's closing argument, in character."),
+    defense: noJury(z.string().min(1).max(1200)).describe("The defense's closing argument, in character."),
   }),
 }).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
@@ -462,7 +477,7 @@ export const DefenseRiskSchema = z.strictObject({
 // The aftermath is LLM/demo-authored narrative that crosses a trust boundary
 // twice: hydrating game state after sentencing and persisting into
 // FinalResult. One schema guards both crossings.
-export const AftermathNarrativeSchema = z.string().min(1).max(4000);
+export const AftermathNarrativeSchema = noJury(z.string().min(1).max(4000));
 
 const finalResultBase = {
   schemaVersion:       z.literal(1),

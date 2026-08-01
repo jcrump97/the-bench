@@ -221,7 +221,7 @@ const rawVaughnPayload = {
       defenseObjection: 'Objection to the People\'s characterization. This form is exactly what a person types when she believes she hit something, not someone — no deletion, no cash repair across town, her own name and number on the request. People conscious of guilt hide damage. Teresa Vaughn photographed hers and asked for a quote before breakfast. The exhibit is the defense\'s case, and the People know it.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'DEFENSE', text: 'Then let the jury read the whole form, Your Honor — her own name, her own number, and "hit a deer."' },
+          { speaker: 'DEFENSE', text: 'Then let the court read the whole form, Your Honor — her own name, her own number, and "hit a deer."' },
           { speaker: 'PROSECUTION', text: 'The People are glad to have it in, counsel, deer and all.' },
         ],
         EXCLUDED: [
@@ -249,7 +249,7 @@ const rawVaughnPayload = {
       defenseObjection: 'Objection — this is a soundtrack being offered as an eyewitness. The camera faces away from the intersection; it heard everything and saw nothing. There is a four-way stop at Alder and 9th, and eight seconds of idle is called "stopping at it." The People want the court to convict on the noise a stop sign makes. Speculation on top of foundation problems, and the prejudice is the whole point of the offer.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Eight seconds is eight seconds, and the jury is entitled to hear them.' },
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Eight seconds is eight seconds, and the court is entitled to hear them.' },
           { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. A stop sign makes the same sound.' },
         ],
         EXCLUDED: [
@@ -259,7 +259,7 @@ const rawVaughnPayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'Eight seconds of idle before acceleration is relevant to the flight element, and its ambiguity goes to weight. Admitted.' },
-        { choice: 'ADMITTED', lineText: 'The jury may draw its own inference from what it hears. The audio is admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court may draw its own inference from what it hears. The audio is admitted.' },
         { choice: 'EXCLUDED', lineText: 'An audio recording of an intersection it cannot see cannot tell this court what the driver saw or decided. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'The foundation problems here are real, and the prejudice outweighs the value. The doorbell-camera audio is excluded.' },
       ],
@@ -316,7 +316,7 @@ const rawVaughnPayload = {
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'The still places the vehicle on the road that evening, and its limits go to weight. Admitted.' },
         { choice: 'ADMITTED', lineText: 'The plate and timestamp are relevant to the driving element. Admitted.' },
-        { choice: 'EXCLUDED', lineText: 'A silhouette proves the car moved, not who moved it, and the People\'s inference invites the jury to fill the gap. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'A silhouette proves the car moved, not who moved it, and the People\'s inference invites the court to fill the gap. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'The motion is granted; the intersection camera still is excluded.' },
       ],
     },
@@ -339,7 +339,7 @@ const rawVaughnPayload = {
       rulingReactions: {
         ADMITTED: [
           { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. "I needed it to be a deer" — the People will let that sentence do its own work.' },
-          { speaker: 'DEFENSE', text: 'The defense renews its objection, Your Honor, and the jury will hear what the sergeant promised her first.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection, Your Honor, and the court will hear what the sergeant promised her first.' },
         ],
         EXCLUDED: [
           { speaker: 'PROSECUTION', text: 'The People note their exception. The court has excluded the only account of those eight seconds in the defendant\'s own voice.' },
@@ -348,7 +348,7 @@ const rawVaughnPayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'She was advised, she signed, and she spoke. The sergeant\'s remark was ill-chosen, but on this record it does not overbear the will. The interview is admitted.' },
-        { choice: 'ADMITTED', lineText: 'The tape comes in — and counsel may play the sergeant\'s promise to the jury as loudly as the People play her answers. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The tape comes in — and counsel may play the sergeant\'s promise to the court as loudly as the People play her answers. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'An officer tied this interview to where her child sleeps. Everything said after that sentence is the answer to a threat. The interview is suppressed.' },
         { choice: 'EXCLUDED', lineText: 'Taken from her doorstep at dawn, her son at a neighbor\'s, a promise about custody on the tape — the totality is coercion. The motion is granted.' },
       ],
@@ -388,7 +388,7 @@ const rawVaughnPayload = {
 // here the defense recommends taking the deal, and the offer reaches the
 // bench for judicial review.
 const rawVaughnPleaNarrative = {
-  prosecutionRationale: 'Your Honor, the People\'s position on the agreement. The license count is arithmetic — certified record, mailed notice, a prior conviction for the identical offense. On the felony, the People have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a jury will not forgive. What the People do not have is a monster: a sober woman, a missed custody exchange, a child in the car. The offer prices all of it. She pleads to both counts at a real discount, Mr. Pyle receives restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
+  prosecutionRationale: 'Your Honor, the People\'s position on the agreement. The license count is arithmetic — certified record, mailed notice, a prior conviction for the identical offense. On the felony, the People have her car, her bumper in the road, her phone calling it a deer, and eight seconds of idle that a court will not forgive. What the People do not have is a monster: a sober woman, a missed custody exchange, a child in the car. The offer prices all of it. She pleads to both counts at a real discount, Mr. Pyle receives restitution and is spared testifying from a walker, and nobody pretends those eight seconds didn\'t happen.',
   defenseRationale: 'Your Honor, Ms. Vaughn has authorized me to advise the court that she accepts the People\'s offer. The defense believes the felony is triable — the camera saw nothing, the deer is honest confusion, and "a breath or two" at a four-way stop is a stop sign, not a getaway — but the license count has no answer, and my client will not pretend otherwise. She has a prison prior; a loss at trial means the full term, and her son standing outside a locked gym for good this time. The agreement is hard, it is honest about what the paper proves, and she asks the court to accept it.',
   allocution: 'I\'ve gone over those eight seconds every night since, Your Honor, and I want to be honest with the court even where it doesn\'t help me: I don\'t know what I knew. I felt the hit and I told myself it was a deer, and I have asked myself every day whether I told myself that because it was almost dark, or because my son was in the seat next to me and I couldn\'t afford for it to be anything else. I know I shouldn\'t have been driving at all. I knew it that night. Mr. Pyle was on the ground and whatever I believed, he stayed there after I didn\'t. I\'m sorry in a way I don\'t have better words for. Whatever the court decides, I\'ll carry those eight seconds longer than any sentence.',
   pleaReactions: {

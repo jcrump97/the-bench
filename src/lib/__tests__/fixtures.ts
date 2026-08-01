@@ -113,7 +113,7 @@ export const rawValidCase = {
         EXCLUDED: [{ speaker: 'PROSECUTION', text: 'The People note their exception.' }],
       },
       rulingOptions: [
-        { choice: 'ADMITTED', lineText: 'The jury can weigh a grainy image. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court can weigh a grainy image. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'Too degraded to identify anyone. Excluded.' },
       ],
     },

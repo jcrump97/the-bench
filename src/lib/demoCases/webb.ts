@@ -145,7 +145,7 @@ const rawWebbPayload = {
       statement: 'Webb\'s supervisor for four years. Will testify that he was the one who caught and reported two billing errors in the firm\'s own favor; that Ray Hollis knew Webb\'s record when he hired him and called it the best decision he\'d made; and that in the months before the transfers, Webb was sleeping in his car between custody exchanges and would not ask anyone for help.',
       credibilityScore: 6,
       directExamination: 'I supervised Marcus for four years. He\'s the one who caught two billing errors in our own favor and made us return the money — clients never would have known. Ray hired him knowing his record and used to call it the best decision he\'d made. Last winter I found out he was sleeping in his car some nights between custody exchanges. He never told anyone. He\'d have died before asking any of us for help. I wish to God he had.',
-      crossExamination: 'No, I didn\'t know about the transfers while they were happening. Yes, I trusted him completely — that\'s rather the point of what happened, isn\'t it. You can call my judgment into question all you like; I watched the man return money nobody knew was missing, twice. I\'m telling you what I saw for four years. The jury can weigh it however they need to.',
+      crossExamination: 'No, I didn\'t know about the transfers while they were happening. Yes, I trusted him completely — that\'s rather the point of what happened, isn\'t it. You can call my judgment into question all you like; I watched the man return money nobody knew was missing, twice. I\'m telling you what I saw for four years. The court can weigh it however it needs to.',
     },
   ],
   evidence: [
@@ -163,7 +163,7 @@ const rawWebbPayload = {
       rulingReactions: {
         ADMITTED: [
           { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People\'s case is the paper, and the paper is in.' },
-          { speaker: 'DEFENSE', text: 'Noted, Your Honor. Then the jury will also be hearing about every dollar that came back.' },
+          { speaker: 'DEFENSE', text: 'Noted, Your Honor. Then the court will also be hearing about every dollar that came back.' },
         ],
         EXCLUDED: [
           { speaker: 'PROSECUTION', text: 'Your Honor, the People\'s case just lost its spine. We would ask the court to note the People\'s objection for the record.' },
@@ -200,8 +200,8 @@ const rawWebbPayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'The defendant\'s own words about the money, in the period the money moved, are plainly probative. What they mean is for the finder of fact. Admitted.' },
-        { choice: 'ADMITTED', lineText: 'Ambiguity is an argument, counsel, not a bar. Both readings go to the jury. The emails are admitted.' },
-        { choice: 'EXCLUDED', lineText: 'These notes admit two readings, and the People offer them for exactly one. The risk the jury hears only that one is too high. Excluded.' },
+        { choice: 'ADMITTED', lineText: 'Ambiguity is an argument, counsel, not a bar. Both readings go to the weight of the evidence. The emails are admitted.' },
+        { choice: 'EXCLUDED', lineText: 'These notes admit two readings, and the People offer them for exactly one. The risk the court hears only that one is too high. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'A man\'s private ledger of his own intentions is not a confession. The motion is granted; the emails are excluded.' },
       ],
     },
@@ -246,7 +246,7 @@ const rawWebbPayload = {
       defenseObjection: 'Objection — foundation and completeness, Your Honor. This system was pulled by the landlord three weeks late, it had already overwritten part of the period, and nobody can account for every master keycard. Two windows out of eleven isn\'t corroboration; it\'s a gap wearing a timestamp, and the People want the court to hear the timestamp and forget the gap.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'DEFENSE', text: 'Then the jury will hear exactly how much of that footage no longer exists, Your Honor — hour by missing hour.' },
+          { speaker: 'DEFENSE', text: 'Then the court will hear exactly how much of that footage no longer exists, Your Honor — hour by missing hour.' },
           { speaker: 'PROSECUTION', text: 'And they will see who badged in for the hours that do, counsel.' },
         ],
         EXCLUDED: [
@@ -256,7 +256,7 @@ const rawWebbPayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'The gaps are real and counsel will no doubt make them sing, but what survived is relevant and its custody is explained. Admitted, for what it is worth.' },
-        { choice: 'ADMITTED', lineText: 'The jury is entitled to see who was in the building. The defects go to weight. The motion is denied.' },
+        { choice: 'ADMITTED', lineText: 'The court is entitled to see who was in the building. The defects go to weight. The motion is denied.' },
         { choice: 'EXCLUDED', lineText: 'An exhibit that cannot account for its own missing hours cannot corroborate anything. The motion is granted; the footage and logs are excluded.' },
         { choice: 'EXCLUDED', lineText: 'Three weeks late, partially overwritten, with master keycards unaccounted for — the court will not let a gap testify. Excluded.' },
       ],
@@ -281,16 +281,16 @@ const rawWebbPayload = {
       rulingReactions: {
         ADMITTED: [
           { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. "I knew better every time" — the People could not have put it better.' },
-          { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. The jury will also hear what the detective promised him just before he said it.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. The court will also hear what the detective promised him just before he said it.' },
         ],
         EXCLUDED: [
           { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor. The court has just excluded the defendant\'s intent in his own voice.' },
-          { speaker: 'DEFENSE', text: 'The defense thanks the court. A statement squeezed out of a man at four in the morning has no business before a jury.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. A statement squeezed out of a man at four in the morning has no business in this record.' },
         ],
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'The defendant was advised, signed the waiver, and spoke. Exhaustion and a late hour do not, on this record, overbear the will. The motion is denied; the interview is admitted.' },
-        { choice: 'ADMITTED', lineText: 'The court has listened to the tape. Pressure, yes — coercion, no. The jury may hear it, and hear the hour it was made. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court has listened to the tape. Pressure, yes — coercion, no. The court may weigh it, and weigh the hour it was made. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'Seven hours in a cell, a promise about his custody schedule, and no counsel in the room — the totality of the circumstances overbears the will. The interview is suppressed.' },
         { choice: 'EXCLUDED', lineText: 'When a detective ties a man\'s children to his answers, what follows is not voluntary. The motion is granted; the tape is excluded.' },
       ],

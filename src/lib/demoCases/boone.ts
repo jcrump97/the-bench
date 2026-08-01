@@ -115,7 +115,7 @@ const rawBoonePayload = {
       name: 'Tasha Boone',
       role: 'CHARACTER',
       bias: 'DEFENSE',
-      statement: 'Defendant\'s older sister. Will testify Curtis was asleep on her couch across town when the alarm company logged the door at 1:52 a.m., that he had been there most nights since losing his job, and that he does not own the sneakers the print came from. She is his sister, and the jury will be told to weigh that.',
+      statement: 'Defendant\'s older sister. Will testify Curtis was asleep on her couch across town when the alarm company logged the door at 1:52 a.m., that he had been there most nights since losing his job, and that he does not own the sneakers the print came from. She is his sister, and the court will be asked to weigh that.',
       credibilityScore: 6,
       directExamination: 'Curtis was on my couch. He\'d been on my couch most nights since Herrera let him go — he\'d watch TV with the sound off so he wouldn\'t wake my kids, and he was there when I went to bed and there when my alarm went off at six. The night they\'re talking about was no different. And those Meridian trainers everybody keeps holding up? My brother wears the same two pairs of work boots he\'s owned for three years. I do his laundry. I\'d know.',
       crossExamination: 'No, I didn\'t sit up and watch him sleep. I went to bed around midnight and my door was closed. Could he have left and come back without me hearing — I suppose a person could, but you\'re asking me to imagine it, and I\'m telling you what I know. Yes, he\'s my brother. That\'s not a reason to lie. It\'s the reason I know what shoes he owns.',
@@ -135,7 +135,7 @@ const rawBoonePayload = {
       defenseObjection: 'The defense moves to suppress, Your Honor. Look at the array: Mr. Boone\'s photo was pulled from QuickCoin\'s own staff page, and his is the only picture in the six where the man is wearing a QuickCoin uniform shirt. That is not an identification, it is a multiple-choice question with one answer in bold. Eleven seconds proves the suggestion worked, not that the memory was real.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Ms. Voss knew that face across a counter for two years — the jury is entitled to hear it.' },
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. Ms. Voss knew that face across a counter for two years — the court is entitled to hear it.' },
           { speaker: 'DEFENSE', text: 'The defense\'s objection stands for the record. We will be asking Ms. Voss about that uniform shirt at length.' },
         ],
         EXCLUDED: [
@@ -145,7 +145,7 @@ const rawBoonePayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'A two-year customer relationship is a legitimate basis for recognition, and the composition of the array goes to weight. The identification is admitted.' },
-        { choice: 'ADMITTED', lineText: 'The court has looked at the array and will let the jury look at it too, uniform shirt and all. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court has looked at the array and will weigh it as offered, uniform shirt and all. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'A six-pack where one photo alone shows the store\'s uniform is not an identification procedure; it is a suggestion dressed as one. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'The suggestiveness here is not a matter for cross-examination to cure. The motion to suppress is granted.' },
       ],
@@ -164,7 +164,7 @@ const rawBoonePayload = {
       rulingReactions: {
         ADMITTED: [
           { speaker: 'PROSECUTION', text: 'The People appreciate the ruling. It is a small piece, Your Honor, and we will not overstate it.' },
-          { speaker: 'DEFENSE', text: 'Noted. The jury will hear how many size-10 feet walk this county every day.' },
+          { speaker: 'DEFENSE', text: 'Noted. The court will hear how many size-10 feet walk this county every day.' },
         ],
         EXCLUDED: [
           { speaker: 'CLERK', text: 'The shoe print cast is withdrawn from the exhibit list.' },
@@ -172,7 +172,7 @@ const rawBoonePayload = {
         ],
       },
       rulingOptions: [
-        { choice: 'ADMITTED', lineText: 'A common shoe is still relevant, however modestly. The weight of the evidence is for the jury to decide. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'A common shoe is still relevant, however modestly. The weight of the evidence is for the court to decide. Admitted.' },
         { choice: 'ADMITTED', lineText: 'The court will let it in for whatever it is worth, and counsel is free to argue it is worth very little.' },
         { choice: 'EXCLUDED', lineText: 'A shoe worn by one man in eight tells this court nothing about which one. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'The probative value here does not clear the bar. The shoe print cast is excluded.' },
@@ -219,7 +219,7 @@ const rawBoonePayload = {
       defenseObjection: 'Objection, and I\'d ask the court to look at the map before ruling. The sector is three-quarters of a mile wide and it contains his sister\'s apartment — the couch he sleeps on every night. This exhibit proves Curtis Boone was at home. The People are offering evidence of the defense\'s own alibi and asking the court to read it backwards.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People will let the jury look at the same map counsel just described.' },
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The People will let the court look at the same map counsel just described.' },
           { speaker: 'DEFENSE', text: 'So will the defense — the same sector that puts him on the couch.' },
         ],
         EXCLUDED: [
@@ -229,7 +229,7 @@ const rawBoonePayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'A three-quarter-mile sector is imprecise, but imprecision goes to weight. The cell-site records are admitted.' },
-        { choice: 'ADMITTED', lineText: 'The jury may draw its own conclusions from a sector that includes both the scene and the alibi. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court may draw its own conclusions from a sector that includes both the scene and the alibi. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'A sector wide enough to include the defendant\'s own alibi location proves nothing about where he actually was. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'This exhibit is equally consistent with the defense\'s account as with the prosecution\'s. Excluded.' },
       ],
@@ -252,7 +252,7 @@ const rawBoonePayload = {
 // so there is no defenseRationale at all (PleaPostureInput and defineDemoCase
 // both enforce its absence on a NO_OFFER case).
 const rawBoonePleaNarrative = {
-  prosecutionRationale: 'Your Honor, the People decline to offer a disposition in this case. This office does not discount commercial burglary, and it will not start with a man accused of emptying a register he used to count. The defendant knew the blind spot, the witness knows the defendant, and his phone was in the sector. The People know what the defense will say about the array in due course, and are content to let twelve jurors hear "pretty sure" for themselves. If the case is as thin as counsel says, a jury can say so. The People are ready for trial.',
+  prosecutionRationale: 'Your Honor, the People decline to offer a disposition in this case. This office does not discount commercial burglary, and it will not start with a man accused of emptying a register he used to count. The defendant knew the blind spot, the witness knows the defendant, and his phone was in the sector. The People know what the defense will say about the array in due course, and are content to let the court hear "pretty sure" for itself. If the case is as thin as counsel says, the court can say so. The People are ready for trial.',
 };
 
 // [LLM-FILL: Aftermath] — CONVICTED and ACQUITTED only: with NO_OFFER the
@@ -260,9 +260,9 @@ const rawBoonePleaNarrative = {
 // variant that could never be shown.
 const booneAftermath = {
   CONVICTED:
-    'The Sentinel\'s courthouse reporter counted the evidence in one paragraph and the conviction in the next, and let the arithmetic sit there. Sam Herrera got his insurance payout and put the camera where the blind spot used to be. Marta Voss told the paper she had never wavered — "I know that face" — and declined to say anything about the sixty-three feet a defense paralegal had measured from the awning to the door, a number the jury heard twice and apparently forgave. Tasha Boone stopped talking to reporters after the verdict; her last comment was that her couch cushions apparently count for less than a rainy window. An appellate clinic took the file inside a month, flagging the uniform shirt in the photo array. The other three people who knew the blind spot were never asked where they were that night. In the county\'s eyes the case is closed; the cash box has still never turned up.',
+    'The Sentinel\'s courthouse reporter counted the evidence in one paragraph and the conviction in the next, and let the arithmetic sit there. Sam Herrera got his insurance payout and put the camera where the blind spot used to be. Marta Voss told the paper she had never wavered — "I know that face" — and declined to say anything about the sixty-three feet a defense paralegal had measured from the awning to the door, a number the court heard twice and apparently forgave. Tasha Boone stopped talking to reporters after the verdict; her last comment was that her couch cushions apparently count for less than a rainy window. An appellate clinic took the file inside a month, flagging the uniform shirt in the photo array. The other three people who knew the blind spot were never asked where they were that night. In the county\'s eyes the case is closed; the cash box has still never turned up.',
   ACQUITTED:
-    'It took the jury five hours, most of it — a juror later told the Sentinel — spent passing the array photos around the table. Not guilty, and Curtis Boone exhaled like a man surfacing. What the verdict did not give back: the job he had already lost, the two months of hearings, or any account of who did come through that door. Sam Herrera\'s insurer denied the claim pending an "unresolved loss event," and QuickCoin now closes at dark. Marta Voss stands by what she saw; she also stopped cashing her checks there. The detective\'s file stays open with no other names in it, which Boone\'s lawyer calls the quiet scandal of the whole affair: four people knew the blind spot, one got charged, and when the charge fell apart nobody went looking at the other three. Boone moved in with his sister for good. He sleeps on the couch.',
+    'The court took five hours before returning to the bench, most of it — a courtroom clerk later told the Sentinel — spent with the array photos spread across the desk. Not guilty, and Curtis Boone exhaled like a man surfacing. What the verdict did not give back: the job he had already lost, the two months of hearings, or any account of who did come through that door. Sam Herrera\'s insurer denied the claim pending an "unresolved loss event," and QuickCoin now closes at dark. Marta Voss stands by what she saw; she also stopped cashing her checks there. The detective\'s file stays open with no other names in it, which Boone\'s lawyer calls the quiet scandal of the whole affair: four people knew the blind spot, one got charged, and when the charge fell apart nobody went looking at the other three. Boone moved in with his sister for good. He sleeps on the couch.',
 };
 
 export const booneCase = defineDemoCase({

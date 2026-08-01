@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { CasePayloadSchema, ChargeSchema, EvidenceSchema, WitnessSchema, PleaNarrativeSchema } from '../gameSchemas';
+import {
+  CasePayloadSchema,
+  ChargeSchema,
+  EvidenceSchema,
+  WitnessSchema,
+  PleaNarrativeSchema,
+  ReactionLineSchema,
+  AftermathNarrativeSchema,
+} from '../gameSchemas';
 import { rawValidCase, rawInterrogationEvidence } from '../../lib/__tests__/fixtures';
 
 describe('ChargeSchema per-charge sentencing range', () => {
@@ -132,6 +140,65 @@ describe('EvidenceSchema interrogation exhibits', () => {
       interrogation: { ...rawInterrogationEvidence.interrogation, outcome: 'INVOKED_COUNSEL' },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// The Bench is always a bench trial: the judge alone rules and decides every
+// verdict, so no party's voiced dialogue may reference a jury. A live Gemini
+// run once produced "the jury is entitled to hear it" in a prosecutionArgument
+// field — a schema-shape check couldn't have caught that, only a content
+// check on the string itself.
+describe('noJury bench-trial guard', () => {
+  it('rejects a courtroom argument field that references a jury', () => {
+    const result = EvidenceSchema.safeParse({
+      ...rawValidCase.evidence[2],
+      prosecutionArgument: 'The People offer this exhibit, and the jury is entitled to hear it.',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a defenseObjection that references jurors', () => {
+    const result = EvidenceSchema.safeParse({
+      ...rawValidCase.evidence[2],
+      defenseObjection: 'Objection — the jurors should never hear this.',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a reaction line that references a jury', () => {
+    const result = ReactionLineSchema.safeParse({
+      speaker: 'PROSECUTION',
+      text: 'The jury can decide what to make of it.',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an aftermath narrative that references jurors', () => {
+    const result = AftermathNarrativeSchema.safeParse(
+      'The jurors deliberated for three hours before returning a verdict.',
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('is case-insensitive and catches "juror" and "jurys" typo-adjacent forms too', () => {
+    expect(ReactionLineSchema.safeParse({ speaker: 'DEFENSE', text: 'JURY.' }).success).toBe(false);
+    expect(ReactionLineSchema.safeParse({ speaker: 'DEFENSE', text: 'One juror agreed.' }).success).toBe(false);
+  });
+
+  it('does not false-positive on unrelated words containing the substring "jur"', () => {
+    const result = ReactionLineSchema.safeParse({
+      speaker: 'CLERK',
+      text: 'The court finds this an injury sufficient to satisfy the element.',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts ordinary bench-trial dialogue with no jury reference', () => {
+    const result = ReactionLineSchema.safeParse({
+      speaker: 'PROSECUTION',
+      text: 'The court can weigh it however it needs to.',
+    });
+    expect(result.success).toBe(true);
   });
 });
 

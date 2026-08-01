@@ -90,7 +90,7 @@ const rawReyesPayload = {
       name: 'Kyle Merritt Jr.',
       role: 'EYEWITNESS',
       bias: 'PROSECUTION',
-      statement: 'The victim\'s cousin, ten feet behind him at the exit. Will testify Reyes was waiting under the floodlight, said something none of them caught, and threw one punch — and that Kyle Sr. never raised a hand. Will concede he was inside during whatever happened by the restrooms, and that his uncle "runs his mouth when he drinks" — a phrase the defense intends to repeat until the jury can say it with him.',
+      statement: 'The victim\'s cousin, ten feet behind him at the exit. Will testify Reyes was waiting under the floodlight, said something none of them caught, and threw one punch — and that Kyle Sr. never raised a hand. Will concede he was inside during whatever happened by the restrooms, and that his uncle "runs his mouth when he drinks" — a phrase the defense intends to repeat until the court can say it with him.',
       credibilityScore: 7,
       directExamination: 'I was maybe ten feet behind my uncle coming out. Reyes was already there, under the floodlight, like he was waiting on us. He said something — I didn\'t catch it — and then it was one punch and Kyle was on the ground not moving. My uncle never raised a hand. I want that to be clear. He never got the chance to raise a hand.',
       crossExamination: 'I was inside when whatever happened by the restrooms happened, yeah. I didn\'t see any of that. And yes — I\'ve said it before, my uncle runs his mouth when he drinks. He\'d had a few. But running your mouth isn\'t a shove, and I was looking right at them, and I didn\'t see my uncle touch him.',
@@ -168,7 +168,7 @@ const rawReyesPayload = {
       defenseObjection: null,
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The jury should know exactly what that curb did.' },
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. The court should know exactly what that curb did.' },
           { speaker: 'DEFENSE', text: 'The defense does not dispute the injury, Your Honor — only whose fault it was.' },
         ],
         EXCLUDED: [
@@ -180,7 +180,7 @@ const rawReyesPayload = {
         { choice: 'ADMITTED', lineText: 'These are certified medical records going directly to the extent of the injury. Admitted.' },
         { choice: 'ADMITTED', lineText: 'No objection has been raised and none is warranted. The records and imaging are admitted.' },
         { choice: 'EXCLUDED', lineText: 'The court excludes this exhibit on its own initiative, finding its clinical detail more prejudicial than probative on the question before it. Excluded.' },
-        { choice: 'EXCLUDED', lineText: 'The imaging will not be shown to the jury. Excluded.' },
+        { choice: 'EXCLUDED', lineText: 'The imaging will not be shown to the court. Excluded.' },
       ],
     },
     {
@@ -196,8 +196,8 @@ const rawReyesPayload = {
       defenseObjection: 'Objection — the People are offering three words shorn of every message around them. The same thread starts with "come get me" from his little sister and ends with him asking his coach what to do. Read whole, it is a scared twenty-six-year-old describing the worst second of his life to the closest thing he has to a father. Prejudice over probative value, Your Honor — unless it all comes in.',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'DEFENSE', text: 'If the thread comes in, Your Honor, it comes in whole — the jury will read "come get me" as well as the rest.' },
-          { speaker: 'PROSECUTION', text: 'The People are content to let the jury read every word, counsel.' },
+          { speaker: 'DEFENSE', text: 'If the thread comes in, Your Honor, it comes in whole — the court will read "come get me" as well as the rest.' },
+          { speaker: 'PROSECUTION', text: 'The People are content to let the court read every word, counsel.' },
         ],
         EXCLUDED: [
           { speaker: 'CLERK', text: 'The text messages are withdrawn from the exhibit list.' },
@@ -224,8 +224,8 @@ const rawReyesPayload = {
       defenseObjection: 'The defense objects to the People\'s framing, not the footage — this clip is the first chapter of their own story and they\'re offering it as a footnote. A man braced over a cornered young woman, a bouncer stepping in: that is the context for everything the parking-lot camera missed. If it comes in, it comes in as what it is, not as "motive."',
       rulingReactions: {
         ADMITTED: [
-          { speaker: 'DEFENSE', text: 'Thank you, Your Honor. The jury will see exactly what happened in that hallway before it sees the parking lot.' },
-          { speaker: 'PROSECUTION', text: 'The People stand by the label, counsel — the jury can decide what to call it.' },
+          { speaker: 'DEFENSE', text: 'Thank you, Your Honor. The court will see exactly what happened in that hallway before it sees the parking lot.' },
+          { speaker: 'PROSECUTION', text: 'The People stand by the label, counsel — the court can decide what to call it.' },
         ],
         EXCLUDED: [
           { speaker: 'CLERK', text: 'The interior hallway clip is withdrawn from the exhibit list.' },
@@ -234,7 +234,7 @@ const rawReyesPayload = {
       },
       rulingOptions: [
         { choice: 'ADMITTED', lineText: 'The clip is admitted for what it shows, not for the label either side puts on it. Admitted.' },
-        { choice: 'ADMITTED', lineText: 'The jury is entitled to see the twenty minutes before the parking lot. Admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court is entitled to see the twenty minutes before the parking lot. Admitted.' },
         { choice: 'EXCLUDED', lineText: 'Offered as proof of motive on a foundation this thin, the clip is more prejudicial than probative. Excluded.' },
         { choice: 'EXCLUDED', lineText: 'The motion is granted; the interior hallway clip is excluded.' },
       ],
@@ -258,7 +258,7 @@ const rawReyesPayload = {
 // the bench.
 const rawReyesPleaNarrative = {
   prosecutionRationale: 'Your Honor, the People\'s position on the offer. The People have the punch in high definition, the fracture on film, and the defendant\'s own thumbs typing "caught him flush" while the victim was in a scanner. A trained fighter is charged with knowing what his hands are; that is the whole theory, and the tape proves it twice. The offer reflects a case the People do not expect to lose: he pleads to the count and takes the term, the People strike the fine, and his family is spared the exhibits. The People are not paying for the first twenty minutes. Whatever happened in that hallway, it did not follow Mr. Merritt into the parking lot with its fists up.',
-  defenseRationale: 'Your Honor, the defense declines the People\'s offer, and Mr. Reyes has asked me to say why on the record. They have offered him four years for pleading against four years for losing — that is not an offer, it is an invoice for skipping the trial. Dominic Reyes has never been arrested in his life. The bouncer — a neutral witness if ever there was one — puts Mr. Merritt over the defendant\'s sister twenty minutes before the tape begins, and the tape itself starts four seconds too late. The defense intends to try those four seconds. Mr. Reyes wants a jury. On these terms, so does his counsel.',
+  defenseRationale: 'Your Honor, the defense declines the People\'s offer, and Mr. Reyes has asked me to say why on the record. They have offered him four years for pleading against four years for losing — that is not an offer, it is an invoice for skipping the trial. Dominic Reyes has never been arrested in his life. The bouncer — a neutral witness if ever there was one — puts Mr. Merritt over the defendant\'s sister twenty minutes before the tape begins, and the tape itself starts four seconds too late. The defense intends to try those four seconds. Mr. Reyes wants a trial. On these terms, so does his counsel.',
 };
 
 // [LLM-FILL: Aftermath] — CONVICTED and ACQUITTED only: the defense rejected
@@ -268,7 +268,7 @@ const reyesAftermath = {
   CONVICTED:
     'The gym took Reyes\'s photo off the wall the week of the verdict — sponsors, the owner said, and did not finish the sentence. The Sentinel\'s coverage led with the medical exhibits, and the comment section relitigated the four missing seconds for a full weekend: one camp asking what kind of man waits under a floodlight, the other asking what kind of case starts its own tape mid-swing. Kyle Merritt walked into the sentencing on his own, which his family called a miracle and his neurologist called eleven months of work; the cognitive results, read into the record, were not all good news. Elena Reyes sat through every hearing and left the courthouse the last day without her brother, which was the photograph every paper ran. The Golden Spur repainted the curb, added a second camera — this one covering the whole lot — and quietly stopped booking fight nights on its TVs.',
   ACQUITTED:
-    'Self-defense, the jury said in effect, and the courtroom split into two families\' worth of noise. The Sentinel ran the fourteen seconds of tape one last time under the headline "The Four Seconds That Weren\'t There." Kyle Merritt, still in speech therapy, told the reporter through his son that a not-guilty verdict doesn\'t un-crack a skull; his family has retained civil counsel, where the burden of proof is lighter and the tape will play again. Elena Reyes said the only thing anyone remembers from the courthouse steps: "He came when I called. That\'s the whole story." The bouncer gave no interviews. Reyes withdrew from his June bout anyway — his manager called it "optics" — and the Golden Spur\'s insurer, unmoved by acquittals, required a second camera and a two-guard exit policy before renewing. The People\'s office issued a two-line statement noting that juries decide facts. It did not congratulate anyone.',
+    'Self-defense, the court found in effect, and the courtroom split into two families\' worth of noise. The Sentinel ran the fourteen seconds of tape one last time under the headline "The Four Seconds That Weren\'t There." Kyle Merritt, still in speech therapy, told the reporter through his son that a not-guilty verdict doesn\'t un-crack a skull; his family has retained civil counsel, where the burden of proof is lighter and the tape will play again. Elena Reyes said the only thing anyone remembers from the courthouse steps: "He came when I called. That\'s the whole story." The bouncer gave no interviews. Reyes withdrew from his June bout anyway — his manager called it "optics" — and the Golden Spur\'s insurer, unmoved by acquittals, required a second camera and a two-guard exit policy before renewing. The People\'s office issued a two-line statement noting that the court decides facts. It did not congratulate anyone.',
 };
 
 export const reyesCase = defineDemoCase({
