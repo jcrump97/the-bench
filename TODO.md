@@ -311,20 +311,45 @@ so they aren't lost.
       InterrogationGen → EvidenceGen → finalizeCasePayload). New
       `src/lib/llm/` module: `geminiClient.ts` (native-fetch wrapper, retry/
       backoff on 429/5xx), `modelSelection.ts` (runtime discovery of the
-      cheapest capable model via ListModels — flash-lite > flash > other,
-      excludes pro/ultra/embedding/vision — with a hardcoded fallback when
-      discovery fails), `stages.ts` (one function per stage, each backed by
-      a hand-written Gemini responseSchema and validated against the same
-      Zod schemas hand-authored demo cases cross; validation failures retry
-      with the Zod issues fed back as corrective feedback;
-      `finalizeCasePayload` runs a bounded repair round when the fully
-      assembled payload fails the cross-stage `CaseSchema` refinements), and
-      `gameService.ts` (`createGameService(apiKey): CaseSource`, model
-      discovery memoized once per session). `useCaseSource`/`WelcomeScreen`
-      wired live — a real Gemini key now plays a generated case through the
-      same seam as the demo docket; the Continue button is no longer
-      disabled. Fully fetch-mocked test suite (first `fetch`-mocking
-      pattern in the repo); no test hits the real Gemini API.
+      cheapest capable model via ListModels, ranked by tier — flash-lite >
+      flash > other — and, within a tier, by stability — a `-latest` alias >
+      a plain versioned name > a preview/dated-snapshot/pinned-numeric-build
+      name — with a hardcoded fallback when discovery fails entirely),
+      `stages.ts` (one function per stage, each backed by a hand-written
+      Gemini responseSchema and validated against the same Zod schemas
+      hand-authored demo cases cross; validation failures retry with the
+      Zod issues fed back as corrective feedback; `finalizeCasePayload` runs
+      a bounded repair round when the fully assembled payload fails the
+      cross-stage `CaseSchema` refinements), and `gameService.ts`
+      (`createGameService(apiKey): CaseSource`, model discovery memoized
+      once per session). `useCaseSource`/`WelcomeScreen` wired live — a real
+      Gemini key now plays a generated case through the same seam as the
+      demo docket; the Continue button is no longer disabled. Fully
+      fetch-mocked default test suite (first `fetch`-mocking pattern in the
+      repo); `npm test` never hits the real Gemini API.
+- [x] **Live Gemini test suite + two reliability fixes it found**
+      (2026-08-01 — DONE, follow-up to the bullet above).
+      `src/lib/llm/__tests__/live/` calls the real API (gated behind
+      `GEMINI_API_KEY`, read from a gitignored repo-root `.env` or the shell
+      env via `liveEnv.ts`; skips cleanly via `describe.skipIf` when no key
+      is available) through a separate `vitest.live.config.ts` and
+      `npm run test:live` — excluded from the default `npm test` run via
+      `vite.config.ts`'s `test.exclude` regardless of whether a `.env` key
+      is present, so it never costs money or flakes in the normal build
+      gate. Running it against the real API caught two gaps the mocked
+      suite couldn't: (1) `selectModel` had picked a retired pinned build
+      (`gemini-2.0-flash-lite-001`) that `ListModels` still listed as
+      `generateContent`-capable but that 404'd on actual use — fixed by the
+      tier+stability ranking described above, plus excluding specialist
+      non-text model families (`image`/`tts`/`robotics`/etc.) that happen to
+      contain "flash" in their name; (2) Gemini's structured-output mode
+      returns an explicit `null` for the optional `interrogation` field
+      instead of omitting it, which `EvidenceSchema` (optional, not
+      nullable) rejected on every ordinary evidence item — fixed with a
+      `z.preprocess` null→undefined normalization ahead of both
+      `EvidenceSchema` (EvidenceGen) and `CaseSchema` (finalizeCasePayload's
+      repair round). Both fixes are also covered by new mocked regression
+      tests; `npm run test:live` passes 6/6 against the real API.
 - [ ] `ResultGenerator` + `FinalResult` localStorage persistence. END_STATE
       currently renders only in-memory state via the ledger; nothing survives
       a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived

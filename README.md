@@ -81,6 +81,7 @@ flowchart LR
         CHAR[CharacterGen]
         INTG[InterrogationGen]
         EVID[EvidenceGen]
+        FIN["finalizeCasePayload (assembly + cross-stage repair)"]
     end
 
     subgraph Deterministic["Deterministic Derivations (no LLM)"]
@@ -112,7 +113,8 @@ flowchart LR
     CHAR -->|"OCEAN + Background"| INTG
     INTP -->|"Outcome + challenge ground (echo-validated)"| INTG
     INTG -->|"Interview transcript"| EVID
-    EVID -->|"Complete Case Payload + Plea Narrative (color only)"| PLEA
+    EVID -->|"Evidence + witnesses"| FIN
+    FIN -->|"Complete Case Payload + Plea Narrative (color only)"| PLEA
     DEM -->|"Demeanor notes (traits stay invisible)"| A3
     SCRIPT --> REVEAL
     REVEAL -->|"DISCLOSED / PRESENTED gating"| UI2["Panels + Detail Modals"]
@@ -136,7 +138,7 @@ Act 1 follows real procedure: the clerk performs only the call and the charges, 
 
 ## Status
 
-Foundation, UI layer, the beat-by-beat courtroom loop, and the courtroom-realism overhaul complete. Schemas, state machine, security vault, deterministic plea/sentencing/interrogation/demeanor derivations, and the full game shell (progressively revealed panels, tiered detail modals, transcript click-through) are implemented — and the game now plays as a living courtroom: arraignment and discovery precede the plea, the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually (recorded interrogations played line by line before the suppression fight), witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Five hardcoded demo cases — **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, split-verdict) — are playable end-to-end on every branch. `GameService` and the five-stage LLM generation pipeline are now implemented (`src/lib/llm/`) and wired to the BYOK path — a real Gemini key plays a generated case through the same seam as the demo docket. Next up: `ResultGenerator` with localStorage persistence.
+Foundation, UI layer, the beat-by-beat courtroom loop, and the courtroom-realism overhaul complete. Schemas, state machine, security vault, deterministic plea/sentencing/interrogation/demeanor derivations, and the full game shell (progressively revealed panels, tiered detail modals, transcript click-through) are implemented — and the game now plays as a living courtroom: arraignment and discovery precede the plea, the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually (recorded interrogations played line by line before the suppression fight), witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Five hardcoded demo cases — **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, split-verdict) — are playable end-to-end on every branch. `GameService` and the five-stage LLM generation pipeline are now implemented (`src/lib/llm/`) and wired to the BYOK path — a real Gemini key plays a generated case through the same seam as the demo docket. The default test suite mocks every Gemini call; a separate opt-in live suite (`npm run test:live`, gated behind a real API key) validates the whole pipeline against the actual API and has already caught and fixed two reliability gaps invisible to mocks — a retired model build ranked ahead of a stable alias, and a structured-output null/undefined mismatch on an optional field. Next up: `ResultGenerator` with localStorage persistence.
 
 ## License
 
