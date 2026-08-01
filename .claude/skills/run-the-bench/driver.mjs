@@ -209,6 +209,15 @@ const browser = await chromium.launch(
     (await page.locator('nav[aria-label="Evidence and testimony"] >> text=Disclosed').count()) === 8);
   await page.screenshot({ path: path.join(SHOTS, '01-act1-plea-ruling.png'), fullPage: true });
 
+  // Transcript click-through: with the evidence panel closed, clicking a
+  // discovery row opens the exhibit's Tier-1 detail modal and the panel.
+  await page.getByRole('button', { name: 'Toggle evidence panel' }).click();
+  await page.locator('li[data-entry-kind="DISCOVERY_EXHIBIT"] button').first().click();
+  await page.waitForSelector('text=Disclosed in discovery — not yet presented to the court.');
+  check('Webb click-through: discovery row opened the Tier-1 exhibit modal and the panel',
+    (await page.getByRole('button', { name: 'Toggle evidence panel' }).getAttribute('aria-pressed')) === 'true');
+  await page.keyboard.press('Escape');
+
   // Defendant dossier — OCEAN stays invisible (traits drive behavior, never
   // display; the judge reads demeanor notes at sentencing instead).
   await page.getByRole('button', { name: /Marcus Webb/ }).first().click();
