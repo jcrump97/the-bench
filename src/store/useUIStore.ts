@@ -18,6 +18,12 @@ interface UIState {
   // corrupt the record. Decisions still commit through the game store's
   // validated actions regardless of where the cursor sits.
   beatCursor: number;
+  // One-shot affordance teaching that the side panels collapse: the drawers
+  // peek and the toggle buttons pop the first time the courtroom mounts.
+  // In-memory only — once per session by construction, and nothing beyond
+  // FinalResult ever persists.
+  panelHintActive: boolean;
+  panelHintPlayed: boolean;
 
   toggleCasePanel: () => void;
   toggleEvidencePanel: () => void;
@@ -31,6 +37,9 @@ interface UIState {
   // thing the courtroom does.
   setBeatCursor: (cursor: number) => void;
   resetBeatCursor: () => void;
+  // Fires the hint (and marks it spent); ends when the animation finishes.
+  beginPanelHint: () => void;
+  endPanelHint: () => void;
 }
 
 // Both panels default open on desktop, closed on mobile and tablet. 1024px
@@ -50,6 +59,8 @@ export const useUIStore = create<UIState>((set) => ({
   evidencePanelOpen: isDesktop,
   activeModal: null,
   beatCursor: 0,
+  panelHintActive: false,
+  panelHintPlayed: false,
 
   toggleCasePanel: () => set((state) => ({ casePanelOpen: !state.casePanelOpen })),
   toggleEvidencePanel: () => set((state) => ({ evidencePanelOpen: !state.evidencePanelOpen })),
@@ -60,4 +71,6 @@ export const useUIStore = create<UIState>((set) => ({
   advanceBeat: () => set((state) => ({ beatCursor: state.beatCursor + 1 })),
   setBeatCursor: (cursor) => set((state) => ({ beatCursor: Math.max(state.beatCursor, cursor) })),
   resetBeatCursor: () => set({ beatCursor: 0 }),
+  beginPanelHint: () => set({ panelHintActive: true, panelHintPlayed: true }),
+  endPanelHint: () => set({ panelHintActive: false }),
 }));

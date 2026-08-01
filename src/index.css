@@ -122,4 +122,42 @@
   .beat-in {
     animation: beat-in 240ms ease-out;
   }
+
+  /* First-run panel hint: on phones/tablets the closed drawers peek out and
+     retreat; on desktop (panels open as static columns) only the toggle
+     buttons pop. Keyframe animations bypass the lg:transition-none on the
+     drawers — that utility only disables transitions. */
+  @keyframes drawer-peek-left {
+    0%, 100% { transform: translateX(-100%); }
+    35%, 65% { transform: translateX(calc(-100% + 2.5rem)); }
+  }
+
+  @keyframes drawer-peek-right {
+    0%, 100% { transform: translateX(100%); }
+    35%, 65% { transform: translateX(calc(100% - 2.5rem)); }
+  }
+
+  @keyframes toggle-pop {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(1.3); }
+  }
+
+  .panel-hint-left {
+    animation: drawer-peek-left 1.1s ease-in-out;
+  }
+
+  .panel-hint-right {
+    animation: drawer-peek-right 1.1s ease-in-out;
+  }
+
+  @media (min-width: 1024px) {
+    .panel-hint-left,
+    .panel-hint-right {
+      animation: none;
+    }
+  }
+
+  .panel-hint-toggle {
+    animation: toggle-pop 550ms ease-in-out 2;
+  }
 }
