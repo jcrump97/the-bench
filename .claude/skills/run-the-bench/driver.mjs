@@ -77,6 +77,11 @@ async function ledgerSpeakers(page) {
   return page.locator('li[data-speaker]').evaluateAll((els) => els.map((el) => el.dataset.speaker));
 }
 
+// The structural entry kind of each revealed beat, in record order.
+async function ledgerKinds(page) {
+  return page.locator('li[data-entry-kind]').evaluateAll((els) => els.map((el) => el.dataset.entryKind));
+}
+
 // The continue-flavored buttons a statement beat can present, in the order
 // they should win when more than one is on screen.
 const ADVANCE_BUTTONS = ['Call the Case', 'Proceed to Trial', 'Continue'];
@@ -169,14 +174,26 @@ const browser = await chromium.launch(
   await page.getByRole('button', { name: 'Call the Case', exact: true }).click();
   await page.waitForSelector('text=Case Called');
 
-  // Advance to the plea ruling and verify the Act 1 beats arrived in order.
+  // Advance to the plea ruling and verify the Act 1 beats arrived in order:
+  // call, charge, arraignment, statement of facts, 5 exhibit disclosures,
+  // 3 witness disclosures (People, People, Defense), offer, response.
   await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Webb plea ruling');
   const act1 = await ledgerSpeakers(page);
-  check('Webb Act1: beats are clerk, clerk (charge read), people, defense',
-    JSON.stringify(act1) === JSON.stringify(['CLERK', 'CLERK', 'PROSECUTION', 'DEFENSE']),
+  check('Webb Act1: call/charge/arraignment/facts/discovery/offer speaker order',
+    JSON.stringify(act1) === JSON.stringify([
+      'CLERK', 'CLERK', 'DEFENSE', 'PROSECUTION',
+      'PROSECUTION', 'PROSECUTION', 'PROSECUTION', 'PROSECUTION', 'PROSECUTION',
+      'PROSECUTION', 'PROSECUTION', 'DEFENSE',
+      'PROSECUTION', 'DEFENSE',
+    ]),
     JSON.stringify(act1));
   check('Webb Act1: charge read as Count 1',
     (await page.locator('text=Count 1: Grand Theft').count()) === 1);
+  const act1Kinds = await ledgerKinds(page);
+  check('Webb Act1: every exhibit disclosed before the offer lands',
+    act1Kinds.filter((k) => k === 'DISCOVERY_EXHIBIT').length === 5 &&
+    act1Kinds.indexOf('PLEA_OFFER') > act1Kinds.lastIndexOf('DISCOVERY_WITNESS'),
+    JSON.stringify(act1Kinds));
   await page.screenshot({ path: path.join(SHOTS, '01-act1-plea-ruling.png'), fullPage: true });
 
   // Defendant dossier → OceanTraitsMeter

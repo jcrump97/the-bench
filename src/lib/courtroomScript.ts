@@ -31,6 +31,10 @@ import { formatSentence, enumLabel } from './format';
 export type StatementEntryKind =
   | 'CASE_OPENED'
   | 'CHARGE_READ'
+  | 'ARRAIGNMENT_PLEA'
+  | 'STATEMENT_OF_FACTS'
+  | 'DISCOVERY_EXHIBIT'
+  | 'DISCOVERY_WITNESS'
   | 'PLEA_OFFER'
   | 'PLEA_DEFENSE_RESPONSE'
   | 'PLEA_DECISION'
@@ -54,6 +58,16 @@ export type StatementEntryKind =
 // voiced by an omniscient narrator.
 export type LedgerSpeaker = 'CLERK' | 'PROSECUTION' | 'DEFENSE' | 'WITNESS' | 'COURT' | 'PRESS';
 
+// The case-file item a beat presents, when it presents one. Stamped at
+// emission on discovery and presentation beats; downstream this one field
+// powers both the progressive reveal (what has the judge lawfully seen) and
+// the transcript's click-through to the item's detail view. Never stored —
+// like every beat property, it is a pure projection of validated state.
+export interface BeatSubject {
+  type: 'EVIDENCE' | 'WITNESS' | 'CHARGE';
+  id: string;
+}
+
 export interface StatementBeat {
   kind: 'STATEMENT';
   id: string;
@@ -69,6 +83,10 @@ export interface StatementBeat {
   // speaker leads with the witness's own name — it's the only place that
   // side is visible once the heading is demoted.
   calledByDefense?: boolean;
+  // The item this beat presents (an exhibit disclosed or offered, a witness
+  // disclosed or testifying, a charge read or called). Absent on beats that
+  // present nothing (reactions, closings, the aftermath).
+  subject?: BeatSubject;
   // Monotonic sequence index, NOT a wall-clock timestamp — the script is a
   // pure projection and must never call Date.now().
   order: number;
@@ -181,14 +199,20 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
     beats.push({ ...beat, kind: 'DECISION', order: beats.length });
   };
 
-  // ---- Act 1: the case is called and arraigned -----------------------------
+  // ---- Act 1: called, arraigned, the facts stated, discovery disclosed -----
+  // The clerk only performs procedure: the call and the charges. The facts
+  // of the case belong to the People (STATEMENT_OF_FACTS), and every item of
+  // evidence and every witness is disclosed by counsel — briefly and
+  // unverified — before any plea lands, so the judge rules knowing what
+  // discovery holds and nothing more.
+  const defendantName = `${caseData.defendant.firstName} ${caseData.defendant.lastName}`;
   pushStatement({
     id: 'case-opened',
     entryKind: 'CASE_OPENED',
     phase: 'ACT_1_INTAKE',
     speaker: 'CLERK',
     heading: 'Case Called',
-    body: caseData.summary,
+    body: `Calling case ${caseData.caseId}, the People of the State of California v. ${defendantName}.`,
   });
 
   for (const charge of caseData.charges) {
@@ -198,13 +222,59 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       phase: 'ACT_1_INTAKE',
       speaker: 'CLERK',
       heading: 'The Clerk Reads the Charge',
+      subject: { type: 'CHARGE', id: charge.id },
       body: `Count ${caseData.charges.indexOf(charge) + 1}: ${charge.name}, a ${enumLabel(charge.classification).toLowerCase()}.`,
+    });
+  }
+
+  pushStatement({
+    id: 'arraignment-plea',
+    entryKind: 'ARRAIGNMENT_PLEA',
+    phase: 'ACT_1_INTAKE',
+    speaker: 'DEFENSE',
+    heading: 'Arraignment',
+    body: `Your Honor, on behalf of ${defendantName}, the defense waives further reading of the complaint and advisement of rights, and enters a plea of not guilty to all counts.`,
+  });
+
+  pushStatement({
+    id: 'statement-of-facts',
+    entryKind: 'STATEMENT_OF_FACTS',
+    phase: 'ACT_1_INTAKE',
+    speaker: 'PROSECUTION',
+    heading: 'Statement of the Case',
+    body: caseData.statementOfFacts,
+  });
+
+  for (const evidence of caseData.evidence) {
+    pushStatement({
+      id: `discovery-${evidence.id}`,
+      entryKind: 'DISCOVERY_EXHIBIT',
+      phase: 'ACT_1_INTAKE',
+      speaker: 'PROSECUTION',
+      heading: `The People Disclose: ${evidence.name}`,
+      subject: { type: 'EVIDENCE', id: evidence.id },
+      body: evidence.disclosureSummary,
+    });
+  }
+
+  for (const witness of caseData.witnesses) {
+    // Disclosure follows the same side derivation as trial testimony: the
+    // People disclose their own and neutral witnesses, the defense its own.
+    const disclosedByDefense = witness.bias === 'DEFENSE';
+    pushStatement({
+      id: `discovery-witness-${witness.id}`,
+      entryKind: 'DISCOVERY_WITNESS',
+      phase: 'ACT_1_INTAKE',
+      speaker: disclosedByDefense ? 'DEFENSE' : 'PROSECUTION',
+      heading: `${disclosedByDefense ? 'The Defense Discloses' : 'The People Disclose'}: ${witness.name}`,
+      subject: { type: 'WITNESS', id: witness.id },
+      body: witness.statement,
     });
   }
 
   if (pleaPosture === null) {
     // No posture means no plea narrative was loaded — the script cannot
-    // proceed past arraignment. (Reachable only in tests; the store hydrates
+    // proceed past discovery. (Reachable only in tests; the store hydrates
     // case and narrative together.)
     return beats;
   }
@@ -314,6 +384,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         phase: 'ACT_2_MOTIONS',
         speaker: 'PROSECUTION',
         heading: `The People Offer: ${evidence.name}`,
+        subject: { type: 'EVIDENCE', id: evidence.id },
         body: evidence.prosecutionArgument,
       });
       pushStatement({
@@ -322,6 +393,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         phase: 'ACT_2_MOTIONS',
         speaker: 'DEFENSE',
         heading: evidence.defenseObjection === null ? 'No Objection' : 'Defense Objects',
+        subject: { type: 'EVIDENCE', id: evidence.id },
         body: evidence.defenseObjection ?? 'No objection from the defense.',
       });
 
@@ -339,6 +411,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'MOTION_RULING',
         phase: 'ACT_2_MOTIONS',
         speaker: 'COURT',
+        subject: { type: 'EVIDENCE', id: evidence.id },
         heading: `Ruling of the Court — ${evidence.name}: ${enumLabel(ruling.ruling)}`,
         body: spokenLine(spokenJudgeLines[`motion-${evidence.id}`], evidence.rulingOptions, ruling.ruling)
           ?? `${evidence.name}: ${enumLabel(ruling.ruling)}`,
@@ -367,6 +440,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         speaker: 'WITNESS',
         speakerName: witness.name,
         calledByDefense,
+        subject: { type: 'WITNESS', id: witness.id },
         heading: `${calledByDefense ? 'The Defense Calls' : 'The People Call'} ${witness.name}`,
         body: witness.directExamination,
       });
@@ -377,6 +451,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
           phase: 'ACT_3_VERDICT',
           speaker: 'WITNESS',
           speakerName: witness.name,
+          subject: { type: 'WITNESS', id: witness.id },
           heading: `Cross-Examination of ${witness.name}`,
           body: witness.crossExamination,
         });
@@ -415,6 +490,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'VERDICT',
         phase: 'ACT_3_VERDICT',
         speaker: 'COURT',
+        subject: { type: 'CHARGE', id: charge.id },
         heading: `Verdict of the Court — ${chargeVerdict.chargeName}: ${enumLabel(chargeVerdict.verdict)}`,
         body: spokenLine(spokenJudgeLines[`verdict-${charge.id}`], charge.verdictOptions, chargeVerdict.verdict)
           ?? `${chargeVerdict.chargeName} (${enumLabel(chargeVerdict.classification)}): ${enumLabel(chargeVerdict.verdict)}`,
