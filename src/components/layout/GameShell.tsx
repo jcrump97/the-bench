@@ -65,7 +65,7 @@ export function GameShell() {
           <div className="flex-1 overflow-y-auto p-4">
             <Ledger entries={visibleEntries} />
           </div>
-          <div className="shrink-0 border-t border-(--border) bg-(--bg-panel) p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div data-action-bar className="shrink-0 border-t border-(--border) bg-(--bg-panel) p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <ActionBar />
           </div>
         </main>
