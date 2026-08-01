@@ -304,10 +304,27 @@ so they aren't lost.
 
 ## Deferred MVP items (from plan §7)
 
-- [ ] `GameService` + the 4-stage LLM generation pipeline
-      (StatuteSelection → EnvironmentGen → CharacterGen → EvidenceGen).
-      The BYOK path is a dead end by design until this exists — WelcomeScreen
-      accepts a key but its Continue button is disabled.
+- [x] `GameService` + the five-stage LLM generation pipeline (2026-08-01 —
+      DONE; this bullet previously said "4-stage", omitting InterrogationGen
+      as its own stage — CLAUDE.md's diagram was always the correct count of
+      five: StatuteSelection → EnvironmentGen → CharacterGen →
+      InterrogationGen → EvidenceGen → finalizeCasePayload). New
+      `src/lib/llm/` module: `geminiClient.ts` (native-fetch wrapper, retry/
+      backoff on 429/5xx), `modelSelection.ts` (runtime discovery of the
+      cheapest capable model via ListModels — flash-lite > flash > other,
+      excludes pro/ultra/embedding/vision — with a hardcoded fallback when
+      discovery fails), `stages.ts` (one function per stage, each backed by
+      a hand-written Gemini responseSchema and validated against the same
+      Zod schemas hand-authored demo cases cross; validation failures retry
+      with the Zod issues fed back as corrective feedback;
+      `finalizeCasePayload` runs a bounded repair round when the fully
+      assembled payload fails the cross-stage `CaseSchema` refinements), and
+      `gameService.ts` (`createGameService(apiKey): CaseSource`, model
+      discovery memoized once per session). `useCaseSource`/`WelcomeScreen`
+      wired live — a real Gemini key now plays a generated case through the
+      same seam as the demo docket; the Continue button is no longer
+      disabled. Fully fetch-mocked test suite (first `fetch`-mocking
+      pattern in the repo); no test hits the real Gemini API.
 - [ ] `ResultGenerator` + `FinalResult` localStorage persistence. END_STATE
       currently renders only in-memory state via the ledger; nothing survives
       a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived

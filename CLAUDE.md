@@ -96,7 +96,7 @@ Single source of truth for all Zod schemas and their inferred TypeScript types. 
 5. **Environment & case payload** — `EnvironmentSchema`, `CaseSchema` / `CasePayloadSchema` (no `pleaPosture`; carries `statementOfFacts` — the People's spoken statement of the case, while `summary` is a dry allegations-only docket synopsis — and `closingArguments`); `PleaNarrativeSchema` carries the LLM's on-the-record plea rationale strings plus optional `allocution`, `pleaReactions`, and `pleaRulingOptions` (each authored exactly when the posture is `PENDING_JUDICIAL_REVIEW` — `defineDemoCase` enforces the pairings)
 6. **State machine** — `GamePhaseSchema`
 
-### Generation Pipeline (designed — implementation begins with Act 1)
+### Generation Pipeline (`src/lib/llm/` — implemented)
 
 Case generation flows through five sequential LLM calls via GameService, each scoped strictly and passing context forward:
 
@@ -105,6 +105,14 @@ StatuteSelection → EnvironmentGen → CharacterGen → InterrogationGen → Ev
 ```
 
 Each stage feeds its output as context into the next call. The pipeline produces a single validated `CasePayload` that hydrates the game state at Act 1 entry. The LLM's plea contribution is narrative-only, supplied via `PleaNarrativeSchema` (separate from `CaseSchema`); plea structure is computed deterministically by `buildPleaPosture`. **InterrogationGen** receives the deterministic profile from `deriveInterrogationProfile` (what the interview produced, on which ground the defense attacks it) and writes a transcript dramatizing exactly that structure, echoing `outcome`/`challengeGround` back for validation — an `INVOKED_COUNSEL` profile skips the stage (no usable tape exists).
+
+`src/lib/llm/` implements the pipeline behind `createGameService(apiKey): CaseSource`:
+- **`geminiClient.ts`** — native-`fetch` wrapper around Gemini's `generateContent`/`models` endpoints; retries on 429/5xx with capped exponential backoff, throws a typed `GeminiError` on exhaustion or 4xx.
+- **`modelSelection.ts`** — `selectModel(apiKey)` discovers the cheapest capable model at runtime via `ListModels` (`flash-lite` > `flash` > anything else; excludes `pro`/`ultra`/`embedding`/`vision`), falling back to a hardcoded candidate if discovery fails. No model name is hardcoded as "the" model — Gemini's lineup shifts over time, and this adapts without a code change. Memoized once per `GameService` session.
+- **`stages.ts`** — one function per pipeline stage, each pairing a hand-written Gemini `responseSchema` (shapes the output) with the *same* Zod schemas hand-authored demo cases cross (the real validation gate). A shared `generateValidated` helper retries a failed generation with the Zod issues fed back into the prompt as corrective feedback. `finalizeCasePayload` assembles the full case and, on a cross-stage refinement failure (id uniqueness, `targetElementId` references), runs one bounded repair round: the assembled JSON plus the flattened issues go back to Gemini for a full corrected payload.
+- **`gameService.ts`** — `createGameService(apiKey): CaseSource` orchestrates the stages in order, deriving `deriveInterrogationProfile` and `assessProsecution(...).band` deterministically between calls (never letting the LLM invent them) and calling `PleaNarrative` last.
+
+`useCaseSource` resolves a `GameService`-backed source for a vaulted non-demo API key; `WelcomeScreen`'s Continue button drives it through the same `generateCase`/`generateAftermath` seam the demo path uses. The entire test suite for `src/lib/llm/` stubs `fetch` — no test calls the real Gemini API.
 
 ## Resolved Design Decisions
 
@@ -126,5 +134,5 @@ Test coverage for all three lives in `src/lib/__tests__/` and `src/schemas/__tes
 - **No Redux or Context for global state.** Zustand only.
 - **No new dependencies without explicit approval.** The stack is locked: Vite, React 19, TypeScript strict, Zustand, Zod, Tailwind CSS v4, lucide-react.
 - **Commits use Conventional Commits:** `feat:`, `fix:`, `chore:`, `docs:` — one concern per commit.
-- `App.tsx` renders `AppShell`, the phase router. The full demo docket (five cases — a guided tutorial with bundle-side decision explainers plus the four originals — both plea and trial branches, including per-charge verdicts for the multi-charge case) is implemented; the BYOK/LLM path is stubbed until GameService exists.
+- `App.tsx` renders `AppShell`, the phase router. The full demo docket (five cases — a guided tutorial with bundle-side decision explainers plus the four originals — both plea and trial branches, including per-charge verdicts for the multi-charge case) is implemented; the BYOK/LLM path is implemented via `GameService` (`src/lib/llm/`) and wired live.
 - Vite base path is `/the-bench/` (required for GitHub Pages routing).
