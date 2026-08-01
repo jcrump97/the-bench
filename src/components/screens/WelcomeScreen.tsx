@@ -4,10 +4,13 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
 import { DEMO_CASES, type DemoCaseBundle } from '../../lib/demoCases';
 import { demoCaseSource } from '../../lib/caseSource';
+import { createGameService } from '../../lib/llm/gameService';
+import type { CaseSource } from '../../lib/caseSource';
 
 export function WelcomeScreen() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const setActiveCase = useGameStore((state) => state.setActiveCase);
   const setActivePleaNarrative = useGameStore((state) => state.setActivePleaNarrative);
@@ -18,12 +21,10 @@ export function WelcomeScreen() {
   const setVault = useSecurityStore((state) => state.setVault);
   const isAuthenticated = useSecurityStore((state) => state.isAuthenticated);
 
-  // [LLM-FILL: CasePayload + PleaNarrative] — on the BYOK path, a GameService-
-  // backed CaseSource produces the payload and plea narrative through this
-  // same async seam; the demo source stands in for it today. The store's Zod
-  // setters remain the validation boundary either way.
-  const handlePlayDemo = (bundle: DemoCaseBundle) => {
-    void demoCaseSource(bundle)
+  // Shared by both the demo bundles and a live BYOK generation — either way,
+  // the store's Zod setters are the validation boundary.
+  const startCase = (source: CaseSource) => {
+    void source
       .generateCase()
       .then(({ payload, pleaNarrative }) => {
         setActiveCase(payload);
@@ -31,7 +32,16 @@ export function WelcomeScreen() {
         resetBeatCursor();
         setPhase('ACT_1_INTAKE');
       })
-      .catch(() => setPhase('ERROR_STATE'));
+      .catch(() => setPhase('ERROR_STATE'))
+      .finally(() => setGenerating(false));
+  };
+
+  const handlePlayDemo = (bundle: DemoCaseBundle) => startCase(demoCaseSource(bundle));
+
+  const handlePlayGenerated = () => {
+    if (vault === null || vault.isDemo || generating) return;
+    setGenerating(true);
+    startCase(createGameService(vault.apiKey));
   };
 
   const handleSubmitKey = (event: FormEvent) => {
@@ -90,11 +100,11 @@ export function WelcomeScreen() {
             <p className="text-(--status-admitted)">Key accepted.</p>
             <button
               type="button"
-              disabled
-              title="Case generation coming soon"
-              className="min-h-11 w-full cursor-not-allowed rounded-md border border-(--border-strong) px-4 py-2 text-(--text-muted)"
+              disabled={generating}
+              onClick={handlePlayGenerated}
+              className="min-h-11 w-full rounded-md border border-(--border-strong) px-4 py-2 text-(--text-h) hover:bg-(--bg-elevated) disabled:cursor-not-allowed disabled:text-(--text-muted)"
             >
-              Continue — Case generation coming soon
+              {generating ? 'Generating your case…' : 'Continue'}
             </button>
           </div>
         ) : (
