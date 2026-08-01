@@ -500,10 +500,37 @@ function dropNullInterrogation(value: unknown): unknown {
   });
 }
 
-const EvidenceGenSchema = z.object({
-  evidence: z.preprocess(dropNullInterrogation, z.array(EvidenceSchema).min(3)),
-  witnesses: z.array(WitnessSchema).min(2),
-});
+// Prompt text alone doesn't guarantee the model actually includes (or
+// omits) the INTERROGATION exhibit as instructed — a schema-valid response
+// with zero INTERROGATION items is easy to produce (evidence.length >= 3 is
+// satisfied by ordinary exhibits alone), and courtroomScript would then
+// silently skip the tape playback with no error, even though the derived
+// profile said an interview transcript exists. Enforcing presence/absence
+// here feeds a retry, the same way any other validation failure does,
+// instead of letting the mismatch through unnoticed.
+function buildEvidenceGenSchema(interrogationRequired: boolean) {
+  return z
+    .object({
+      evidence: z.preprocess(dropNullInterrogation, z.array(EvidenceSchema).min(3)),
+      witnesses: z.array(WitnessSchema).min(2),
+    })
+    .superRefine((data, ctx) => {
+      const hasInterrogation = data.evidence.some((item) => item.type === 'INTERROGATION');
+      if (interrogationRequired && !hasInterrogation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'evidence must include exactly one item with type "INTERROGATION" dramatizing the given interrogation transcript, but none was found',
+        });
+      }
+      if (!interrogationRequired && hasInterrogation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'evidence must not include any item with type "INTERROGATION" — no usable tape exists for this defendant',
+        });
+      }
+    });
+}
 
 const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
@@ -550,7 +577,7 @@ export async function runEvidenceGen(
     EVIDENCE_GEN_SYSTEM,
     (feedback) => buildEvidenceGenContents(charges, environment, defendant, interrogation, feedback),
     EVIDENCE_GEN_GEMINI_SCHEMA,
-    EvidenceGenSchema,
+    buildEvidenceGenSchema(interrogation !== null),
   );
 
   // Force the echo fields on the interrogation exhibit (if any) to match the

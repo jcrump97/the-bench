@@ -154,6 +154,35 @@ describe('runEvidenceGen', () => {
     expect(tape?.interrogation?.outcome).toBe('DENIAL');
     expect(tape?.interrogation?.challengeGround).toBe('MIRANDA');
   });
+
+  it('retries when an interrogation is required but the response omits any INTERROGATION exhibit', async () => {
+    const requiredInterrogation = rawInterrogationEvidence.interrogation as {
+      detectiveName: string;
+      outcome: 'DENIAL';
+      challengeGround: 'MIRANDA';
+      lines: { speaker: 'DETECTIVE' | 'DEFENDANT'; text: string }[];
+    };
+
+    mockCallsWith(
+      JSON.stringify({ evidence, witnesses }),
+      JSON.stringify({ evidence: [...evidence, rawInterrogationEvidence], witnesses }),
+    );
+
+    const result = await runEvidenceGen(API_KEY, MODEL, [charge], environment, defendant, requiredInterrogation);
+    expect(result.evidence.some((item) => item.type === 'INTERROGATION')).toBe(true);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries when no interrogation is required but the response includes one anyway', async () => {
+    mockCallsWith(
+      JSON.stringify({ evidence: [...evidence, rawInterrogationEvidence], witnesses }),
+      JSON.stringify({ evidence, witnesses }),
+    );
+
+    const result = await runEvidenceGen(API_KEY, MODEL, [charge], environment, defendant, null);
+    expect(result.evidence.some((item) => item.type === 'INTERROGATION')).toBe(false);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('finalizeCasePayload', () => {
