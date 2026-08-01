@@ -34,6 +34,17 @@ export type AftermathVariants = SingleChargeAftermath | MultiChargeAftermath;
 // `[LLM-FILL: <stage>]` comment, where <stage> is one of the pipeline calls:
 // StatuteSelection, EnvironmentGen, CharacterGen, EvidenceGen, CasePayload
 // (final assembly), PleaNarrative, or Aftermath.
+// The decision-control explainers a guided (tutorial) bundle carries — one
+// short out-of-fiction line per control the action bar can present. Keyed by
+// the pending beat: CONTINUE for statement beats, else the decision type.
+// Presentation tier like title/teaser: rendered above the active control,
+// never part of the case payload, never crosses a trust boundary.
+export interface TutorialGuidance {
+  decisionExplainers: Partial<
+    Record<'CONTINUE' | 'PLEA_RULING' | 'MOTION_RULING' | 'CHARGE_VERDICT' | 'SENTENCING', string>
+  >;
+}
+
 export interface DemoCaseBundle {
   // Mirrors payload.caseId (enforced by defineDemoCase) so registry lookups
   // and store state key off the same identifier.
@@ -44,6 +55,7 @@ export interface DemoCaseBundle {
   payload: CasePayload;
   pleaNarrative: PleaNarrative;
   aftermath: AftermathVariants;
+  tutorial?: TutorialGuidance;
 }
 
 interface RawDemoCase {
@@ -52,6 +64,7 @@ interface RawDemoCase {
   payload: unknown;
   pleaNarrative: unknown;
   aftermath: AftermathVariants;
+  tutorial?: TutorialGuidance;
 }
 
 // FinalResultSchema.aftermathNarrative bound — authored text must fit the
@@ -151,5 +164,6 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     payload,
     pleaNarrative,
     aftermath: raw.aftermath,
+    ...(raw.tutorial !== undefined ? { tutorial: raw.tutorial } : {}),
   };
 }

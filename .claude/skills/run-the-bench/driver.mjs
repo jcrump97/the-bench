@@ -7,12 +7,13 @@
 // driver's workhorse is advanceTo(), which clicks through statement beats
 // until a target control appears.
 //
-// Drives all four docket cases end-to-end across five runs:
-//   1. Webb, accepted plea, desktop  — modals, beat reveal, allocution, plea ending
-//   2. Webb, forced trial, mobile    — per-exhibit motions, testimony, convicted ending
+// Drives all five docket cases end-to-end across six runs:
+//   1. Webb, accepted plea, desktop  — modals, reveal gating, click-through, plea ending
+//   2. Webb, forced trial, mobile    — per-exhibit motions, tape playback, convicted ending
 //   3. Boone (WEAK/no offer)         — trial-only path, adjournment on acquittal
 //   4. Reyes (STRONG/offer rejected) — skip-to-next-decision, convicted ending
 //   5. Vaughn (multi-charge)         — per-charge verdict beats, split ending
+//   6. Navarro (guided tutorial)     — decision explainers, plea-accepted ending
 // Assertions pin demo-case data (names, ranges, beat headings, speaker order,
 // aftermath variant phrases) — if a case in src/lib/demoCases/ or the beat
 // UI changes intentionally, update them here.
@@ -162,7 +163,9 @@ const browser = await chromium.launch(
   const page = await newPage(browser, { width: 1280, height: 900 });
   await gotoWithRetry(page, BASE);
   const docketEntries = await page.locator('button:has-text("People v.")').count();
-  check('Welcome: 4 docket entries listed', docketEntries === 4, `got ${docketEntries}`);
+  check('Welcome: 5 docket entries listed', docketEntries === 5, `got ${docketEntries}`);
+  check('Welcome: tutorial case leads the docket with the Start here badge',
+    (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
 
   await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
@@ -389,6 +392,35 @@ const browser = await chromium.launch(
   check('Vaughn end: split-verdict aftermath variant shown',
     (await page.locator('text=down the center line').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '13-vaughn-split-endstate.png'), fullPage: true });
+  await page.close();
+}
+
+// ---------- Run 6: Navarro (guided tutorial) — explainers render ----------
+{
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  await gotoWithRetry(page, BASE);
+  await page.getByRole('button', { name: /People v\. Eli Navarro/ }).click();
+
+  // The CONTINUE explainer accompanies the very first control.
+  check('Navarro tutorial: CONTINUE explainer above Call the Case',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'one statement at a time' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '14-tutorial-continue.png'), fullPage: true });
+
+  await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Navarro plea ruling');
+  check('Navarro tutorial: PLEA_RULING explainer above the plea decision',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'Your first ruling' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '15-tutorial-plea.png'), fullPage: true });
+
+  // Take the plea path to the end: allocution, sentencing explainer, aftermath.
+  await choiceButton(page, 'ACCEPT').click();
+  await advanceTo(page, page.getByRole('button', { name: 'Impose Sentence' }), 'Navarro sentencing');
+  check('Navarro tutorial: SENTENCING explainer above the sentencing form',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'statutory range' }).count()) === 1);
+  await page.getByRole('button', { name: 'Impose Sentence' }).click();
+  await advanceTo(page, page.getByRole('button', { name: 'New Case' }), 'Navarro case closed');
+  check('Navarro end: plea-accepted aftermath variant shown',
+    (await page.locator('text=finally signed something with his own name').count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '16-tutorial-endstate.png'), fullPage: true });
   await page.close();
 }
 

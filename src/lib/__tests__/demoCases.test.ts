@@ -5,6 +5,7 @@ import { deriveSentencingExposure } from '../sentencingExposure';
 import { deriveInterrogationProfile } from '../interrogation';
 import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
+import { navarroCase } from '../demoCases/navarro';
 import { webbCase } from '../demoCases/webb';
 import { booneCase } from '../demoCases/boone';
 import { reyesCase } from '../demoCases/reyes';
@@ -70,6 +71,34 @@ describe('demo case registry', () => {
       }
     }
   );
+});
+
+describe('navarroCase (People v. Eli Navarro — the guided tutorial)', () => {
+  it('leads the docket and is the only bundle carrying tutorial guidance', () => {
+    expect(DEMO_CASES[0]).toBe(navarroCase);
+    expect(navarroCase.tutorial).toBeDefined();
+    expect(DEMO_CASES.filter((b) => b.tutorial !== undefined)).toHaveLength(1);
+  });
+
+  it('assessProsecution bands the case MODERATE with full element coverage', () => {
+    const strength = assessProsecution(navarroCase.payload);
+    expect(strength.band).toBe('MODERATE');
+    expect(strength.score).toBe(56);
+    expect(strength.elementCoverage).toBe(1);
+  });
+
+  it('the offer reaches the bench: prior-heavy, anxious profile accepts', () => {
+    const { posture, defenseRisk } = computePleaPostureForCase(navarroCase.payload, navarroCase.pleaNarrative);
+    expect(posture.status).toBe('PENDING_JUDICIAL_REVIEW');
+    expect(defenseRisk?.posture).toBe('ACCEPT');
+    expect(defenseRisk?.priorExposure).toBe(85);
+  });
+
+  it('authors an explainer for every control the action bar can present', () => {
+    expect(Object.keys(navarroCase.tutorial?.decisionExplainers ?? {}).sort()).toEqual([
+      'CHARGE_VERDICT', 'CONTINUE', 'MOTION_RULING', 'PLEA_RULING', 'SENTENCING',
+    ]);
+  });
 });
 
 describe('booneCase (People v. Curtis Boone)', () => {

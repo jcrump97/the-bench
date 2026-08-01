@@ -67,7 +67,14 @@ export function WelcomeScreen() {
                 <span className="block text-xs text-(--text-muted)">
                   No. {bundle.id} &middot; {bundle.payload.charges.map((charge) => charge.name).join(' · ')}
                 </span>
-                <span className="mt-0.5 block font-medium text-(--text-h)">{bundle.title}</span>
+                <span className="mt-0.5 block font-medium text-(--text-h)">
+                  {bundle.title}
+                  {bundle.tutorial !== undefined && (
+                    <span className="ml-2 rounded-full bg-(--accent-bg) px-2 py-0.5 text-xs font-medium text-(--accent)">
+                      Start here
+                    </span>
+                  )}
+                </span>
                 <span className="mt-0.5 block text-sm text-(--text)">{bundle.teaser}</span>
               </button>
             </li>
