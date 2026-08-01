@@ -157,6 +157,7 @@ const rawWebbPayload = {
       relevanceScore: 9,
       objectionRisk: 'LOW',
       targetElementId: 'elem-value',
+      disclosureSummary: 'The People disclose certified bank statements for the firm\'s client trust account and the defendant\'s personal checking: eleven transfers over four months, and three partial repayments.',
       prosecutionArgument: 'The People offer the trust account records: eleven transfers, $14,200, every one landing in Mr. Webb\'s personal checking, nine of them within three days of a child-support deadline. These are the bank\'s own certified statements. The paper does not have a theory of the case, Your Honor. It just has the money.',
       defenseObjection: null,
       rulingReactions: {
@@ -184,6 +185,7 @@ const rawWebbPayload = {
       relevanceScore: 8,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-intent',
+      disclosureSummary: 'The People disclose emails the defendant sent to his own personal account during the charged period: a running tally, and references to the firm\'s audit calendar.',
       prosecutionArgument: 'The People offer Mr. Webb\'s emails to himself: a running tally of what he took, and the line that ends the intent argument — "audit is the 14th, needs to be whole by the 10th." That is consciousness of guilt in the defendant\'s own words, timed to the calendar of getting caught.',
       defenseObjection: 'Objection, Your Honor. The People want to read half the document. The same tally says "put back 800 of March" — these are the notes of a man keeping careful score of what he intended to return, and offering them as proof he intended to keep the money turns the writing on its head. If they come in, they come in whole.',
       rulingReactions: {
@@ -211,6 +213,7 @@ const rawWebbPayload = {
       relevanceScore: 7,
       objectionRisk: 'MEDIUM',
       targetElementId: 'elem-value',
+      disclosureSummary: 'The People disclose an independent forensic reconciliation of the client trust account, fixing the net diversion at $14,200.',
       prosecutionArgument: 'The People offer the independent forensic reconciliation. It fixes the diversion at $14,200, well past the felony threshold, and it puts faces on the number: a widow\'s escrow, a landscaper\'s payroll. Ms. Whitfield answers to neither party, and her math has not been challenged.',
       defenseObjection: 'No objection to the arithmetic, Your Honor — but the defense objects to the report coming in without its own footnote: the examiner found the firm\'s controls so thin that any of three employees could have initiated a transfer. The People cannot offer her conclusions and leave her caveats on the table.',
       rulingReactions: {
@@ -238,6 +241,7 @@ const rawWebbPayload = {
       relevanceScore: 6,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-taking',
+      disclosureSummary: 'The People disclose keycard access logs and hallway security footage from the office building, covering part of the charged period.',
       prosecutionArgument: 'The People offer the keycard logs and hallway footage. For two of the eleven transfer windows they place Mr. Webb alone in that office — corroboration, in time and place, of what the bank records already show.',
       defenseObjection: 'Objection — foundation and completeness, Your Honor. This system was pulled by the landlord three weeks late, it had already overwritten part of the period, and nobody can account for every master keycard. Two windows out of eleven isn\'t corroboration; it\'s a gap wearing a timestamp, and the People want the court to hear the timestamp and forget the gap.',
       rulingReactions: {
@@ -257,10 +261,65 @@ const rawWebbPayload = {
         { choice: 'EXCLUDED', lineText: 'Three weeks late, partially overwritten, with master keycards unaccounted for — the court will not let a gap testify. Excluded.' },
       ],
     },
+    {
+      // [LLM-FILL: InterrogationGen] — the recorded interview. The structure
+      // (outcome, challenge ground) is derived from Webb's traits by
+      // deriveInterrogationProfile — neuroticism 9 talks despite four priors
+      // that should know better — and the transcript dramatizes exactly that:
+      // admissions under pressure, then silence and a lawyer when the
+      // repayments come up (matching Detective Alvarez's testimony).
+      id: 'ev-interrogation',
+      name: 'Recorded custodial interview',
+      type: 'INTERROGATION',
+      description: 'Recording of Webb\'s stationhouse interview with Detective Alvarez, begun seven hours after his arrest, at 4:10 a.m. Webb talks for nearly forty minutes — the firm, the deadlines, "putting it back" — and then, asked about the repayments, goes silent and asks for a lawyer.',
+      relevanceScore: 7,
+      objectionRisk: 'HIGH',
+      targetElementId: 'elem-intent',
+      disclosureSummary: 'The People disclose a recorded interview of the defendant, conducted at the station in the early morning after his arrest, in which the defendant discusses the transfers.',
+      prosecutionArgument: 'The People offer the recorded interview. Seven hours after his arrest, Mr. Webb called the transfers "loans," said he put back what he could, and recited the firm\'s audit calendar from memory — and then told Detective Alvarez, in his own voice, "I knew it was wrong every time." The tape is the intent element, speaking.',
+      defenseObjection: 'The defense moves to suppress, Your Honor. Mr. Webb sat in a holding cell for seven hours — no sleep, eighteen months sober, no counsel — before a 4 a.m. interview in which the detective told him this was his chance to "get ahead of it" for his custody schedule. What the People call intent in his own voice is an exhausted father saying whatever kept his sons in reach. That is not a voluntary statement; it is pressure with a transcript.',
+      rulingReactions: {
+        ADMITTED: [
+          { speaker: 'PROSECUTION', text: 'Thank you, Your Honor. "I knew better every time" — the People could not have put it better.' },
+          { speaker: 'DEFENSE', text: 'The defense renews its objection for the record. The jury will also hear what the detective promised him just before he said it.' },
+        ],
+        EXCLUDED: [
+          { speaker: 'PROSECUTION', text: 'The People note their exception, Your Honor. The court has just excluded the defendant\'s intent in his own voice.' },
+          { speaker: 'DEFENSE', text: 'The defense thanks the court. A statement squeezed out of a man at four in the morning has no business before a jury.' },
+        ],
+      },
+      rulingOptions: [
+        { choice: 'ADMITTED', lineText: 'The defendant was advised, signed the waiver, and spoke. Exhaustion and a late hour do not, on this record, overbear the will. The motion is denied; the interview is admitted.' },
+        { choice: 'ADMITTED', lineText: 'The court has listened to the tape. Pressure, yes — coercion, no. The jury may hear it, and hear the hour it was made. Admitted.' },
+        { choice: 'EXCLUDED', lineText: 'Seven hours in a cell, a promise about his custody schedule, and no counsel in the room — the totality of the circumstances overbears the will. The interview is suppressed.' },
+        { choice: 'EXCLUDED', lineText: 'When a detective ties a man\'s children to his answers, what follows is not voluntary. The motion is granted; the tape is excluded.' },
+      ],
+      interrogation: {
+        detectiveName: 'Detective Ray Alvarez',
+        outcome: 'PARTIAL_ADMISSION',
+        challengeGround: 'VOLUNTARINESS',
+        lines: [
+          { speaker: 'DETECTIVE', text: 'You\'ve been read your rights and you signed the card. It\'s 4:10 in the morning and this is being recorded. Tell me about the trust account, Marcus.' },
+          { speaker: 'DEFENDANT', text: 'I kept that account clean for six years. Ask anyone at the firm. I reconciled it every single day.' },
+          { speaker: 'DETECTIVE', text: 'Eleven transfers into your personal checking. Nine of them inside three days of a support deadline. Walk me through that.' },
+          { speaker: 'DEFENDANT', text: 'They were loans. I know how that sounds. I logged every one in my own notes — you have the emails, you know I logged them. And I put back what I could, when I could.' },
+          { speaker: 'DETECTIVE', text: 'Loans have paperwork and a second signature, Marcus. These had your password. Help me understand, and get ahead of this — for that custody schedule of yours.' },
+          { speaker: 'DEFENDANT', text: 'I was going to be whole before the audit. The 14th. I had it planned to the day. A man planning to steal doesn\'t plan to be whole by the audit — he plans to be gone.' },
+          { speaker: 'DETECTIVE', text: 'You just gave me the audit date from memory. You knew exactly what you were doing.' },
+          { speaker: 'DEFENDANT', text: 'I knew it was wrong. Moving it — I knew it was wrong every time, and I told myself it was a loan every time, and I knew better every time. If I lose my boys over this... you said I could get ahead of it. I\'m trying.' },
+          { speaker: 'DETECTIVE', text: 'Then get ahead of it. The repayments — the $3,100. Why those amounts? Why those dates?' },
+          { speaker: 'DEFENDANT', text: 'I want a lawyer.' },
+        ],
+      },
+    },
   ],
-  // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
-  // assembly call with all four stage outputs in context.
-  summary: 'Marcus Webb kept the books at Hollis & Associates for six years. Ray Hollis hired him knowing his record — two theft convictions and a possession charge — because Webb owned it in the interview, and for six years that faith looked justified. Then, over four months, $14,200 left the client trust account for Webb\'s personal checking in eleven transfers, most landing days before a child-support deadline. About $3,100 came back in small, irregular repayments before the transfers stopped. The trust account held real people\'s money: a widow\'s home-sale escrow, a landscaper\'s payroll reserve. Webb — divorced, two kids, eighteen months sober, sleeping in his car some weeks — has said nothing publicly. His emails say he meant to make it whole before the audit. The People say that is what every embezzler says.',
+  // [LLM-FILL: CasePayload] — the dry docket synopsis (case-file modal) and
+  // the People's spoken statement of the case, written by the final assembly
+  // call with all four stage outputs in context. The synopsis is
+  // allegations-only; the narrative color lives in statementOfFacts, spoken
+  // by a party.
+  summary: 'The People charge Marcus Webb, 38, with one count of grand theft (Cal. Penal Code § 487(a)). The complaint alleges that over a four-month period, while employed as bookkeeper at Hollis & Associates, Webb transferred $14,200 from the firm\'s client trust account to a personal checking account in eleven unauthorized transactions, and that approximately $3,100 was returned in three partial repayments before the transfers ceased. Webb has four prior convictions, including two for theft offenses. The matter comes before the court for arraignment and plea.',
+  statementOfFacts: 'Your Honor, the People\'s statement of the case. For six years Marcus Webb kept the books at Hollis & Associates — the only employee with keys, the alarm code, and transfer authority over the client trust account. Over four months, eleven transfers moved $14,200 out of that trust account and into Mr. Webb\'s personal checking. Nine of the eleven landed within days of one of his child-support deadlines. About $3,100 came back in small, irregular repayments before the transfers stopped. The money belonged to the firm\'s clients — a widow\'s home-sale escrow, a landscaping company\'s payroll reserve. The defendant\'s own emails count down to the firm\'s audit. The People will prove the taking, the value, and the intent, and will ask the court to hold Mr. Webb to the same ledger he kept for everyone else.',
   // [LLM-FILL: CasePayload] — closing arguments, written by the final
   // assembly call once the evidence and witness stages are complete.
   closingArguments: {
@@ -274,8 +333,8 @@ const rawWebbPayload = {
 // partition) is computed deterministically by buildPleaPosture; a WEAK case
 // must omit defenseRationale entirely (PleaPostureInput enforces this).
 const rawWebbPleaNarrative = {
-  prosecutionRationale: 'The paper is unanswerable: the transfers, the destination account, the timing against his support deadlines, and his intent in his own words. I don\'t need the keycard footage — which is convenient, because it has problems. What I don\'t have is a villain. He paid a fifth of it back, and the firm\'s own expert will say the door was left standing open. That is why the offer exists: he pleads, restitution gets ordered, and nobody has to put the widow on a plane to testify about her escrow.',
-  defenseRationale: 'I can beat the footage and I can make the controls finding sing, but I cannot beat the bank records, and Marcus\'s own emails read like a confession with a conscience. With his priors, a trial loss means the full term — and the custody schedule he bled for goes with it. The offer puts a floor under his life. He hates it. I have told him to take it.',
+  prosecutionRationale: 'Your Honor, the People\'s position on the agreement. The paper is unanswerable: the transfers, the destination account, the timing against his own support deadlines, and the defendant\'s intent in his own words. The People will not pretend the case has a villain in it — he repaid a fifth of what he took, and the firm\'s own expert will say the door stood open. The offer reflects that. He pleads to the count, restitution is ordered in full, and the widow whose escrow sat in that account is spared a plane ticket and a cross-examination.',
+  defenseRationale: 'Your Honor, Mr. Webb has authorized me to state the defense\'s position on the record: he accepts the People\'s offer. The defense does not concede every exhibit — the court has heard what we think of that footage, and the controls finding speaks for itself — but the bank records are the bank records, and my client does not run from them. With his record, a conviction at trial carries the full term, and with it the custody schedule he has spent two years rebuilding. The agreement puts a floor under his life and lets restitution begin now. He enters it with his eyes open.',
   allocution: 'I\'m not going to stand here and tell the court it wasn\'t stealing, because I kept the books and I know exactly what it was. I told myself it was a loan every single time I moved the money, and I put back what I could, and none of that makes it not stealing — it just means I knew better while I did it. Mr. Hollis gave me a chance nobody else would, and I spent it. The people whose money sat in that account never agreed to fund my emergency. I\'d ask the court to leave me able to work, because the restitution is mine to pay and I mean to pay all of it. That\'s all I have, Your Honor.',
   pleaReactions: {
     ACCEPT: [

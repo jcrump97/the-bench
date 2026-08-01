@@ -1,7 +1,6 @@
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
-import { OceanTraitsMeter } from '../common/OceanTraitsMeter';
 import { SentenceList } from '../common/SentenceList';
 import { enumLabel } from '../../lib/format';
 
@@ -55,9 +54,6 @@ export function DefendantDossierModal() {
           ))}
         </ul>
       )}
-
-      <h3 className="mt-5 text-sm font-medium text-(--text-h)">Personality (OCEAN)</h3>
-      <OceanTraitsMeter traits={defendant.oceanTraits} />
     </Modal>
   );
 }

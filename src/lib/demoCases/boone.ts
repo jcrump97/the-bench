@@ -130,6 +130,7 @@ const rawBoonePayload = {
       relevanceScore: 6,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-entry',
+      disclosureSummary: 'The People disclose a six-photo array identification of the defendant, made nine days after the burglary by a witness who observed the rear alley from across the street.',
       prosecutionArgument: 'The People offer the photo array identification. Nine days after the burglary, Ms. Voss picked the defendant out of a six-pack in eleven seconds — a face she\'d seen across a counter every other week for two years. The identification was administered by a detective with no connection to the case.',
       defenseObjection: 'The defense moves to suppress, Your Honor. Look at the array: Mr. Boone\'s photo was pulled from QuickCoin\'s own staff page, and his is the only picture in the six where the man is wearing a QuickCoin uniform shirt. That is not an identification, it is a multiple-choice question with one answer in bold. Eleven seconds proves the suggestion worked, not that the memory was real.',
       rulingReactions: {
@@ -157,6 +158,7 @@ const rawBoonePayload = {
       relevanceScore: 4,
       objectionRisk: 'HIGH',
       targetElementId: 'elem-entry',
+      disclosureSummary: 'The People disclose a partial shoe-tread cast lifted from the mud inside the rear door, with a preliminary size and model identification.',
       prosecutionArgument: 'The People offer the tread cast lifted from the mud inside the rear door: a size-10 Meridian trainer. The defendant wears a size 10. It places a matching shoe inside the point of entry on the night of the burglary.',
       defenseObjection: 'Objection — relevance dressed up as forensics. The Meridian is one of the most common shoes sold in this county, and size 10 fits roughly one man in eight. The People are offering the court a shoe that fits a hundred thousand people, none of whom have been shown to be my client, who does not own a pair.',
       rulingReactions: {
@@ -184,6 +186,7 @@ const rawBoonePayload = {
       relevanceScore: 5,
       objectionRisk: 'MEDIUM',
       targetElementId: null,
+      disclosureSummary: 'The People disclose a pry bar recovered from a dumpster two blocks north of the scene, pending tool-mark comparison.',
       prosecutionArgument: 'The People offer the pry bar recovered from a dumpster two blocks north of QuickCoin. The tool-mark examiner will say it is consistent with the marks on the rear door. It is the instrument of the entry, discarded on the natural walking route away from the scene.',
       defenseObjection: 'Objection — foundation, Your Honor. No prints, no DNA, no purchase record, no witness. The People\'s entire connection is that the dumpster is near a bus stop my client has used, which describes half the neighborhood. "Consistent with the tool marks" means consistent with every pry bar in every garage in this county.',
       rulingReactions: {
@@ -211,6 +214,7 @@ const rawBoonePayload = {
       relevanceScore: 5,
       objectionRisk: 'HIGH',
       targetElementId: null,
+      disclosureSummary: 'The People disclose carrier cell-site location records for the defendant\'s phone covering the night of the burglary.',
       prosecutionArgument: 'The People offer the carrier\'s cell-site records: the defendant\'s phone, inside the sector containing QuickCoin, from 1:40 to 2:15 in the morning — squarely bracketing the 1:52 alarm. His phone was where the burglary was, when the burglary was.',
       defenseObjection: 'Objection, and I\'d ask the court to look at the map before ruling. The sector is three-quarters of a mile wide and it contains his sister\'s apartment — the couch he sleeps on every night. This exhibit proves Curtis Boone was at home. The People are offering evidence of the defense\'s own alibi and asking the court to read it backwards.',
       rulingReactions: {
@@ -231,9 +235,11 @@ const rawBoonePayload = {
       ],
     },
   ],
-  // [LLM-FILL: CasePayload] — the case-opening summary, written by the final
-  // assembly call with all four stage outputs in context.
-  summary: 'Someone came through the rear door of QuickCoin Check Cashing at 1:52 a.m. in the rain, walked the one path the camera cannot see, and left with $2,300 and the spare cash box. Nine days later a woman who waited out the storm across the street picked Curtis Boone out of a photo array — Boone, who cashed her checks for two years, and whom the owner fired two months ago over a till dispute Boone himself had reported. The People have a common shoe print, a pry bar no one can connect to anyone, a phone that was somewhere in the neighborhood where Boone also happens to live, and a witness who is pretty sure. Boone has a sister who says he was on her couch, no job since the firing, and one act of vandalism from when he was twenty. Four other people knew the blind spot. One of them got charged.',
+  // [LLM-FILL: CasePayload] — the dry docket synopsis (case-file modal) and
+  // the People's spoken statement of the case. The synopsis is
+  // allegations-only; the narrative color lives in statementOfFacts.
+  summary: 'The People charge Curtis Boone, 29, with one count of second-degree commercial burglary (Cal. Penal Code §§ 459, 460(b)). The complaint alleges that at approximately 1:52 a.m. Boone entered QuickCoin Check Cashing through its rear service door and took $2,300 in cash and a spare cash box. Boone is a former employee of the business, terminated approximately two months before the alleged entry. He has one prior conviction, for vandalism. None of the property has been recovered. The matter comes before the court for arraignment and plea.',
+  statementOfFacts: 'Your Honor, the People\'s statement of the case. At 1:52 in the morning, in the rain, someone forced the rear door of QuickCoin Check Cashing, walked the one path through the store its camera cannot see, and left with $2,300 and the spare cash box. The People will show that path was not luck — it was knowledge. The defendant counted that till and closed that store for two years before he was fired, two months before the entry. A witness who knew his face across the counter identified him. His phone was in the sector when the alarm tripped. The People will ask the court to find that the man who knew the blind spot is the man who used it.',
   // [LLM-FILL: CasePayload] — closing arguments, written by the final
   // assembly call once the evidence and witness stages are complete.
   closingArguments: {
@@ -246,7 +252,7 @@ const rawBoonePayload = {
 // so there is no defenseRationale at all (PleaPostureInput and defineDemoCase
 // both enforce its absence on a NO_OFFER case).
 const rawBoonePleaNarrative = {
-  prosecutionRationale: 'This office does not discount commercial burglary, and I am not going to start with a man who cleaned out a register he used to count. Boone knew the blind spot, the witness knows Boone, and his phone was in the sector. I know what the defense will do to the array, and I know what "pretty sure" sounds like on cross. It does not matter. You don\'t offer paper to the obvious suspect because the proof got wet. If the case is as thin as they say, let twelve people say so.',
+  prosecutionRationale: 'Your Honor, the People decline to offer a disposition in this case. This office does not discount commercial burglary, and it will not start with a man accused of emptying a register he used to count. The defendant knew the blind spot, the witness knows the defendant, and his phone was in the sector. The People know what the defense will say about the array in due course, and are content to let twelve jurors hear "pretty sure" for themselves. If the case is as thin as counsel says, a jury can say so. The People are ready for trial.',
 };
 
 // [LLM-FILL: Aftermath] — CONVICTED and ACQUITTED only: with NO_OFFER the

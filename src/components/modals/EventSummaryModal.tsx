@@ -1,12 +1,14 @@
 import { Fragment } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
+import { useRevealState } from '../../hooks/useRevealState';
 import { Modal } from './Modal';
 import { enumLabel } from '../../lib/format';
 
 export function EventSummaryModal() {
   const activeCase = useGameStore((state) => state.activeCase);
   const closeModal = useUIStore((state) => state.closeModal);
+  const { factsStated } = useRevealState();
 
   if (!activeCase) return null;
   const { environment } = activeCase;
@@ -26,8 +28,14 @@ export function EventSummaryModal() {
       </div>
       <p className="mt-3 text-(--text)">{environment.description}</p>
 
+      {/* The synopsis unlocks once the People have stated the case on the
+          record — before that the judge has the venue and the statutes only. */}
       <h3 className="mt-5 text-sm font-medium text-(--text-h)">Summary</h3>
-      <p className="mt-1 text-(--text)">{activeCase.summary}</p>
+      {factsStated ? (
+        <p className="mt-1 text-(--text)">{activeCase.summary}</p>
+      ) : (
+        <p className="mt-1 text-sm text-(--text-muted)">The People have not yet stated the case.</p>
+      )}
 
       <h3 className="mt-5 text-sm font-medium text-(--text-h)">Statutory Context</h3>
       <ul className="mt-1 list-disc space-y-1 pl-5">

@@ -79,14 +79,18 @@ flowchart LR
         STAT[StatuteSelection]
         ENV[EnvironmentGen]
         CHAR[CharacterGen]
+        INTG[InterrogationGen]
         EVID[EvidenceGen]
     end
 
     subgraph Deterministic["Deterministic Derivations (no LLM)"]
         PLEA["buildPleaPosture (plea structure)"]
+        INTP["deriveInterrogationProfile (OCEAN + priors → interview outcome + suppression ground)"]
+        DEM["describeDemeanor (OCEAN → probation demeanor notes)"]
         EXPO["deriveSentencingExposure (per-charge ranges → case exposure)"]
         MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
         SCRIPT["buildCourtroomScript (statement + decision beats; spokenJudgeLines voice record; choice-keyed reaction beats)"]
+        REVEAL["deriveRevealState (revealed transcript → disclosure tiers)"]
     end
 
     subgraph ViewState["View State (useUIStore, unvalidated)"]
@@ -105,8 +109,13 @@ flowchart LR
     GS -->|"Trigger Pipeline"| STAT
     STAT -->|"Tier Law Context"| ENV
     ENV -->|"Physical Context"| CHAR
-    CHAR -->|"OCEAN + Background"| EVID
+    CHAR -->|"OCEAN + Background"| INTG
+    INTP -->|"Outcome + challenge ground (echo-validated)"| INTG
+    INTG -->|"Interview transcript"| EVID
     EVID -->|"Complete Case Payload + Plea Narrative (color only)"| PLEA
+    DEM -->|"Demeanor notes (traits stay invisible)"| A3
+    SCRIPT --> REVEAL
+    REVEAL -->|"DISCLOSED / PRESENTED gating"| UI2["Panels + Detail Modals"]
     PLEA -->|"Offer / No-Offer / Rejected"| A1
     A1 -->|"Trial Forced"| A2
     A1 -->|"Plea Deal Accepted"| A3
@@ -123,9 +132,11 @@ The LLM provides color; deterministic code provides structure. Plea structure, c
 
 The case plays out **one beat at a time**: `buildCourtroomScript` projects validated state into an ordered screenplay of speaker-attributed statements and decision points, truncated at the first unresolved decision (no spoilers) and prefix-stable (resolving a decision never rewrites the past). A reveal cursor in the view-state slice paces the courtroom — the prosecutor offers each exhibit, the defense objects or waives, witnesses testify, and the judge rules from the bench at every pause. The judge's rulings are *voiced*: each decision point presents authored bench lines bound to the closed decision enums (variants multiply voice, never the state space), the chosen words enter the record verbatim, and the courtroom reacts in character to every ruling. The record itself reads as a spoken transcript — every line led by the party speaking (witnesses and the allocuting defendant by name), each party in its own accent, with the court's rulings and the press aftermath set apart from the flowing testimony.
 
+Act 1 follows real procedure: the clerk performs only the call and the charges, the defense enters the not-guilty plea, the People state the facts, and both sides disclose their exhibits and witnesses before any plea offer lands. What the judge can browse follows the record — the panels and detail modals are gated by a derived reveal state (`DISCLOSED` at discovery with counsel's brief unverified summary, `PRESENTED` with full detail once the item is offered or the witness sworn), and any transcript line that presents an item clicks through to its detail view. Police interrogations are *simulated at generation time*: a pure function of the defendant's OCEAN traits and priors decides what the interview room produced (confession, partial admission, denial, or lawyering up — in which case no tape exists) and which ground the defense attacks it on; the authored transcript dramatizes exactly that structure, and the tape is played into the record line by line before the suppression ruling. The traits themselves are never displayed — at sentencing the judge reads a derived probation demeanor note instead.
+
 ## Status
 
-Foundation, UI layer, and the beat-by-beat courtroom loop complete. Schemas, state machine, security vault, deterministic plea/sentencing derivations, and the full game shell (panels, detail modals, OCEAN traits meter) are implemented — and the game now plays as a living courtroom: the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually, witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Four hardcoded demo cases — **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, split-verdict) — are playable end-to-end on every branch. Next up: `GameService` and the four-stage LLM generation pipeline (the BYOK path), then `ResultGenerator` with localStorage persistence.
+Foundation, UI layer, the beat-by-beat courtroom loop, and the courtroom-realism overhaul complete. Schemas, state machine, security vault, deterministic plea/sentencing/interrogation/demeanor derivations, and the full game shell (progressively revealed panels, tiered detail modals, transcript click-through) are implemented — and the game now plays as a living courtroom: arraignment and discovery precede the plea, the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually (recorded interrogations played line by line before the suppression fight), witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Five hardcoded demo cases — **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, split-verdict) — are playable end-to-end on every branch. Next up: `GameService` and the five-stage LLM generation pipeline (the BYOK path), then `ResultGenerator` with localStorage persistence.
 
 ## License
 

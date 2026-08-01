@@ -1,5 +1,37 @@
 # TODO
 
+## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
+
+Nine issues in one push, eight commits (`feat(schema)` → `feat(demo)`),
+plan: `~/.claude/plans/here-is-a-draft-cheeky-comet.md`. Player-reported:
+transcript read as inner monologue; OCEAN visible; everything browsable
+from beat 0; no tutorial; no panel-collapse affordance; the clerk narrated
+facts; the offer landed with no arraignment/discovery pacing; transcript
+rows weren't clickable — plus, added in plan review, simulated police
+interrogations driven by the OCEAN traits.
+
+- [x] `statementOfFacts` + per-evidence `disclosureSummary`; `summary`
+      re-authored dry; rationales re-voiced as on-record speech.
+- [x] Interrogation system: `deriveInterrogationProfile` (traits + priors →
+      outcome + suppression ground, echo-validated by `defineDemoCase`);
+      `INTERROGATION` exhibits with transcripts for Webb and Vaughn (both
+      neuroticism-9 talkers); tape played beat-by-beat before the
+      suppression ruling. Future pipeline stage: InterrogationGen.
+- [x] Act 1 restructure: call → charges → arraignment plea → statement of
+      facts → discovery disclosures → offer. `subject` stamped on
+      presentation beats.
+- [x] Progressive reveal (`src/lib/reveal.ts` + `useRevealState`):
+      DISCLOSED/PRESENTED tiers gate panels and modals.
+- [x] OCEAN hidden everywhere; derived probation demeanor notes
+      (`src/lib/demeanorNotes.ts`, digit-free) at sentencing.
+- [x] Transcript click-through: subject rows open modal + panel.
+- [x] Once-per-session panel-collapse hint (in-memory flag).
+- [x] Guided tutorial case (People v. Eli Navarro, MODERATE/offer-pending)
+      with bundle-side decision explainers rendered by ActionBar.
+
+Verified per phase and end-to-end: `npm run lint && npm test && npm run
+build` + the full six-run `run-the-bench` docket, clean console.
+
 ## Mobile sentencing input snapping to floor/ceiling (user bug report, 2026-07-21 — FIXED)
 
 Reported on Android Chrome: adjusting the sentencing amount would only let

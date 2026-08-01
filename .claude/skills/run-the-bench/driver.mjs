@@ -7,12 +7,13 @@
 // driver's workhorse is advanceTo(), which clicks through statement beats
 // until a target control appears.
 //
-// Drives all four docket cases end-to-end across five runs:
-//   1. Webb, accepted plea, desktop  — modals, beat reveal, allocution, plea ending
-//   2. Webb, forced trial, mobile    — per-exhibit motions, testimony, convicted ending
+// Drives all five docket cases end-to-end across six runs:
+//   1. Webb, accepted plea, desktop  — modals, reveal gating, click-through, plea ending
+//   2. Webb, forced trial, mobile    — per-exhibit motions, tape playback, convicted ending
 //   3. Boone (WEAK/no offer)         — trial-only path, adjournment on acquittal
 //   4. Reyes (STRONG/offer rejected) — skip-to-next-decision, convicted ending
 //   5. Vaughn (multi-charge)         — per-charge verdict beats, split ending
+//   6. Navarro (guided tutorial)     — decision explainers, plea-accepted ending
 // Assertions pin demo-case data (names, ranges, beat headings, speaker order,
 // aftermath variant phrases) — if a case in src/lib/demoCases/ or the beat
 // UI changes intentionally, update them here.
@@ -75,6 +76,11 @@ async function gotoWithRetry(page, url, attempts = 20) {
 // name but stay data-speaker="WITNESS".
 async function ledgerSpeakers(page) {
   return page.locator('li[data-speaker]').evaluateAll((els) => els.map((el) => el.dataset.speaker));
+}
+
+// The structural entry kind of each revealed beat, in record order.
+async function ledgerKinds(page) {
+  return page.locator('li[data-entry-kind]').evaluateAll((els) => els.map((el) => el.dataset.entryKind));
 }
 
 // The continue-flavored buttons a statement beat can present, in the order
@@ -157,7 +163,9 @@ const browser = await chromium.launch(
   const page = await newPage(browser, { width: 1280, height: 900 });
   await gotoWithRetry(page, BASE);
   const docketEntries = await page.locator('button:has-text("People v.")').count();
-  check('Welcome: 4 docket entries listed', docketEntries === 4, `got ${docketEntries}`);
+  check('Welcome: 5 docket entries listed', docketEntries === 5, `got ${docketEntries}`);
+  check('Welcome: tutorial case leads the docket with the Start here badge',
+    (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
 
   await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
@@ -169,23 +177,58 @@ const browser = await chromium.launch(
   await page.getByRole('button', { name: 'Call the Case', exact: true }).click();
   await page.waitForSelector('text=Case Called');
 
-  // Advance to the plea ruling and verify the Act 1 beats arrived in order.
+  // Progressive reveal: at the case call nothing has been disclosed yet.
+  check('Webb reveal: discovery panel empty at the case call',
+    (await page.locator('text=No discovery has been entered.').count()) === 1 &&
+    (await page.locator('text=No witnesses have been disclosed.').count()) === 1);
+  check('Webb reveal: no charges listed before the clerk reads them',
+    (await page.locator('text=No charges have been read.').count()) === 1);
+
+  // Advance to the plea ruling and verify the Act 1 beats arrived in order:
+  // call, charge, arraignment, statement of facts, 5 exhibit disclosures,
+  // 3 witness disclosures (People, People, Defense), offer, response.
   await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Webb plea ruling');
   const act1 = await ledgerSpeakers(page);
-  check('Webb Act1: beats are clerk, clerk (charge read), people, defense',
-    JSON.stringify(act1) === JSON.stringify(['CLERK', 'CLERK', 'PROSECUTION', 'DEFENSE']),
+  check('Webb Act1: call/charge/arraignment/facts/discovery/offer speaker order',
+    JSON.stringify(act1) === JSON.stringify([
+      'CLERK', 'CLERK', 'DEFENSE', 'PROSECUTION',
+      'PROSECUTION', 'PROSECUTION', 'PROSECUTION', 'PROSECUTION', 'PROSECUTION',
+      'PROSECUTION', 'PROSECUTION', 'DEFENSE',
+      'PROSECUTION', 'DEFENSE',
+    ]),
     JSON.stringify(act1));
   check('Webb Act1: charge read as Count 1',
     (await page.locator('text=Count 1: Grand Theft').count()) === 1);
+  const act1Kinds = await ledgerKinds(page);
+  check('Webb Act1: every exhibit disclosed before the offer lands',
+    act1Kinds.filter((k) => k === 'DISCOVERY_EXHIBIT').length === 5 &&
+    act1Kinds.indexOf('PLEA_OFFER') > act1Kinds.lastIndexOf('DISCOVERY_WITNESS'),
+    JSON.stringify(act1Kinds));
+  // By plea-ruling time discovery has filled both panel sections.
+  const panelRows = await page.locator('nav[aria-label="Evidence and testimony"] li').count();
+  check('Webb reveal: discovery panel populated by the plea ruling (5 exhibits + 3 witnesses)',
+    panelRows === 8, `got ${panelRows}`);
+  check('Webb reveal: disclosed exhibits carry the Disclosed badge, not a ruling',
+    (await page.locator('nav[aria-label="Evidence and testimony"] >> text=Disclosed').count()) === 8);
   await page.screenshot({ path: path.join(SHOTS, '01-act1-plea-ruling.png'), fullPage: true });
 
-  // Defendant dossier → OceanTraitsMeter
+  // Transcript click-through: with the evidence panel closed, clicking a
+  // discovery row opens the exhibit's Tier-1 detail modal and the panel.
+  await page.getByRole('button', { name: 'Toggle evidence panel' }).click();
+  await page.locator('li[data-entry-kind="DISCOVERY_EXHIBIT"] button').first().click();
+  await page.waitForSelector('text=Disclosed in discovery — not yet presented to the court.');
+  check('Webb click-through: discovery row opened the Tier-1 exhibit modal and the panel',
+    (await page.getByRole('button', { name: 'Toggle evidence panel' }).getAttribute('aria-pressed')) === 'true');
+  await page.keyboard.press('Escape');
+
+  // Defendant dossier — OCEAN stays invisible (traits drive behavior, never
+  // display; the judge reads demeanor notes at sentencing instead).
   await page.getByRole('button', { name: /Marcus Webb/ }).first().click();
-  await page.waitForSelector('text=Personality (OCEAN)');
-  check('Webb dossier: 5 meter bars render', (await page.locator('[role="meter"]').count()) === 5);
-  check('Webb dossier: neuroticism meter aria-valuenow=9',
-    (await page.locator('[role="meter"][aria-label="Neuroticism"]').getAttribute('aria-valuenow')) === '9');
-  await page.screenshot({ path: path.join(SHOTS, '02-dossier-meter.png') });
+  await page.waitForSelector('text=Past Convictions');
+  check('Webb dossier: OCEAN traits are not rendered',
+    (await page.locator('text=Personality (OCEAN)').count()) === 0 &&
+    (await page.locator('[role="meter"]').count()) === 0);
+  await page.screenshot({ path: path.join(SHOTS, '02-dossier.png') });
   await page.keyboard.press('Escape');
 
   // Charge modal → per-charge sentencing range
@@ -203,6 +246,11 @@ const browser = await chromium.launch(
     (await page.locator('li[data-entry-kind="ALLOCUTION"]', { hasText: 'Marcus Webb' }).count()) === 1);
   const seeded = Number(await page.locator('input[type="number"]').inputValue());
   check('Webb plea sentencing: seeded within statutory range', seeded >= 1 && seeded <= 3, `value=${seeded}`);
+  const sentencingText = await page.locator('main').innerText();
+  check('Webb sentencing: probation demeanor notes shown, raw trait digits gone',
+    sentencingText.includes('Probation Department — Demeanor Notes') &&
+    sentencingText.includes('Visibly anxious under questioning') &&
+    !sentencingText.includes('/10'));
   await page.getByRole('button', { name: 'Impose Sentence' }).click();
   await advanceTo(page, page.getByRole('button', { name: 'New Case' }), 'Webb plea case closed');
   const end = await ledgerSpeakers(page);
@@ -223,13 +271,26 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Webb plea ruling');
   await choiceButton(page, 'REJECT').click();
-  await ruleAllMotions(page, 4, 'Webb Act2', { excludeLast: true });
+  // 5 exhibits; excludeLast suppresses the interrogation tape.
+  await ruleAllMotions(page, 5, 'Webb Act2', { excludeLast: true });
   check('Webb Act2: LOW-risk exhibit drew the derived waiver line',
     (await page.locator('text=No objection from the defense.').count()) === 1);
   check('Webb Act2: rulings carry the structural outcome in the heading',
-    (await page.locator('text=Ruling of the Court —').count()) === 4);
+    (await page.locator('text=Ruling of the Court —').count()) === 5);
   check('Webb Act2: the courtroom reacted to at least one ruling',
     (await page.locator('li[data-entry-kind="MOTION_REACTION"]').count()) >= 1);
+  // The tape is played into the record between its offer and the
+  // suppression objection — 10 lines, voiced by the detective and Webb.
+  const playbackCount = await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]').count();
+  check('Webb Act2: interrogation tape played line by line', playbackCount === 10, `got ${playbackCount}`);
+  check('Webb Act2: playback led by the detective and the defendant by name',
+    (await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]', { hasText: 'Detective Ray Alvarez' }).count()) === 5 &&
+    (await page.locator('li[data-entry-kind="INTERROGATION_PLAYBACK"]', { hasText: 'Marcus Webb' }).count()) === 5);
+  const act2Kinds = await ledgerKinds(page);
+  check('Webb Act2: playback sits between the offer and the objection',
+    act2Kinds[act2Kinds.indexOf('INTERROGATION_PLAYBACK') - 1] === 'EXHIBIT_OFFERED' &&
+    act2Kinds[act2Kinds.lastIndexOf('INTERROGATION_PLAYBACK') + 1] === 'EXHIBIT_OBJECTION',
+    JSON.stringify(act2Kinds.slice(act2Kinds.indexOf('INTERROGATION_PLAYBACK') - 1, act2Kinds.lastIndexOf('INTERROGATION_PLAYBACK') + 2)));
   await page.screenshot({ path: path.join(SHOTS, '05-act2-ruling-mobile.png') });
 
   await callCharge(page, 'GUILTY', 'Webb verdict');
@@ -241,10 +302,10 @@ const browser = await chromium.launch(
     (await page.locator('text=Closing Argument — The People').count()) === 1);
   await finishCase(page, 'Webb trial');
   const speakers = await ledgerSpeakers(page);
-  check('Webb end(trial): witness beats attributed to WITNESS',
-    speakers.filter((s) => s === 'WITNESS').length === 6, JSON.stringify(speakers));
-  check('Webb end(trial): trial order + 4 rulings + verdict + sentence are THE COURT',
-    speakers.filter((s) => s === 'COURT').length === 7, JSON.stringify(speakers));
+  check('Webb end(trial): testimony (6) + detective playback (5) attributed to WITNESS',
+    speakers.filter((s) => s === 'WITNESS').length === 11, JSON.stringify(speakers));
+  check('Webb end(trial): trial order + 5 rulings + verdict + sentence are THE COURT',
+    speakers.filter((s) => s === 'COURT').length === 8, JSON.stringify(speakers));
   check('Webb end(trial): convicted aftermath variant shown',
     (await page.locator('text=came back in under a day').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '06-endstate-trial-mobile.png'), fullPage: true });
@@ -318,7 +379,7 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Vaughn plea ruling');
   await choiceButton(page, 'REJECT').click();
-  await ruleAllMotions(page, 5, 'Vaughn Act2');
+  await ruleAllMotions(page, 6, 'Vaughn Act2');
 
   await callCharge(page, 'GUILTY', 'Vaughn count 1');
   check('Vaughn Act3: per-charge verdict counter reached count 2',
@@ -331,6 +392,35 @@ const browser = await chromium.launch(
   check('Vaughn end: split-verdict aftermath variant shown',
     (await page.locator('text=down the center line').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '13-vaughn-split-endstate.png'), fullPage: true });
+  await page.close();
+}
+
+// ---------- Run 6: Navarro (guided tutorial) — explainers render ----------
+{
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  await gotoWithRetry(page, BASE);
+  await page.getByRole('button', { name: /People v\. Eli Navarro/ }).click();
+
+  // The CONTINUE explainer accompanies the very first control.
+  check('Navarro tutorial: CONTINUE explainer above Call the Case',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'one statement at a time' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '14-tutorial-continue.png'), fullPage: true });
+
+  await advanceTo(page, choiceButton(page, 'ACCEPT'), 'Navarro plea ruling');
+  check('Navarro tutorial: PLEA_RULING explainer above the plea decision',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'Your first ruling' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '15-tutorial-plea.png'), fullPage: true });
+
+  // Take the plea path to the end: allocution, sentencing explainer, aftermath.
+  await choiceButton(page, 'ACCEPT').click();
+  await advanceTo(page, page.getByRole('button', { name: 'Impose Sentence' }), 'Navarro sentencing');
+  check('Navarro tutorial: SENTENCING explainer above the sentencing form',
+    (await page.locator('[data-tutorial-explainer]', { hasText: 'statutory range' }).count()) === 1);
+  await page.getByRole('button', { name: 'Impose Sentence' }).click();
+  await advanceTo(page, page.getByRole('button', { name: 'New Case' }), 'Navarro case closed');
+  check('Navarro end: plea-accepted aftermath variant shown',
+    (await page.locator('text=finally signed something with his own name').count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '16-tutorial-endstate.png'), fullPage: true });
   await page.close();
 }
 

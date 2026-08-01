@@ -5,7 +5,7 @@ import {
   type ScriptBeat,
   type StatementBeat,
 } from '../courtroomScript';
-import { validCase } from './fixtures';
+import { validCase, validCaseWithInterrogation } from './fixtures';
 import { DEMO_CASES } from '../demoCases';
 import { computePleaPostureForCase } from '../pleaAssessment';
 import type { PleaPosture, MotionRuling, ChargeVerdict } from '../../schemas/gameSchemas';
@@ -52,18 +52,71 @@ const statements = (beats: ScriptBeat[]): StatementBeat[] =>
 const kinds = (beats: ScriptBeat[]): string[] =>
   beats.map((b) => (b.kind === 'STATEMENT' ? b.entryKind : `DECISION:${b.decision.type}`));
 
+// validCase: 1 charge, 3 exhibits, 2 witnesses (both People-side) — so Act 1
+// runs call, charge, arraignment, facts, 3 disclosures, 2 witness
+// disclosures before any plea beat.
+const ACT_1_RUN_UP = [
+  'CASE_OPENED',
+  'CHARGE_READ',
+  'ARRAIGNMENT_PLEA',
+  'STATEMENT_OF_FACTS',
+  'DISCOVERY_EXHIBIT',
+  'DISCOVERY_EXHIBIT',
+  'DISCOVERY_EXHIBIT',
+  'DISCOVERY_WITNESS',
+  'DISCOVERY_WITNESS',
+];
+
 describe('buildCourtroomScript — Act 1 sequence', () => {
-  it('opens with the case called and one charge-read beat per charge', () => {
+  it('runs call, charges, arraignment, facts, and discovery before any plea beat', () => {
     const beats = buildCourtroomScript(baseInput);
-    expect(kinds(beats)).toEqual(['CASE_OPENED', 'CHARGE_READ']);
+    expect(kinds(beats)).toEqual(ACT_1_RUN_UP);
+    // The clerk performs procedure only: the call is the procedural call,
+    // not a narrative summary.
     expect(beats[0]?.kind === 'STATEMENT' && beats[0].speaker).toBe('CLERK');
+    expect(beats[0]?.kind === 'STATEMENT' && beats[0].body).toBe(
+      'Calling case 24-CR-00001, the People of the State of California v. Jordan Vance.',
+    );
+    // The facts come from a party, in the case's authored voice.
+    const facts = statements(beats).find((b) => b.entryKind === 'STATEMENT_OF_FACTS');
+    expect(facts?.speaker).toBe('PROSECUTION');
+    expect(facts?.body).toBe(validCase.statementOfFacts);
+    // The defense enters the not-guilty plea for the defendant by name.
+    const arraignment = statements(beats).find((b) => b.entryKind === 'ARRAIGNMENT_PLEA');
+    expect(arraignment?.speaker).toBe('DEFENSE');
+    expect(arraignment?.body).toContain('Jordan Vance');
+    expect(arraignment?.body).toContain('not guilty');
   });
 
-  it('with a pending offer: offer, defense response, then the plea-ruling decision', () => {
+  it('discovery beats carry Tier-1 disclosure text and are spoken by the disclosing side', () => {
+    const beats = buildCourtroomScript(baseInput);
+    const exhibits = statements(beats).filter((b) => b.entryKind === 'DISCOVERY_EXHIBIT');
+    expect(exhibits.map((b) => b.body)).toEqual(validCase.evidence.map((e) => e.disclosureSummary));
+    expect(exhibits.every((b) => b.speaker === 'PROSECUTION')).toBe(true);
+    const witnesses = statements(beats).filter((b) => b.entryKind === 'DISCOVERY_WITNESS');
+    // Disclosure bodies reuse the witness statements; both fixture witnesses
+    // are People-side (PROSECUTION / NEUTRAL bias).
+    expect(witnesses.map((b) => b.body)).toEqual(validCase.witnesses.map((w) => w.statement));
+    expect(witnesses.every((b) => b.speaker === 'PROSECUTION')).toBe(true);
+  });
+
+  it('a DEFENSE-bias witness is disclosed by the defense', () => {
+    const beats = buildCourtroomScript({
+      ...baseInput,
+      caseData: {
+        ...validCase,
+        witnesses: validCase.witnesses.map((w, i) => (i === 1 ? { ...w, bias: 'DEFENSE' as const } : w)),
+      },
+    });
+    const witnesses = statements(beats).filter((b) => b.entryKind === 'DISCOVERY_WITNESS');
+    expect(witnesses.map((b) => b.speaker)).toEqual(['PROSECUTION', 'DEFENSE']);
+    expect(witnesses[1]?.heading).toBe('The Defense Discloses: Sam Okafor');
+  });
+
+  it('with a pending offer: offer, defense response, then the plea-ruling decision — after discovery', () => {
     const beats = buildCourtroomScript({ ...baseInput, pleaPosture: pendingPosture });
     expect(kinds(beats)).toEqual([
-      'CASE_OPENED',
-      'CHARGE_READ',
+      ...ACT_1_RUN_UP,
       'PLEA_OFFER',
       'PLEA_DEFENSE_RESPONSE',
       'DECISION:PLEA_RULING',
@@ -75,14 +128,14 @@ describe('buildCourtroomScript — Act 1 sequence', () => {
     expect(offer?.body).toContain('8 years in prison');
   });
 
-  it('NO_OFFER: declination beat, no defense response, decision carries hasOffer=false', () => {
+  it('NO_OFFER: declination beat after the same run-up, decision carries hasOffer=false', () => {
     const beats = buildCourtroomScript({ ...baseInput, pleaPosture: noOfferPosture });
-    expect(kinds(beats)).toEqual(['CASE_OPENED', 'CHARGE_READ', 'PLEA_OFFER', 'DECISION:PLEA_RULING']);
+    expect(kinds(beats)).toEqual([...ACT_1_RUN_UP, 'PLEA_OFFER', 'DECISION:PLEA_RULING']);
     const decision = beats.at(-1);
     expect(decision?.kind === 'DECISION' && decision.decision.type === 'PLEA_RULING' && decision.decision.hasOffer).toBe(false);
   });
 
-  it('emits nothing past arraignment when no posture is loaded', () => {
+  it('emits nothing past discovery when no posture is loaded', () => {
     expect(kinds(buildCourtroomScript(baseInput))).not.toContain('DECISION:PLEA_RULING');
   });
 
@@ -231,8 +284,7 @@ describe('buildCourtroomScript — accepted-plea path', () => {
   it('skips motions and trial entirely: acceptance, allocution, sentencing decision', () => {
     const beats = buildCourtroomScript(pleaInput);
     expect(kinds(beats)).toEqual([
-      'CASE_OPENED',
-      'CHARGE_READ',
+      ...ACT_1_RUN_UP,
       'PLEA_OFFER',
       'PLEA_DEFENSE_RESPONSE',
       'PLEA_DECISION',
@@ -399,6 +451,101 @@ describe('buildCourtroomScript — voiced judge lines', () => {
 
     const fallback = buildCourtroomScript(base);
     expect(statements(fallback).find((b) => b.entryKind === 'PLEA_DECISION')?.body).toBe('The deal is fair and final. Accepted.');
+  });
+});
+
+describe('buildCourtroomScript — interrogation playback', () => {
+  // validCaseWithInterrogation appends the tape as e4; rule the first three
+  // exhibits so the script reaches it.
+  const playbackInput: BuildCourtroomScriptInput = {
+    ...baseInput,
+    caseData: validCaseWithInterrogation,
+    pleaPosture: rejectedPosture,
+    currentPhase: 'ACT_2_MOTIONS',
+    motionRulings: [
+      { evidenceId: 'e1', ruling: 'ADMITTED' },
+      { evidenceId: 'e2', ruling: 'ADMITTED' },
+      { evidenceId: 'e3', ruling: 'ADMITTED' },
+    ],
+  };
+
+  it('plays the tape line by line between the offer and the suppression objection', () => {
+    const beats = buildCourtroomScript(playbackInput);
+    // The tail: offer, 4 playback lines, objection, pending ruling.
+    expect(kinds(beats).slice(-7)).toEqual([
+      'EXHIBIT_OFFERED',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'INTERROGATION_PLAYBACK',
+      'EXHIBIT_OBJECTION',
+      'DECISION:MOTION_RULING',
+    ]);
+  });
+
+  it('attributes detective lines to the detective and defendant lines to the defendant', () => {
+    const beats = buildCourtroomScript(playbackInput);
+    const playback = statements(beats).filter((b) => b.entryKind === 'INTERROGATION_PLAYBACK');
+    expect(playback.map((b) => b.speakerName)).toEqual([
+      'Sam Okafor', 'Jordan Vance', 'Sam Okafor', 'Jordan Vance',
+    ]);
+    expect(playback.map((b) => b.speaker)).toEqual(['WITNESS', 'DEFENSE', 'WITNESS', 'DEFENSE']);
+    // Every playback beat presents the tape exhibit.
+    expect(playback.every((b) => b.subject?.type === 'EVIDENCE' && b.subject.id === 'e4')).toBe(true);
+    // Bodies are the transcript, in order.
+    expect(playback[0]?.body).toBe('You understand the rights as I read them to you?');
+  });
+
+  it('emits no playback for cases without an interrogation exhibit', () => {
+    const beats = buildCourtroomScript({
+      ...baseInput,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_2_MOTIONS',
+    });
+    expect(kinds(beats)).not.toContain('INTERROGATION_PLAYBACK');
+  });
+});
+
+describe('buildCourtroomScript — subject stamping', () => {
+  it('stamps discovery and presentation beats with the item they present', () => {
+    const beats = buildCourtroomScript({
+      ...baseInput,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_3_VERDICT',
+      motionRulings: [
+        { evidenceId: 'e1', ruling: 'ADMITTED' },
+        { evidenceId: 'e2', ruling: 'ADMITTED' },
+        { evidenceId: 'e3', ruling: 'ADMITTED' },
+      ],
+      chargeVerdicts: [
+        { chargeId: 'c1', chargeName: 'Second-degree burglary', classification: 'FELONY', verdict: 'GUILTY' },
+      ],
+    });
+    const firstSubject = (kind: StatementBeat['entryKind']) =>
+      statements(beats).find((b) => b.entryKind === kind)?.subject;
+    expect(firstSubject('CHARGE_READ')).toEqual({ type: 'CHARGE', id: 'c1' });
+    expect(firstSubject('DISCOVERY_EXHIBIT')).toEqual({ type: 'EVIDENCE', id: 'e1' });
+    expect(firstSubject('DISCOVERY_WITNESS')).toEqual({ type: 'WITNESS', id: 'w1' });
+    expect(firstSubject('EXHIBIT_OFFERED')).toEqual({ type: 'EVIDENCE', id: 'e1' });
+    expect(firstSubject('EXHIBIT_OBJECTION')).toEqual({ type: 'EVIDENCE', id: 'e1' });
+    expect(firstSubject('MOTION_RULING')).toEqual({ type: 'EVIDENCE', id: 'e1' });
+    expect(firstSubject('TESTIMONY_DIRECT')).toEqual({ type: 'WITNESS', id: 'w1' });
+    expect(firstSubject('TESTIMONY_CROSS')).toEqual({ type: 'WITNESS', id: 'w1' });
+    expect(firstSubject('VERDICT')).toEqual({ type: 'CHARGE', id: 'c1' });
+  });
+
+  it('leaves non-presentation beats unstamped', () => {
+    const beats = buildCourtroomScript({
+      ...baseInput,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_2_MOTIONS',
+      motionRulings: [{ evidenceId: 'e1', ruling: 'ADMITTED' }],
+    });
+    for (const kind of ['CASE_OPENED', 'ARRAIGNMENT_PLEA', 'STATEMENT_OF_FACTS', 'PLEA_OFFER', 'MOTION_REACTION'] as const) {
+      const beat = statements(beats).find((b) => b.entryKind === kind);
+      expect(beat, kind).toBeDefined();
+      expect(beat?.subject, kind).toBeUndefined();
+    }
   });
 });
 

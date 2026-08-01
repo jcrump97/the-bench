@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CasePayloadSchema, ChargeSchema, EvidenceSchema, WitnessSchema, PleaNarrativeSchema } from '../gameSchemas';
-import { rawValidCase } from '../../lib/__tests__/fixtures';
+import { rawValidCase, rawInterrogationEvidence } from '../../lib/__tests__/fixtures';
 
 describe('ChargeSchema per-charge sentencing range', () => {
   const rawCharge = rawValidCase.charges[0];
@@ -75,6 +75,63 @@ describe('EvidenceSchema courtroom argument fields', () => {
     const withoutArgument: Record<string, unknown> = { ...highRisk };
     delete withoutArgument.prosecutionArgument;
     expect(EvidenceSchema.safeParse(withoutArgument).success).toBe(false);
+  });
+
+  it('rejects an exhibit missing disclosureSummary entirely', () => {
+    const withoutDisclosure: Record<string, unknown> = { ...highRisk };
+    delete withoutDisclosure.disclosureSummary;
+    expect(EvidenceSchema.safeParse(withoutDisclosure).success).toBe(false);
+  });
+});
+
+describe('EvidenceSchema interrogation exhibits', () => {
+  it('accepts a well-formed INTERROGATION exhibit', () => {
+    expect(EvidenceSchema.safeParse(rawInterrogationEvidence).success).toBe(true);
+  });
+
+  it('rejects an INTERROGATION exhibit missing its interrogation block', () => {
+    const withoutBlock: Record<string, unknown> = { ...rawInterrogationEvidence };
+    delete withoutBlock.interrogation;
+    expect(EvidenceSchema.safeParse(withoutBlock).success).toBe(false);
+  });
+
+  it('rejects an interrogation block on any other evidence type', () => {
+    const result = EvidenceSchema.safeParse({
+      ...rawInterrogationEvidence,
+      type: 'DIGITAL',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an INTERROGATION exhibit with a waived (null) defenseObjection', () => {
+    // Even at LOW risk — the tape is always challenged.
+    const result = EvidenceSchema.safeParse({
+      ...rawInterrogationEvidence,
+      objectionRisk: 'LOW',
+      defenseObjection: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('bounds the transcript at 4–24 lines with closed speakers', () => {
+    const line = rawInterrogationEvidence.interrogation.lines[0];
+    const withLines = (lines: unknown[]) =>
+      EvidenceSchema.safeParse({
+        ...rawInterrogationEvidence,
+        interrogation: { ...rawInterrogationEvidence.interrogation, lines },
+      }).success;
+    expect(withLines([line, line, line])).toBe(false);
+    expect(withLines(Array.from({ length: 24 }, () => line))).toBe(true);
+    expect(withLines(Array.from({ length: 25 }, () => line))).toBe(false);
+    expect(withLines([line, line, line, { speaker: 'COURT', text: 'Order.' }])).toBe(false);
+  });
+
+  it('rejects an interrogation outcome outside the echo vocabulary (INVOKED_COUNSEL has no tape)', () => {
+    const result = EvidenceSchema.safeParse({
+      ...rawInterrogationEvidence,
+      interrogation: { ...rawInterrogationEvidence.interrogation, outcome: 'INVOKED_COUNSEL' },
+    });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -209,6 +266,12 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
       ],
     };
     expect(CasePayloadSchema.safeParse(danglingRef).success).toBe(false);
+  });
+
+  it('rejects a case missing statementOfFacts', () => {
+    const withoutFacts: Record<string, unknown> = { ...rawValidCase };
+    delete withoutFacts.statementOfFacts;
+    expect(CasePayloadSchema.safeParse(withoutFacts).success).toBe(false);
   });
 
   it('rejects a case missing closingArguments', () => {
