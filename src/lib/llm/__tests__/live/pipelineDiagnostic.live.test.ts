@@ -1,6 +1,5 @@
-/* eslint-disable no-console -- The report *is* this file's output. It runs
-   only under `npm run test:live`, never in the app bundle, and console.warn
-   would misrepresent a successful measurement as a problem. */
+/// <reference types="node" />
+import { writeFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { createGameService } from '../../gameService';
 import { setGenerationObserver, type GenerationAttemptFailure } from '../../generationObserver';
@@ -19,7 +18,8 @@ import { LIVE_API_KEY } from './liveEnv';
 // table you came here to read. Costs a real case generation per run — like
 // the rest of this directory, it only runs under `npm run test:live`.
 
-const RUNS = 5;
+const RUNS = Number(process.env.DIAGNOSTIC_RUNS ?? 5);
+const REPORT_PATH = process.env.DIAGNOSTIC_REPORT ?? '/tmp/bench-pipeline-diagnostic.txt';
 // Five sequential pipelines, each 7+ Gemini calls that may retry twice over.
 // The config-level testTimeout (60s) is sized for a single call.
 const TIMEOUT_MS = 900_000;
@@ -53,16 +53,11 @@ function normalizeIssuePath(issue: string): string {
   return path.replace(/\.\d+/g, '[]');
 }
 
-function printTable(title: string, rows: [string, number][]): void {
-  console.log(`\n${title}`);
-  if (rows.length === 0) {
-    console.log('  (none)');
-    return;
-  }
+function renderTable(title: string, rows: [string, number][]): string {
+  if (rows.length === 0) return `\n${title}\n  (none)`;
   const width = Math.max(...rows.map(([label]) => label.length));
-  for (const [label, count] of rows) {
-    console.log(`  ${String(count).padStart(4)}  ${label.padEnd(width)}`);
-  }
+  const body = rows.map(([label, count]) => `  ${String(count).padStart(4)}  ${label.padEnd(width)}`);
+  return `\n${title}\n${body.join('\n')}`;
 }
 
 describe.skipIf(LIVE_API_KEY === null)('Generation pipeline diagnostic (live)', () => {
@@ -95,27 +90,32 @@ describe.skipIf(LIVE_API_KEY === null)('Generation pipeline diagnostic (live)', 
       const schemaFailures = failures.filter((f) => f.kind === 'SCHEMA');
       const issues = schemaFailures.flatMap((f) => f.issues);
 
-      console.log('\n' + '='.repeat(72));
-      console.log(`PIPELINE DIAGNOSTIC — ${succeeded}/${RUNS} runs produced a valid case ` +
-        `(${Math.round((succeeded / RUNS) * 100)}%)`);
-      console.log('='.repeat(72));
+      const report = [
+        '='.repeat(72),
+        `PIPELINE DIAGNOSTIC — ${succeeded}/${RUNS} runs produced a valid case ` +
+          `(${Math.round((succeeded / RUNS) * 100)}%)`,
+        '='.repeat(72),
+        renderTable(
+          'Runs killed by stage (exhausted all attempts):',
+          ranked(tally(outcomes.filter((o) => !o.ok), (o) => o.failedStage ?? 'unknown')),
+        ),
+        renderTable(
+          'Failed attempts by stage (survivable retries included):',
+          ranked(tally(failures, (f) => f.stage)),
+        ),
+        renderTable('Failed attempts by kind:', ranked(tally(failures, (f) => f.kind))),
+        renderTable('Schema violations by field path:', ranked(tally(issues, normalizeIssuePath))),
+        renderTable('Schema violations, full message:', ranked(tally(issues, (issue) => issue))),
+        ...outcomes.filter((o) => !o.ok).map((o) => `\nFATAL: ${o.message}`),
+        '',
+      ].join('\n');
 
-      printTable(
-        'Runs killed by stage (exhausted all attempts):',
-        ranked(tally(outcomes.filter((o) => !o.ok), (o) => o.failedStage ?? 'unknown')),
-      );
-      printTable(
-        'Failed attempts by stage (survivable retries included):',
-        ranked(tally(failures, (f) => f.stage)),
-      );
-      printTable('Failed attempts by kind:', ranked(tally(failures, (f) => f.kind)));
-      printTable('Schema violations by field path:', ranked(tally(issues, normalizeIssuePath)));
-      printTable('Schema violations, full message:', ranked(tally(issues, (issue) => issue)));
-
-      for (const outcome of outcomes.filter((o) => !o.ok)) {
-        console.log(`\nFATAL: ${outcome.message}`);
-      }
-      console.log('');
+      // Written to a file, not just logged: vitest's reporter swallows test
+      // console output depending on how the run is invoked, and a measurement
+      // that costs five real case generations must not be recoverable only
+      // from a terminal scrollback.
+      writeFileSync(REPORT_PATH, report);
+      console.error(`\n${report}\nDiagnostic report written to ${REPORT_PATH}`);
     },
     TIMEOUT_MS,
   );

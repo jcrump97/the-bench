@@ -60,12 +60,35 @@ and seven independent stages multiply — 85% each is 32% end to end.
 ### Measurements
 
 Before/after end-to-end `generateCase` success across 5 live runs, from the
-C2 diagnostic. Filled in as the runs happen.
+C2 diagnostic (`/tmp/bench-pipeline-diagnostic.txt`).
 
 | Sweep | Success rate | Dominant failures |
 |---|---|---|
-| Baseline (pre-C3) | _pending_ | _pending_ |
+| Baseline 2026-08-02 | **5/5 (100%)** | EvidenceGen first attempt failed in 3/5 runs on `relevanceScore`/`credibilityScore` `>= 1`; all recovered on retry |
 | Post-C9 | _pending_ | _pending_ |
+
+**The baseline contradicts two of the three hypotheses above — recorded here
+rather than quietly dropped.**
+
+- **Hypothesis 2 (`conditions: []`) did not reproduce.** Gemini never emitted a
+  stray `conditions` array. The likely reason: it materializes fields marked
+  `nullable: true` as an explicit `null` (which is how `interrogation` was
+  found), but simply *omits* plain non-required fields like `conditions`.
+  `stripInapplicableConditions` therefore lands as cheap insurance against a
+  model-behavior change, not as the fix for an observed failure.
+- **Hypothesis 1 is confirmed, but narrowly.** The only violation actually
+  observed is exactly the missing-numeric-range case: the model emits
+  `relevanceScore`/`credibilityScore` on a 0-1 normalized scale because nothing
+  in the response schema says the range is 1-10. That makes **C5 the confirmed
+  highest-value fix**, and it is promoted ahead of C3/C4.
+- **The reported "mistrials most of the time" is not reproducible from the
+  pipeline alone** at this key and model. The store hydration path was checked
+  and is correct (`WelcomeScreen` sets case → narrative → phase, all while
+  `WELCOME`). Remaining candidates are all *invisible* in the current code, which
+  is itself the bug C8 fixes: rate-limit exhaustion, a safety block, or a
+  `MAX_TOKENS` truncation are today reported as "no candidate text" or "not
+  valid JSON" with no way to tell them apart. Needs the actual `[stage] message`
+  from the player's Mistrial screen to close out.
 
 ## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
 
