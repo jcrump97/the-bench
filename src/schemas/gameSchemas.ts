@@ -156,15 +156,25 @@ function addChoiceCoverageIssues(
   }
 }
 
-// Charges carry their own statutory range; case-level exposure is derived
-// deterministically from these in src/lib/sentencingExposure.ts.
-export const ChargeSchema = z.strictObject({
+// The structural/legal half of a charge — the part the LLM must produce first,
+// before the voiced verdict layer is authored in a separate pipeline stage.
+const ChargeCoreShape = {
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(200),
   classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
   elements: z.array(StatuteElementSchema).min(1),
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema).min(1),
+};
+
+export const ChargeCoreSchema = z.strictObject(ChargeCoreShape).superRefine((charge, ctx) => {
+  addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx);
+});
+
+// Charges carry their own statutory range; case-level exposure is derived
+// deterministically from these in src/lib/sentencingExposure.ts.
+export const ChargeSchema = z.strictObject({
+  ...ChargeCoreShape,
   // The courtroom's voiced reaction to each possible verdict on this charge,
   // spoken immediately after the verdict enters the record.
   verdictReactions: z.strictObject({
@@ -526,6 +536,7 @@ export type CasePayload         = z.infer<typeof CasePayloadSchema>;
 export type GamePhase           = z.infer<typeof GamePhaseSchema>;
 export type Environment         = z.infer<typeof EnvironmentSchema>;
 export type Charge              = z.infer<typeof ChargeSchema>;
+export type ChargeCore          = z.infer<typeof ChargeCoreSchema>;
 export type PleaPosture         = z.infer<typeof PleaPostureSchema>;
 export type PleaNarrative       = z.infer<typeof PleaNarrativeSchema>;
 export type PleaDecision        = z.infer<typeof PleaDecisionSchema>;
