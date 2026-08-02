@@ -1,5 +1,72 @@
 # TODO
 
+## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — IN PROGRESS)
+
+Player-reported: the live Gemini pipeline lands on `ErrorScreen` ("Mistrial")
+most of the time. Plan: `~/.claude/plans/peaceful-wandering-wigderson.md`.
+Branch: `fix/pipeline-reliability`.
+
+**Root cause is not model flakiness.** Three compounding gaps, each verified
+by reading `src/lib/llm/` against `src/schemas/gameSchemas.ts`:
+
+1. **The Zod schemas enforce ~15 constraints Gemini is never told about.** The
+   hand-written `GeminiSchema` type (`geminiClient.ts:27-37`) cannot express
+   length, range, or pattern, and no prompt states the cross-field refinements
+   — judge-line choice coverage, `objectionRisk`/`defenseObjection`, a
+   mandatory minimum needing a same-type maximum, the `caseId` pattern. The
+   model is graded on a rubric it was never shown.
+2. **Gemini materializes every declared property, and `SentenceSchema` is
+   strict.** `stages.ts:518-534` already documents this for `interrogation:
+   null`; the same thing happens to `conditions: []` on every sentence, which
+   `SentenceSchema` rejects as an unrecognized key on PRISON/JAIL/FINE/
+   COMMUNITY_SERVICE and as too-small on PROBATION. Guarded only by a prompt
+   sentence. A two-charge case with two priors rolls this die ~10 times.
+3. **Prompts suppress bad output instead of producing good output**, and the
+   inference parameters are half-configured — no `maxOutputTokens`, no
+   `finishReason` check, no safety config, and no thinking config on a
+   `flash-lite` tier that does not think by default.
+
+Amplified by two structural problems: `generateValidated`'s retry never shows
+the model the JSON it produced (so it regenerates blind rather than repairing),
+and seven independent stages multiply — 85% each is 32% end to end.
+
+- [ ] **C1** — this entry (`docs(todo)`).
+- [ ] **C2** — `onAttemptFailure` hook + `pipelineDiagnostic.live.test.ts`
+      (5 runs, ranked stage × issue table). Baseline recorded below.
+- [ ] **C3** — `normalizeResponse.ts`: `dropNullInterrogation` moved here plus
+      `stripInapplicableConditions`, wired into StatuteSelection, CharacterGen,
+      and the repair preprocess.
+- [ ] **C4** — deterministic id/`targetElementId` reconciliation in
+      `finalizeCasePayload` before the LLM repair round.
+- [ ] **C5** — `minLength`/`maxLength`/`minimum`/`maximum`/`pattern` carried
+      into the response schema for ~20 fields.
+- [ ] **C6** — every `*_SYSTEM` rebuilt on affirmative, exemplified
+      instruction (ROLE / TASK / RULES / EXAMPLE).
+- [ ] **C7** — retry carries the previous response, so it repairs.
+- [ ] **C8** — `MAX_TOKENS` and safety blocks surface as typed errors;
+      `safetySettings` at `BLOCK_ONLY_HIGH`.
+- [ ] **C9** — per-stage temperature and model-aware thinking config
+      (`thinkingBudget` for 2.5, `thinkingLevel` for 3, never both).
+- [ ] **C10** — regression tests over Gemini-shaped raw responses.
+- [ ] **C11** *(conditional)* — split `runEvidenceGen` only if it still
+      dominates the post-fix table.
+- [ ] **C12/C13** — `qa-agent`: case memory (it is asked to find cross-beat
+      contradictions it structurally cannot see), plus bounded per-beat
+      screenshot and inference cost.
+- [ ] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
+      README status, and the stale four-cases/five-runs drift at
+      `AGENTS.md:74`/`:88`).
+
+### Measurements
+
+Before/after end-to-end `generateCase` success across 5 live runs, from the
+C2 diagnostic. Filled in as the runs happen.
+
+| Sweep | Success rate | Dominant failures |
+|---|---|---|
+| Baseline (pre-C3) | _pending_ | _pending_ |
+| Post-C9 | _pending_ | _pending_ |
+
 ## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
 
 Nine issues in one push, eight commits (`feat(schema)` → `feat(demo)`),
