@@ -178,8 +178,34 @@ async function callGeminiJson(apiKey, model, { systemInstruction, parts, respons
     }),
   });
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (text === undefined) throw new Error('Gemini response contained no candidate text');
+
+  // A blocked prompt never reaches generation, so there are no candidates at
+  // all — check it before looking for text that cannot exist. Mirrors the
+  // app's own geminiClient.ts: without this, a SAFETY block reads as "no
+  // candidate text", burns a retry, and degrades — never naming the real cause.
+  const blockReason = data.promptFeedback?.blockReason;
+  if (blockReason !== undefined) {
+    throw new Error(`Gemini blocked the prompt (${blockReason})`);
+  }
+
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
+
+  // Order matters: a MAX_TOKENS candidate can carry partial text, and handing
+  // that back as if it were complete is how a truncation gets misreported as
+  // malformed JSON. Name the real cause instead — same fix as the app's client.
+  if (candidate?.finishReason === 'MAX_TOKENS') {
+    throw new Error(
+      `Gemini stopped at the output token limit (${QA_MAX_OUTPUT_TOKENS}); the JSON is truncated, not malformed`,
+    );
+  }
+  if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'PROHIBITED_CONTENT') {
+    throw new Error(`Gemini stopped generating for ${candidate.finishReason}`);
+  }
+  if (text === undefined) {
+    const detail = candidate?.finishReason === undefined ? '' : ` (finishReason: ${candidate.finishReason})`;
+    throw new Error(`Gemini response contained no candidate text${detail}`);
+  }
   return text;
 }
 
@@ -439,14 +465,32 @@ async function gotoWithRetry(page, url, attempts = 20) {
 // timed out at 180s on a run that hit retries — generation alone can
 // legitimately take several minutes in the worst case, so this defaults much
 // longer than that single observed failure.
+//
+// On failure, scrapes the ErrorScreen's technical-details <details> rather
+// than relying on console capture alone. The app stores the full
+// `[StageName] ...` error in lastGenerationError and renders it in the DOM
+// (src/components/screens/ErrorScreen.tsx), so reading it straight from the
+// page is more reliable than timing-dependent console-event capture — and is
+// exactly the stage-level diagnostic that tells you which of the seven
+// response schemas actually failed.
 async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000)) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if ((await page.locator('[data-action-bar] button').count()) > 0) return 'READY';
-    if ((await page.locator('text=Mistrial').count()) > 0) return 'ERROR';
+    if ((await page.locator('[data-action-bar] button').count()) > 0) return { status: 'READY', technicalDetails: '' };
+    if ((await page.locator('text=Mistrial').count()) > 0) {
+      // The ErrorScreen renders the stage and message in a collapsed <details>.
+      // Best-effort — if the selector misses, the console-errors fallback below
+      // still carries something.
+      let technicalDetails = '';
+      try {
+        const detailsText = await page.locator('details').innerText();
+        if (detailsText) technicalDetails = detailsText.trim();
+      } catch { /* details not present or not rendered */ }
+      return { status: 'ERROR', technicalDetails };
+    }
     await page.waitForTimeout(1000);
   }
-  return 'TIMEOUT';
+  return { status: 'TIMEOUT', technicalDetails: '' };
 }
 
 (async () => {
@@ -491,15 +535,43 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
     const genResult = await waitForGenerationToSettle(page);
-    if (genResult !== 'READY') {
-      const consoleNote = consoleErrors.length > 0 ? ` — console: ${consoleErrors.join(' | ')}` : ' — no console errors captured (the app swallows generation failures without logging)';
-      outcome = (genResult === 'ERROR' ? 'FAIL: case generation reached ERROR_STATE (Mistrial)' : 'FAIL: case generation timed out') + consoleNote;
+    if (genResult.status !== 'READY') {
+      const techNote = genResult.technicalDetails
+        ? ` — ErrorScreen technical details: ${genResult.technicalDetails}`
+        : '';
+      const consoleNote = consoleErrors.length > 0
+        ? ` — console: ${consoleErrors.join(' | ')}`
+        : ' — no console errors captured';
+      outcome =
+        (genResult.status === 'ERROR'
+          ? 'FAIL: case generation reached ERROR_STATE (Mistrial)'
+          : 'FAIL: case generation timed out') + techNote + consoleNote;
       await page.screenshot({ path: path.join(SHOTS_DIR, 'generation-failure.png'), fullPage: true });
     } else {
       let beat = 0;
       let stuckSinceMs = null;
       while (beat < MAX_ITERATIONS) {
         beat++;
+
+        // A mid-game ERROR_STATE (Mistrial) can happen after the aftermath
+        // call fails — the main loop only checked for "New Case" and
+        // action-bar controls, so a Mistrial here (no action bar, no "New
+        // Case" button) would run the stuck timer to exhaustion and report
+        // a useless "no actionable control" FAIL instead of naming the
+        // actual generation failure. The ErrorScreen renders the stage and
+        // message in a <details>, so scrape it — same logic as
+        // waitForGenerationToSettle's ERROR branch.
+        if ((await page.locator('text=Mistrial').count()) > 0) {
+          let technicalDetails = '';
+          try {
+            const detailsText = await page.locator('details').innerText();
+            if (detailsText) technicalDetails = detailsText.trim();
+          } catch { /* details not present */ }
+          const consoleNote = consoleErrors.length > 0 ? ` — console: ${consoleErrors.join(' | ')}` : '';
+          outcome = `FAIL: reached ERROR_STATE (Mistrial) at beat ${beat}${technicalDetails ? ` — ErrorScreen: ${technicalDetails}` : ''}${consoleNote}`;
+          await page.screenshot({ path: path.join(SHOTS_DIR, 'midgame-mistrial.png'), fullPage: true });
+          break;
+        }
 
         if ((await page.getByRole('button', { name: 'New Case' }).count()) > 0) {
           const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();

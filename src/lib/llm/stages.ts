@@ -80,6 +80,13 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
 ): Promise<z.infer<Schema>> {
   let feedback: string | undefined;
   let lastError = 'unknown error';
+  // The raw text of the most recent Gemini response that failed to validate.
+  // Echoed (capped) in the terminal GameServiceError so the error carries not
+  // just *what* Zod rejected but *what the model actually returned* — the
+  // difference between "interrogation: Invalid input" (cryptic) and
+  // "interrogation: Invalid input ... Last response: {detectiveName,...}"
+  // (obvious: the schema was unwrapped).
+  let lastRawResponse: string | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let text: string;
@@ -104,11 +111,11 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
         // malformed schema undebuggable from the player's Mistrial screen,
         // and cost a live bisection to work out. The GeminiError type and
         // status are preserved so callers still classify it the same way.
-        reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [err.message] });
+        reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [err.message], schemaShape: null });
         throw new GeminiError(`[${stageName}] ${err.message}`, err.status);
       }
       lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
-      reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError] });
+      reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError], schemaShape: null });
       continue;
     }
 
@@ -117,7 +124,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
       raw = JSON.parse(text);
     } catch (err) {
       lastError = `Response was not valid JSON: ${String(err)}`;
-      reportAttemptFailure({ stage: stageName, attempt, kind: 'BAD_JSON', issues: [lastError] });
+      reportAttemptFailure({ stage: stageName, attempt, kind: 'BAD_JSON', issues: [lastError], schemaShape: schemaShape(responseSchema) });
       feedback = buildRetryFeedback([lastError], text);
       continue;
     }
@@ -126,20 +133,43 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     if (result.success) return result.data;
 
     const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
-    reportAttemptFailure({ stage: stageName, attempt, kind: 'SCHEMA', issues });
+    reportAttemptFailure({ stage: stageName, attempt, kind: 'SCHEMA', issues, schemaShape: schemaShape(responseSchema) });
     lastError = issues.join('; ');
+    lastRawResponse = text;
     feedback = buildRetryFeedback(issues, text);
   }
 
   // The stage name is what actually makes this actionable in
   // console.error/lastGenerationError.message — a pipeline runs 6+ of these,
   // and "Failed to produce valid output" alone doesn't say which one.
-  throw new GameServiceError(`[${stageName}] Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}`);
+  //
+  // The raw response echo is the single highest-value diagnostic: the joined
+  // Zod issues say *what* Zod rejected, but not *what the model actually
+  // returned* that triggered the rejection. The InterrogationGen unwrapped-
+  // schema bug produced `interrogation: Invalid input: expected object,
+  // received undefined` three times — accurate but cryptic until you saw that
+  // the model returned `{detectiveName, outcome, ...}` (no `interrogation`
+  // wrapper), at which point the cause is obvious. Cap the echo so a runaway
+  // EvidenceGen response doesn't blow the message.
+  const echoed = lastRawResponse === null
+    ? ''
+    : `\nLast response (truncated): ${lastRawResponse.length > MAX_ECHOED_RESPONSE_CHARS ? `${lastRawResponse.slice(0, MAX_ECHOED_RESPONSE_CHARS)}...[truncated]` : lastRawResponse}`;
+  throw new GameServiceError(`[${stageName}] Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}${echoed}`);
 }
 
 function requireChoiceCoverage(options: { choice: string }[], allChoices: readonly string[]): string | null {
   const missing = allChoices.filter((choice) => !options.some((o) => o.choice === choice));
   return missing.length > 0 ? `Missing judge-line coverage for: ${missing.join(', ')}` : null;
+}
+
+// Top-level property names of a Gemini responseSchema, when it's an object —
+// null otherwise. Recorded on every failed attempt so the live diagnostic
+// report can surface a wrapped-vs-unwrapped schema divergence (the exact shape
+// of bug that made InterrogationGen send `{detectiveName, outcome, ...}` when
+// Zod expected `{interrogation: {...}}`) without a live bisection.
+function schemaShape(schema: GeminiSchema): string[] | null {
+  if (schema.type !== 'object') return null;
+  return schema.properties ? Object.keys(schema.properties) : [];
 }
 
 // ============================================================================
@@ -602,7 +632,19 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
 // ============================================================================
 const InterrogationGenSchema = z.object({ interrogation: InterrogationSchema });
 
-
+// The Gemini responseSchema must mirror the Zod wrapper — a top-level
+// `interrogation` object, not the inner shape directly. INTERROGATION_GEMINI_SCHEMA
+// alone is the unwrapped shape reused as the nested `interrogation` field on
+// EVIDENCE_GEMINI_SCHEMA (line 422), where it is correct; passing it un-wrapped
+// here made the live API return `{ detectiveName, outcome, ... }` and Zod reject
+// it with `interrogation: Invalid input` — every other stage wraps correctly,
+// the unit-test mock returned the wrapped shape so the divergence was invisible
+// until a live run.
+const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
+  type: 'object',
+  properties: { interrogation: INTERROGATION_GEMINI_SCHEMA },
+  required: ['interrogation'],
+};
 
 const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
 
@@ -645,7 +687,7 @@ export async function runInterrogationGen(
     'InterrogationGen',
     INTERROGATION_GEN_SYSTEM,
     (feedback) => buildInterrogationGenContents(defendant, environment, profile, feedback),
-    INTERROGATION_GEMINI_SCHEMA,
+    INTERROGATION_GEN_GEMINI_SCHEMA,
     InterrogationGenSchema,
   );
 
