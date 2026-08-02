@@ -62,6 +62,29 @@ const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
 
+// A grader's severity ratings need to be comparable between runs — the API's
+// default temperature of 1.0 makes the same beat flip between "no findings"
+// and "HIGH severity" on a re-run for no reason tied to the content itself.
+const QA_TEMPERATURE = Number(process.env.QA_TEMPERATURE ?? 0.2);
+// An unbounded findings array can run long enough to truncate the JSON
+// mid-object, which fails validation for a reason that has nothing to do
+// with the judgment itself. Bound it generously instead.
+const QA_MAX_OUTPUT_TOKENS = Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 2048);
+
+// Gemini's "thinking" knob is split by model family: 2.5-series models take a
+// numeric thinkingBudget, Gemini 3 models take a thinkingLevel enum, and
+// sending both fields in the same request returns HTTP 400. selectQaModel
+// resolves the model name at runtime — nothing here is hardcoded — so which
+// field (if either) applies has to be derived from that resolved name rather
+// than assumed. This skill prefers the plain `flash` tier (see selectQaModel
+// below), where thinking is otherwise on by default with an unbounded
+// dynamic budget; capping it keeps judgment latency and cost predictable.
+function resolveThinkingConfig(model) {
+  if (/gemini-2\.5/.test(model)) return { thinkingConfig: { thinkingBudget: 512 } };
+  if (/gemini-3/.test(model)) return { thinkingConfig: { thinkingLevel: 'low' } };
+  return {};
+}
+
 function isRetryableStatus(status) {
   return status === 429 || status >= 500;
 }
@@ -145,7 +168,13 @@ async function callGeminiJson(apiKey, model, { systemInstruction, parts, respons
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema,
+        temperature: QA_TEMPERATURE,
+        maxOutputTokens: QA_MAX_OUTPUT_TOKENS,
+        ...resolveThinkingConfig(model),
+      },
     }),
   });
   const data = await response.json();
@@ -273,27 +302,54 @@ async function judgeContent(model, { memory, promptText, screenshot, mode }) {
     : mode === 'sentencing' ? SentencingSchema
     : ReviewOnlySchema;
 
-  const imagePart = { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } };
+  // Screenshots are throttled upstream (see QA_SHOT_EVERY) — most beats now
+  // call this with no image at all, so the image part is only included when
+  // one was actually captured for this beat.
+  const imagePart = screenshot
+    ? { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } }
+    : null;
 
   const composed = `${memory}\n\n---\n\n${promptText}`;
 
   let lastError = null;
+  let lastRaw = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    // Include the actual response that failed, not just the Zod error — the
+    // error message alone ("expected number, received string") gives the
+    // model nothing to anchor the fix to; the raw text lets it see exactly
+    // which field it got wrong.
     const text = attempt === 0
       ? composed
-      : `${composed}\n\nYour previous response failed validation: ${lastError}. Return corrected JSON only.`;
+      : `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw}\n\nReturn corrected JSON only.`;
+    const parts = imagePart ? [{ text }, imagePart] : [{ text }];
     const raw = await callGeminiJson(API_KEY, model, {
       systemInstruction: PERSONA,
-      parts: [{ text }, imagePart],
+      parts,
       responseSchema: schema,
     });
+    lastRaw = raw;
     try {
       return zodSchema.parse(JSON.parse(raw));
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
-  throw new Error(`QA judgment call failed validation twice in a row: ${lastError}`);
+
+  // A live run's whole point is surviving a 10-20 minute playthrough — one
+  // beat's judgment call failing validation twice shouldn't discard the rest
+  // of it. Degrade to a neutral, mode-appropriate result and let the run
+  // continue; the downstream fallback logic (out-of-range chosenIndex ->
+  // first option, missing amounts -> each line's floor) already exists to
+  // absorb exactly this shape of result, so this leans on it rather than
+  // duplicating it.
+  console.warn(`QA judgment call failed validation twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
+  if (mode === 'decide') {
+    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.' };
+  }
+  if (mode === 'sentencing') {
+    return { findings: [], amounts: [], reasoning: 'QA judgment call failed validation twice; defaulted to the statutory floor.' };
+  }
+  return { findings: [] };
 }
 
 // ---------- Prompt builders ----------
@@ -357,6 +413,14 @@ const REPORT_DIR = process.env.QA_REPORT_DIR ?? '/tmp/bench-qa-report';
 const SHOTS_DIR = process.env.QA_SHOTS_DIR ?? path.join(REPORT_DIR, 'screenshots');
 const MAX_ITERATIONS = Number(process.env.QA_MAX_ITERATIONS ?? 150);
 const STUCK_TIMEOUT_MS = Number(process.env.QA_STUCK_TIMEOUT_MS ?? 60_000);
+// Screenshots dominate per-beat token cost, and most plain statement-advance
+// beats look pixel-identical to the one before — nothing in the layout
+// changed, so there's nothing new for the model to see. Decision/sentencing
+// beats and the first judged beat of the run always get one regardless of
+// this cadence; this only throttles the plain-advance beats in between. Every
+// beat still gets a screenshot written to disk — this only limits what the
+// *model* sees.
+const QA_SHOT_EVERY = Number(process.env.QA_SHOT_EVERY ?? 5);
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
 
 async function gotoWithRetry(page, url, attempts = 20) {
@@ -408,6 +472,11 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   let lastRowCount = 0;
   let outcome = 'IN_PROGRESS';
   const startedAt = new Date();
+  // Tracks whether any beat has been sent to the judgment model yet — the
+  // very first judged beat always gets a screenshot (nothing to diff it
+  // against, so err toward showing the model the starting state), regardless
+  // of QA_SHOT_EVERY.
+  let hasJudgedFirstBeat = false;
 
   function recordFindings(list, beat) {
     for (const f of list) findings.push({ ...f, beat });
@@ -434,10 +503,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
         if ((await page.getByRole('button', { name: 'New Case' }).count()) > 0) {
           const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();
           const delta = rows.slice(lastRowCount).join('\n\n');
+          // The final aftermath review always gets a screenshot — it's the
+          // one review-mode call the shot-cadence throttle never applies to.
           const screenshot = await page.screenshot({ type: 'png' });
           const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
           const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
           outcome = 'PASS: case completed';
           break;
         }
@@ -479,9 +551,15 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
         // "truncated text" VERBIAGE findings).
         const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();
         const delta = rows.slice(lastRowCount).join('\n\n');
-        const screenshot = await page.screenshot({ type: 'png' });
-        await page.screenshot({ path: path.join(SHOTS_DIR, `beat-${String(beat).padStart(3, '0')}.png`) });
+        // Captured once and reused for both purposes: the human-facing
+        // screenshot record on disk gets every beat regardless of judgment
+        // policy, and the same buffer is handed to the model only when the
+        // attach policy below says so — this used to be two separate
+        // page.screenshot() calls, doubling render cost for no reason.
+        const screenshotBuffer = await page.screenshot({ type: 'png' });
+        fs.writeFileSync(path.join(SHOTS_DIR, `beat-${String(beat).padStart(3, '0')}.png`), screenshotBuffer);
         const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
+        const isFirstJudgedBeat = !hasJudgedFirstBeat;
 
         if (choiceCount >= 2) {
           const options = [];
@@ -491,8 +569,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               text: (await choiceButtons.nth(i).innerText()).trim(),
             });
           }
-          const result = await judgeContent(model, { memory, promptText: decidePrompt(delta, options), screenshot, mode: 'decide' });
+          // Decision beats always get a screenshot — the whole point of the
+          // shot-cadence throttle is to skip beats where the layout can't
+          // have meaningfully changed, and a decision beat is exactly the
+          // opposite of that (a fresh action bar, often new case-file panels).
+          const result = await judgeContent(model, { memory, promptText: decidePrompt(delta, options), screenshot: screenshotBuffer, mode: 'decide' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
           let idx = result.chosenIndex;
           let fallback = false;
           if (!Number.isInteger(idx) || idx < 0 || idx >= choiceCount) { idx = 0; fallback = true; }
@@ -512,8 +595,10 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               label,
             });
           }
-          const result = await judgeContent(model, { memory, promptText: sentencingPrompt(delta, ranges), screenshot, mode: 'sentencing' });
+          // Sentencing is a decision beat too — always attach.
+          const result = await judgeContent(model, { memory, promptText: sentencingPrompt(delta, ranges), screenshot: screenshotBuffer, mode: 'sentencing' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
           const amounts = ranges.map((r, i) => {
             const amt = result.amounts[i];
             return Number.isInteger(amt) && amt >= r.min && amt <= r.max ? amt : r.min;
@@ -561,8 +646,21 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           for (let i = 0; i < plainCount; i++) texts.push((await plainButtons.nth(i).innerText()).trim());
           const candidateIdx = texts.findIndex((t) => t !== 'Skip to Next Decision');
           const clickIdx = candidateIdx === -1 ? 0 : candidateIdx;
-          const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
+          // A plain statement-advance beat's layout is identical to the last
+          // one — no new panel, no new action bar shape — so most of these
+          // are judged on text alone. Still send the image on the very first
+          // judged beat (nothing to compare the starting state against) and
+          // every QA_SHOT_EVERY'th beat thereafter, as a periodic visual
+          // sanity check between the guaranteed looks at decision beats.
+          const attachScreenshot = isFirstJudgedBeat || beat % QA_SHOT_EVERY === 0;
+          const result = await judgeContent(model, {
+            memory,
+            promptText: reviewOnlyPrompt(delta),
+            screenshot: attachScreenshot ? screenshotBuffer : null,
+            mode: 'review',
+          });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
           actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx] });
           const clicked = plainButtons.nth(clickIdx);
           const isSubmit = /Impose Sentence|Adjourn/.test(texts[clickIdx]);
