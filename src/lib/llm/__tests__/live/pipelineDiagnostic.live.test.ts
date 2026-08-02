@@ -90,6 +90,20 @@ describe.skipIf(LIVE_API_KEY === null)('Generation pipeline diagnostic (live)', 
       const schemaFailures = failures.filter((f) => f.kind === 'SCHEMA');
       const issues = schemaFailures.flatMap((f) => f.issues);
 
+      // One row per stage × schema-shape pair: "InterrogationGen: [detectiveName, outcome, ...]"
+      // vs "EnvironmentGen: [environment]". A stage whose Gemini responseSchema
+      // top-level keys don't match its Zod wrapper (e.g. unwrapped `{detectiveName,...}`
+      // when Zod expects `{interrogation: {...}}`) shows up here as a mismatch
+      // against the other stages' wrapped shapes — the exact divergence that
+      // made InterrogationGen return the wrong shape and Zod reject it with
+      // `interrogation: Invalid input`.
+      const shapeRows = ranked(
+        tally(
+          schemaFailures,
+          (f) => `${f.stage}: [${(f.schemaShape ?? []).join(', ')}]`,
+        ),
+      );
+
       const report = [
         '='.repeat(72),
         `PIPELINE DIAGNOSTIC — ${succeeded}/${RUNS} runs produced a valid case ` +
@@ -104,6 +118,7 @@ describe.skipIf(LIVE_API_KEY === null)('Generation pipeline diagnostic (live)', 
           ranked(tally(failures, (f) => f.stage)),
         ),
         renderTable('Failed attempts by kind:', ranked(tally(failures, (f) => f.kind))),
+        renderTable('Schema response shape by stage (top-level Gemini keys):', shapeRows),
         renderTable('Schema violations by field path:', ranked(tally(issues, normalizeIssuePath))),
         renderTable('Schema violations, full message:', ranked(tally(issues, (issue) => issue))),
         ...outcomes.filter((o) => !o.ok).map((o) => `\nFATAL: ${o.message}`),

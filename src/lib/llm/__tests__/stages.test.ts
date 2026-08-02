@@ -86,6 +86,26 @@ describe('runStatuteSelection', () => {
     await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(/^\[StatuteSelection\]/);
   });
 
+  // The joined Zod issues say *what* Zod rejected, but not *what the model
+  // actually returned* that triggered the rejection. The InterrogationGen
+  // unwrapped-schema bug produced `interrogation: Invalid input` three times —
+  // accurate but cryptic until you saw the model returned `{detectiveName,...}`
+  // with no `interrogation` wrapper. Echoing the last raw response turns that
+  // from a multi-hour bisection into a one-read diagnosis.
+  it('echoes the last raw response on terminal schema failure', async () => {
+    vi.mocked(callGemini).mockResolvedValue(JSON.stringify({ unexpected: 'shape' }));
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(/Last response.*unexpected.*shape/);
+  });
+
+  // BAD_JSON already echoes the raw text in the error itself (via String(err)
+  // on the SyntaxError, which names the offending token), so the explicit
+  // "Last response:" suffix is only added for SCHEMA failures — but the raw
+  // text is still present in the thrown message for JSON failures.
+  it('includes the raw text in the terminal JSON-failure message', async () => {
+    vi.mocked(callGemini).mockResolvedValue('definitely not json');
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(/definitely not json/);
+  });
+
   it('retries a transient GeminiError (network/429/5xx) and succeeds on a later attempt', async () => {
     // Previously a thrown GeminiError propagated straight out of
     // generateValidated, burning none of its own retry budget — a single
@@ -197,6 +217,30 @@ describe('runInterrogationGen', () => {
 
     expect(result?.outcome).toBe('DENIAL');
     expect(result?.challengeGround).toBe('MIRANDA');
+  });
+
+  // Regression: the Gemini responseSchema passed to callGemini must mirror the
+  // Zod wrapper — a top-level `interrogation` object — not the unwrapped inner
+  // shape. The unwrapped schema made the live API return `{ detectiveName, ... }`
+  // and Zod reject it with `interrogation: Invalid input`; the unit-test mock
+  // returned the wrapped shape so the divergence was invisible until a live run.
+  it('sends the wrapped responseSchema (top-level `interrogation` property) to callGemini', async () => {
+    mockCallsWith(
+      JSON.stringify({
+        interrogation: { ...rawInterrogationEvidence.interrogation, outcome: 'DENIAL', challengeGround: 'MIRANDA' },
+      }),
+    );
+
+    await runInterrogationGen(API_KEY, MODEL, defendant, environment, {
+      outcome: 'DENIAL',
+      challengeGround: 'MIRANDA',
+    });
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    const schema = vi.mocked(callGemini).mock.calls[0]![2].responseSchema;
+    expect(schema.type).toBe('object');
+    expect(schema.properties).toHaveProperty('interrogation');
+    expect(schema.required).toEqual(['interrogation']);
   });
 });
 

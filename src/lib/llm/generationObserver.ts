@@ -30,6 +30,17 @@ export interface GenerationAttemptFailure {
   attempt: number;
   kind: GenerationFailureKind;
   issues: string[];
+  /**
+   * Top-level property names of the Gemini responseSchema sent on this attempt
+   * (i.e. the keys of `responseSchema.properties`, when the schema is an
+   * object). Set on SCHEMA and BAD_JSON attempts so the live diagnostic report
+   * can show whether a stage sent a wrapped schema (`{interrogation: ...}`)
+   * vs an unwrapped one (`{detectiveName, outcome, ...}`) — exactly the
+   * divergence that made InterrogationGen return the wrong shape and Zod
+   * reject it with `interrogation: Invalid input`. Null when the schema is
+   * not an object or the attempt failed before validation (CALL_FAILED).
+   */
+  schemaShape: string[] | null;
 }
 
 type GenerationObserver = (failure: GenerationAttemptFailure) => void;
