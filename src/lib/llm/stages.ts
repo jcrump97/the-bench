@@ -342,8 +342,13 @@ const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
       maximum: 10,
       description: 'How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
     },
-    directExamination: { type: 'string', minLength: 1, maxLength: 1200 },
-    crossExamination: { type: 'string', maxLength: 1200, nullable: true },
+    directExamination: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 1200,
+      description: 'The witness\'s spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel\'s questions.'
+    },
+    crossExamination: { type: 'string', maxLength: 1200, nullable: true, description: 'The witness\'s spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel\'s questions.' },
   },
   required: [
     'id',
@@ -705,8 +710,9 @@ RULES:
 3. Cover both outcomes in every "rulingOptions" array: at least one option with choice "ADMITTED" and at least one with choice "EXCLUDED".
 4. Point each exhibit's "targetElementId" at one of the element ids you are given, or set it to null.
 5. Give every exhibit and every witness an id unique across the whole case.
-6. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
-7. ${BENCH_TRIAL_RULE}`;
+6. Write each witness's "directExamination" and "crossExamination" as first-person testimony the witness delivers from the stand, in a continuous narrative. Do not write counsel's questions mixed into the answer — the transcript voices the witness alone.
+7. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
+8. ${BENCH_TRIAL_RULE}`;
 
 function buildEvidenceGenContents(
   charges: Charge[],
