@@ -69,6 +69,10 @@ Knobs (all optional):
   `screenshots/` subdirectory (one PNG per beat) land here.
 - `QA_MAX_ITERATIONS` — default `150`. Safety cap so a stuck run doesn't spin
   forever.
+- `QA_MEMORY_CHARS` — default `12000`. How much of the already-read record is
+  carried into each judgment call (see below). Past the budget the record is
+  kept head-and-tail rather than truncated, so the Act 1 facts a contradiction
+  is measured against survive alongside recent context.
 - `QA_GENERATION_TIMEOUT_MS` — default `480000` (8 min). How long to wait for
   BYOK case generation before treating it as a hard failure. The six-plus
   sequential Gemini calls behind generation can each retry-with-feedback on a
@@ -82,8 +86,9 @@ Knobs (all optional):
    the courtroom or fail into `ErrorScreen` ("Mistrial") — the latter is a
    hard FAIL, not retried.
 2. At every beat, reads the newly-revealed transcript text (`main` innerText,
-   diffed against what was already reviewed) and a screenshot, and enumerates
-   the current `[data-action-bar]` controls:
+   diffed against what was already reviewed) and a screenshot, prepends **the
+   record it has already read plus the rulings it has already made**, and
+   enumerates the current `[data-action-bar]` controls:
    - **A single button** (a statement continue, or a forced transition like
      "Order Trial"/"Adjourn") → review-only judgment call, then click it.
      "Skip to Next Decision" is deliberately never the chosen button — a real
@@ -108,6 +113,16 @@ Knobs (all optional):
 Exit code is non-zero if generation failed, the run got stuck past
 `QA_MAX_ITERATIONS`, or any finding was `HIGH` severity. `MEDIUM`/`LOW`
 findings are informational and don't fail the run.
+
+## Why the tester carries the record
+
+Each judgment call used to receive only the *delta* since the last look, with
+no history and no conversation state — while the persona asked it to flag
+"facts that don't match earlier details". That finding class was structurally
+impossible to produce: there was nothing to compare a new line against. Every
+call now leads with `THE RECORD SO FAR` and the rulings already made, which is
+what makes cross-beat contradictions (a witness's age changing, an exhibit
+renamed, a date that moved) detectable at all.
 
 ## Gotchas
 

@@ -209,16 +209,61 @@ const SENTENCING_GEMINI_SCHEMA = {
 
 const PERSONA = `You are a meticulous, technically literate human QA tester playing "The Bench" for the first time — a California courtroom simulation where the PLAYER is the judge.
 
-Critical fact about this game: it is ALWAYS a bench trial. The judge (the player) alone rules on every objection and decides every verdict. There is NEVER a jury. Any dialogue that references a jury, jurors, or asks for a jury trial is a HIGH severity REALISM finding.
+Critical fact about this game: it is ALWAYS a bench trial. The judge (the player) alone rules on every objection and decides every verdict. Every party addresses the court directly — "Your Honor", "the Court". Dialogue that hands the decision to a jury, that addresses jurors, or that asks for a jury trial is a HIGH severity REALISM finding.
 
-Also flag, when genuinely present:
-- REALISM: anachronisms, internal contradictions (facts that don't match earlier details), courtroom procedure that wouldn't make sense in a bench trial, tonal breaks.
-- VERBIAGE: awkward phrasing, redundant text, confusing button/label text, typos.
-- UI_UX: anything wrong or confusing visible in the attached screenshot — layout glitches, unreadable or overlapping text, misalignment, unclear affordances.
+Each turn you are given THE RECORD SO FAR — everything you have already read — followed by the newly revealed lines. Check the new lines against the established record: names, ages, dates, locations, amounts, exhibit and witness names, and who said what. A fact in the new lines that contradicts the earlier record is the single most valuable finding you can report.
 
-Only report real issues — don't invent nitpicks about ordinary courtroom formality or stylistic flourish. Quote the exact offending text in "quote" (empty string if the finding is purely visual/UI). Keep "note" to one or two sentences on why it's a problem. If nothing is wrong, return an empty findings array — don't manufacture findings to have something to say.`;
+Report findings in these categories:
+- REALISM: contradictions with the earlier record, anachronisms, courtroom procedure that would not happen in a bench trial, tonal breaks.
+- VERBIAGE: awkward phrasing, redundant text, confusing button or label text, typos.
+- UI_UX: problems visible in the attached screenshot — layout glitches, unreadable or overlapping text, misalignment, unclear affordances.
 
-async function judgeContent(model, { promptText, screenshot, mode }) {
+Report a finding when you can quote the specific offending text in "quote", or — for a purely visual issue — name the specific element in "note" and leave "quote" an empty string. Keep "note" to one or two sentences on why it is a problem. Ordinary courtroom formality and stylistic flourish are correct for this game and belong in no finding. An empty findings array is the expected, correct answer for a beat that reads well.`;
+
+// How much of the already-read record to carry into each judgment call.
+const MEMORY_CHARS = Number(process.env.QA_MEMORY_CHARS ?? 12_000);
+
+// The tester used to see only the delta since its last look, with no memory of
+// any earlier beat — while PERSONA asked it to flag "facts that don't match
+// earlier details". That finding class was structurally impossible to produce:
+// there was nothing to compare against. This rebuilds the context on every
+// call: the record already read, plus the rulings this tester has already made.
+//
+// Past the budget, keep the head and the tail rather than truncating. Act 1
+// carries the durable facts a contradiction is measured against (the case
+// call, the charges, the People's statement of facts, the discovery
+// disclosures); the tail carries what just happened.
+function buildCaseMemory(priorRows, actionLog) {
+  if (priorRows.length === 0) {
+    return 'THE RECORD SO FAR: nothing yet — this is the opening of the case.';
+  }
+
+  let record = priorRows.join('\n\n');
+  if (record.length > MEMORY_CHARS) {
+    const head = Math.floor(MEMORY_CHARS * 0.6);
+    const tail = MEMORY_CHARS - head;
+    record = `${record.slice(0, head)}\n\n[... middle of the record omitted for length ...]\n\n${record.slice(-tail)}`;
+  }
+
+  const rulings = actionLog
+    .filter((a) => a.type === 'DECISION' || a.type === 'SENTENCING')
+    .map((a) =>
+      a.type === 'DECISION'
+        ? `- Beat ${a.beat}: you ruled "${a.chosen}".`
+        : `- Beat ${a.beat}: you imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}].`,
+    )
+    .join('\n');
+
+  return [
+    'THE RECORD SO FAR (already reviewed — check the new lines against these facts):',
+    record,
+    rulings.length > 0 ? `RULINGS YOU HAVE ALREADY MADE:\n${rulings}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+async function judgeContent(model, { memory, promptText, screenshot, mode }) {
   const schema =
     mode === 'decide' ? REVIEW_AND_DECIDE_GEMINI_SCHEMA
     : mode === 'sentencing' ? SENTENCING_GEMINI_SCHEMA
@@ -230,11 +275,13 @@ async function judgeContent(model, { promptText, screenshot, mode }) {
 
   const imagePart = { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } };
 
+  const composed = `${memory}\n\n---\n\n${promptText}`;
+
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const text = attempt === 0
-      ? promptText
-      : `${promptText}\n\nYour previous response failed validation: ${lastError}. Return corrected JSON only.`;
+      ? composed
+      : `${composed}\n\nYour previous response failed validation: ${lastError}. Return corrected JSON only.`;
     const raw = await callGeminiJson(API_KEY, model, {
       systemInstruction: PERSONA,
       parts: [{ text }, imagePart],
@@ -388,7 +435,8 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();
           const delta = rows.slice(lastRowCount).join('\n\n');
           const screenshot = await page.screenshot({ type: 'png' });
-          const result = await judgeContent(model, { promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
+          const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
+          const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
           outcome = 'PASS: case completed';
           break;
@@ -433,6 +481,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
         const delta = rows.slice(lastRowCount).join('\n\n');
         const screenshot = await page.screenshot({ type: 'png' });
         await page.screenshot({ path: path.join(SHOTS_DIR, `beat-${String(beat).padStart(3, '0')}.png`) });
+        const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
 
         if (choiceCount >= 2) {
           const options = [];
@@ -442,7 +491,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               text: (await choiceButtons.nth(i).innerText()).trim(),
             });
           }
-          const result = await judgeContent(model, { promptText: decidePrompt(delta, options), screenshot, mode: 'decide' });
+          const result = await judgeContent(model, { memory, promptText: decidePrompt(delta, options), screenshot, mode: 'decide' });
           recordFindings(result.findings, beat);
           let idx = result.chosenIndex;
           let fallback = false;
@@ -463,7 +512,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               label,
             });
           }
-          const result = await judgeContent(model, { promptText: sentencingPrompt(delta, ranges), screenshot, mode: 'sentencing' });
+          const result = await judgeContent(model, { memory, promptText: sentencingPrompt(delta, ranges), screenshot, mode: 'sentencing' });
           recordFindings(result.findings, beat);
           const amounts = ranges.map((r, i) => {
             const amt = result.amounts[i];
@@ -512,7 +561,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           for (let i = 0; i < plainCount; i++) texts.push((await plainButtons.nth(i).innerText()).trim());
           const candidateIdx = texts.findIndex((t) => t !== 'Skip to Next Decision');
           const clickIdx = candidateIdx === -1 ? 0 : candidateIdx;
-          const result = await judgeContent(model, { promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
+          const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
           actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx] });
           const clicked = plainButtons.nth(clickIdx);
