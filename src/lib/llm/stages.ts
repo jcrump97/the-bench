@@ -507,7 +507,7 @@ const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
 // ============================================================================
 
 // The single most important fact about this courtroom, stated as behaviour.
-const BENCH_TRIAL_RULE = `This is a bench trial. The judge alone rules on every objection and decides every verdict. Parties address the court directly — "Your Honor", "the Court" — and ask the court to find, hold, or rule.`;
+const BENCH_TRIAL_RULE = `This is a bench trial. The judge alone rules on every objection and decides every verdict. Parties address the court directly — "Your Honor", "the Court" — and ask the court to find, hold, or rule. Never reference a jury, jurors, or a jury trial — there is none in this courtroom.`;
 
 // A worked pair teaches the conditions rule in two lines where the previous
 // prose spent forty words on it: `conditions` rides with PROBATION and
@@ -1236,7 +1236,7 @@ TASK: Write the aftermath — public reaction, the consequences for those involv
 RULES:
 1. Ground every claim in the outcome you are given: the plea or the verdict that actually happened, and the sentence the judge actually imposed.
 2. Write between 1 and 4000 characters.
-3. This was a bench trial: the judge alone heard the case and decided it. Write the coverage around the judge's decision — that is what reporters and the public would be reacting to.`;
+3. This was a bench trial: the judge alone heard the case and decided it. Write the coverage around the judge's decision — that is what reporters and the public would be reacting to. Never reference a jury, jurors, or a jury trial — there was none. Phrases like "in the absence of a jury" or "without a jury" are unnecessary and will be rejected; the bench trial is the default, not a deviation.`;
 
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
   const base = [
