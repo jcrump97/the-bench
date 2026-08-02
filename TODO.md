@@ -200,34 +200,144 @@ result and therefore `status` are all derived from `caseData` and `band` alone
 (`pleaAssessment.ts:193-222`) — the rationales are pure pass-through. So the
 offer can be derived *before* the narrative that argues about it.
 
-- [ ] **D1** — this entry.
-- [ ] **D2** — `environment` threaded into InterrogationGen (finding 4).
-- [ ] **D3** — exhibits and witnesses into the finalize prompt (finding 3).
-- [ ] **D4** — examination fields written as testimony, not Q&A (finding 5).
-- [ ] **D5** — extract `derivePleaOfferTerms`; `buildPleaPosture` calls it so
+- [x] **D1** — this entry.
+- [x] **D2** — `environment` threaded into InterrogationGen (finding 4).
+- [x] **D3** — exhibits and witnesses into the finalize prompt (finding 3).
+- [x] **D4** — examination fields written as testimony, not Q&A (finding 5).
+- [x] **D5** — extract `derivePleaOfferTerms`; `buildPleaPosture` calls it so
       there is one derivation and no drift.
-- [ ] **D6** — offer terms and the defense's accept/reject into the plea
+- [x] **D6** — offer terms and the defense's accept/reject into the plea
       narrative prompt (finding 2).
-- [ ] **D7** — `ChargeSchema` split into `ChargeCoreSchema` + a voiced half.
+- [x] **D7** — `ChargeSchema` split into `ChargeCoreSchema` + a voiced half.
       It is a `strictObject(...).superRefine(...)`, so `.omit()` is
       unavailable; the split shares a shape object and `ChargeSchema` itself
       stays byte-identical in behaviour so demo cases cross the same gate.
-- [ ] **D8** — new `VerdictVoice` stage (finding 1). **Probe its response
+- [x] **D8** — new `VerdictVoice` stage (finding 1). **Probe its response
       schema against the live API before wiring it in** — a `minItems`
       constraint and a `thinkingBudget: 0` have each already broken this
       pipeline on plausible-sounding reasoning.
-- [ ] **D9** — `CaseSchema` refinement: the phrase "defendant &lt;Name&gt;" must
+- [x] **D9** — `CaseSchema` refinement: the phrase "defendant &lt;Name&gt;" must
       name the defendant (finding 6). All five demo cases must still pass.
-- [ ] **D10/D11/D12** — outstanding items from the skeptical review: a
+- [x] **D10/D11/D12** — outstanding items from the skeptical review: a
       degraded `qa-agent` review judgment currently reads as a clean beat, the
       repair round re-embeds stale context on its second retry, and
       `reconcileCrossStageIds` has one untested branch.
-- [ ] **D13** — docs sync, including the README pipeline diagram and stating
+- [x] **D13** — docs sync, including the README pipeline diagram and stating
       the `BLOCK_ONLY_HIGH` safety threshold as an accepted decision.
 
 Noted, not actioned: `MAX_ECHOED_RESPONSE_CHARS = 60_000` now applies to every
 stage's retry rather than only the repair round it was sized for. Fine at
 current payload sizes; revisit if a stage ever produces much larger output.
+
+### Multi-approach code review (three independent passes)
+
+Three reviewers ran in parallel — an AI/LLM implementation lens, a
+TypeScript/Zod strict-mode lens, and an architecture/determinism lens. All
+three returned **Ship with minor fixes**; none blocked. Findings below are
+ranked by severity and deduplicated across reviewers (two independently
+flagged the same Major, noted inline). The full per-reviewer output lives in
+the session transcript; this is the consolidated action list.
+
+**Major**
+
+- [ ] **R1 — `addDefendantNameIssues` false-positives on the defendant's own
+      first name.** `gameSchemas.ts:33` matches `defendant <Name>` and
+      compares against `fullName` or `lastName`, never `firstName`. A
+      verdict line "the court finds defendant Jordan guilty" where Jordan is
+      the defendant's first name is rejected even though Jordan *is* the
+      defendant. Flagged independently by both the schema and architecture
+      reviewers. Latent today (no demo case uses first-name-only phrasing),
+      but VerdictVoice could legitimately produce it and burn a repair round
+      or exhaust retries into a Mistrial. Fix: add a `firstName` accept
+      branch and a test for the "defendant `<FirstName>`" form.
+- [ ] **R2 — `credibilityScore`/`relevanceScore` Zod allows floats; Gemini
+      schema says `integer`.** `gameSchemas.ts:285,303` use
+      `z.number().min(1).max(10)` (accepts `7.5`); `stages.ts:371,408`
+      declare `type: 'integer'`. The Gemini gate is stricter than the Zod
+      gate — the inverse of the usual direction, and the same class of bug
+      as the original "Mistrial most of the time" root cause (Zod and the
+      Gemini schema disagreeing on a numeric constraint). Currently masked
+      because `integer` happens to reject floats at the API. Fix:
+      `z.number().int().min(1).max(10)` in both places, matching the
+      `amount` field at `gameSchemas.ts:116`.
+
+**Minor**
+
+- [ ] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
+      that their Zod counterparts enforce.** `crossExamination`
+      (`stages.ts:381` vs `gameSchemas.ts:290`), `defenseObjection`
+      (`stages.ts:415` vs `gameSchemas.ts:310`), and `directExamination`
+      already correct. Model could emit `""`, pass Gemini, fail Zod, burn a
+      retry — exactly the "constraint the model is never told" class this
+      branch set out to eliminate. Fix: add `minLength: 1` to the three.
+- [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
+      /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
+      name passes both gates and renders as an empty speaker line in
+      `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
+      `.min(1)` in both layers for all three fields.
+- [ ] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
+      fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
+      `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
+      schema but fails the downstream `CaseSchema`/`PleaNarrativeSchema`
+      gate, burning a repair round. Defeats the "fail fast at the stage that
+      produced the error" design. Fix: wrap the stage-schema `lineText`
+      fields in `noJury(z.string()...)` for symmetry.
+- [ ] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
+      VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
+      failure carries a `[StageName]` prefix; this one reports as
+      `stage: 'generateCase'` on the Mistrial screen. Fix: throw
+      `new GameServiceError('[VerdictVoice] missing voice for charge …')`,
+      or strengthen `VerdictVoiceSchema` to require every requested charge
+      id be present (a `superRefine`).
+- [ ] **R7 — `addDefendantNameIssues` does not scan `charge.name` or
+      `element.description`.** A charge name like "Theft from defendant
+      Arthur Pendelton" is not caught. Likely intentional (charge names are
+      statutory, not narrative) and prompt-defended, but the scope omission
+      is undocumented. Fix: a one-line comment noting the deliberate scope,
+      or add the fields.
+
+**Nit**
+
+- [ ] **R8 — `new Date().getFullYear()` is evaluated at module load.**
+      `stages.ts:317` and `gameSchemas.ts:355`. Across a year boundary a
+      long-running session uses the stale year. Negligible for this app's
+      usage pattern; note or pin.
+- [ ] **R9 — `MAX_ECHOED_RESPONSE_CHARS` truncation could slice mid-JSON.**
+      `stages.ts:52-54`. Currently safe (largest stage response is well
+      under 60KB), but if EvidenceGen ever grows past 60KB the repair would
+      operate on a truncated object. Worth a comment noting the largest
+      measured stage response size as the safety margin check.
+- [ ] **R10 — `extractPreviousResponse` couples to `buildRetryFeedback`'s
+      exact marker wording with no test.** `stages.ts:910-916` parses by the
+      `"Your previous response was:\n"` string; if the marker is reworded,
+      the repair round silently falls back to the stale `assembled` object —
+      the exact D11 bug. Fix: a unit test asserting the marker round-trips.
+- [ ] **R11 — `ChargeCoreShape` shared-spread has no compile-time drift
+      guard.** `gameSchemas.ts:224-253`. Byte-identical today, but a future
+      edit could desynchronize the two schemas with no type error. Fix: a
+      `Charge extends ChargeCore` compile assertion, or a test that
+      `ChargeSchema` parses every `ChargeCoreSchema`-valid input plus the
+      voiced fields.
+- [ ] **R12 — `CHARGE_GEMINI_SCHEMA` is now repair-only.** `stages.ts:228-
+      244` survives only inside `FULL_CASE_GEMINI_SCHEMA`. A comment noting
+      "repair-round only" would prevent someone simplifying it away.
+
+**Open questions for the author**
+
+1. Has `VERDICT_VOICE_GEMINI_SCHEMA` been probed against the live API? The
+   D8 plan note called for it; the 5/5 diagnostic ran after VerdictVoice
+   was wired in, so presumably yes — confirm no 400s appeared.
+2. Is `temperature: 0.7` still optimal after the prompt rebuild? The 5/5
+   measurement was at 0.7; re-measuring at 0.6/0.8 might find a better
+   operating point now that the model has stronger structural guidance.
+3. Does `assessDefense` mutate the `proposedSentence` array it shares with
+   `derivePleaOfferTerms`? `gameService.ts:64-65` passes the same reference
+   to both. Likely safe (`discountSentences` returns new arrays) but
+   unconfirmed.
+4. Should VerdictVoice receive the evidence/witness inventory too, so
+   verdict *reactions* can reference the evidence that drove the finding?
+   Currently it gets only charge ids+names and the defendant. A content-
+   quality question for a qa-agent sweep.
 
 ### Handoff notes (anyone picking this up cold)
 
