@@ -425,9 +425,44 @@ const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
 // a discriminated union), so nothing else stops the model from attaching an
 // empty or stray `conditions` array to a non-PROBATION sentence, which the
 // real Zod validation (a strict discriminated union) then rejects.
-const SENTENCE_CONDITIONS_INSTRUCTION = `For any sentence object: include "conditions" only when "type" is "PROBATION", and in that case give it at least one item; omit "conditions" entirely for PRISON, JAIL, FINE, and COMMUNITY_SERVICE sentences.`;
+// ============================================================================
+// Stage prompts.
+//
+// Every prompt below follows one shape — ROLE, TASK, RULES, and where a rule
+// is easier shown than said, EXAMPLE — and every rule is written as the thing
+// to do rather than the thing to avoid. That is not a style preference. A
+// prohibition ("never mention a jury") tells the model what not to write and
+// leaves it to guess the rest; naming the behaviour ("parties address the
+// court directly — 'Your Honor'") gives it something to produce. The rules
+// that used to live only in Zod refinements — choice coverage, the
+// objection/risk pairing, minimum-under-matching-maximum — are stated here
+// too, because a constraint the model is never told is a constraint it can
+// only satisfy by luck.
+// ============================================================================
 
-const STATUTE_SELECTION_SYSTEM = `You are generating the statutory charges for a California criminal court simulation. Invent one or more realistic charges under California law, each with its own elements, statutory sentencing ranges, and voiced verdict reactions/options. Every id must be unique. Do not include any real person's name. This is a bench trial: the judge alone decides every verdict. There is no jury — never write a verdict reaction or judge-line option that references a jury, jurors, or a jury trial. ${SENTENCE_CONDITIONS_INSTRUCTION}`;
+// The single most important fact about this courtroom, stated as behaviour.
+const BENCH_TRIAL_RULE = `This is a bench trial. The judge alone rules on every objection and decides every verdict. Parties address the court directly — "Your Honor", "the Court" — and ask the court to find, hold, or rule.`;
+
+// A worked pair teaches the conditions rule in two lines where the previous
+// prose spent forty words on it: `conditions` rides with PROBATION and
+// nothing else.
+const SENTENCE_SHAPE = `A sentence object carries "type", "unit", and a positive whole-number "amount". A PROBATION sentence also carries "conditions" with at least one entry; the other types carry no "conditions" key at all. Two valid sentences:
+{"type":"PROBATION","unit":"YEARS","amount":3,"conditions":["RANDOM_DRUG_TESTING"]}
+{"type":"PRISON","unit":"YEARS","amount":5}`;
+
+const STATUTE_SELECTION_SYSTEM = `ROLE: You are a California deputy district attorney drafting the charging document for a criminal case.
+
+TASK: Invent one or more realistic charges under California law. Give each charge its elements, its statutory sentencing range, the courtroom's voiced reaction to each possible verdict, and the judge's selectable verdict lines.
+
+RULES:
+1. Give every charge and every element an id that is unique across the whole case.
+2. Match each mandatory minimum with a maximum penalty of the same "type" that is at least as large. A charge whose minimum is 180 DAYS of JAIL needs a JAIL maximum as well, even when it also carries a PRISON maximum.
+3. Cover both outcomes in every "verdictOptions" array: at least one option with choice "GUILTY" and at least one with choice "NOT_GUILTY". The judge has to be able to speak either result from the bench.
+4. Keep each judge line to one or two sentences under 300 characters, and each reaction line under 600.
+5. Use fictional names throughout.
+6. ${BENCH_TRIAL_RULE}
+
+EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildStatuteSelectionContents(feedback: string | undefined): string {
   const base = 'Generate the charges and statuteContexts for a new case.';
@@ -460,7 +495,13 @@ const ENVIRONMENT_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['environment'],
 };
 
-const ENVIRONMENT_GEN_SYSTEM = `You are generating the scene environment for a California criminal court simulation: where and when the alleged offense occurred.`;
+const ENVIRONMENT_GEN_SYSTEM = `ROLE: You are an investigator recording the scene of an alleged offense for a California criminal case.
+
+TASK: Give the location type, the time of day, the weather, and a description of where and when the offense is alleged to have happened.
+
+RULES:
+1. Keep the description under 500 characters and concrete — the physical detail an investigator would put in a report.
+2. Choose "N/A" for weather when the scene is indoors or digital.`;
 
 function buildEnvironmentGenContents(charges: Charge[], feedback: string | undefined): string {
   const base = `Generate the environment for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
@@ -491,7 +532,17 @@ const CHARACTER_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['defendant'],
 };
 
-const CHARACTER_GEN_SYSTEM = `You are generating the defendant for a California criminal court simulation: a fictional person with demographics, criminal history, and OCEAN personality traits (openness, conscientiousness, extraversion, agreeableness, neuroticism, each 1-10). These traits are hidden behavior drivers — never state them as numbers in any prose fields elsewhere. Do not use any real person's identity. Each past conviction's sentences follow the same rule as any other sentence: ${SENTENCE_CONDITIONS_INSTRUCTION}`;
+const CHARACTER_GEN_SYSTEM = `ROLE: You are a probation officer compiling the defendant's background for a California criminal case.
+
+TASK: Produce one fictional defendant: demographics, criminal history, and the five OCEAN personality traits (openness, conscientiousness, extraversion, agreeableness, neuroticism).
+
+RULES:
+1. Score each OCEAN trait as a whole number from 1 to 10. The traits drive the defendant's behaviour behind the scenes; keep the numbers in these fields and describe the person in words everywhere else.
+2. Give the defendant an age between 18 and 120, and date each past conviction between 1900 and the present year.
+3. Build a fictional identity — name, history, and circumstances all invented.
+4. Each past conviction's sentences follow the sentence shape below.
+
+EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildCharacterGenContents(charges: Charge[], feedback: string | undefined): string {
   const base = `Generate the defendant for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
@@ -522,7 +573,15 @@ const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['interrogation'],
 };
 
-const INTERROGATION_GEN_SYSTEM = `You are dramatizing a recorded police custodial interrogation for a California criminal court simulation. You are given the exact structural outcome the interview must produce and the exact ground on which the defense will move to suppress it — write a transcript (4-24 lines, alternating detective/defendant naturally) that dramatizes precisely that outcome. Do not deviate from the given outcome or challengeGround. This is a bench trial: the judge alone decides the verdict. There is no jury — neither the detective nor the defendant should reference a jury or jury trial.`;
+const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
+
+TASK: Write the interview transcript — 4 to 24 lines, alternating naturally between the detective and the defendant.
+
+RULES:
+1. Dramatize exactly the outcome you are given, and echo that "outcome" and "challengeGround" back unchanged. What the interview produced, and the ground the defense will attack it on, are already decided; your job is how the room actually sounded.
+2. Write spoken dialogue — the detective's questions and the defendant's answers, as a tape would capture them.
+3. Keep each line under 400 characters.
+4. ${BENCH_TRIAL_RULE}`;
 
 function buildInterrogationGenContents(
   defendant: Defendant,
@@ -631,7 +690,18 @@ const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['evidence', 'witnesses'],
 };
 
-const EVIDENCE_GEN_SYSTEM = `You are generating the evidence exhibits and witnesses for a California criminal court simulation. Produce at least 3 evidence items and at least 2 witnesses. Each evidence item's targetElementId must reference one of the given valid element ids, or be null. Every id must be unique across evidence and witnesses. This is a bench trial: the judge alone rules on every objection and decides every verdict. There is no jury. Never write dialogue that refers to a jury, jurors, or "the jury" deciding or hearing anything — parties argue to the court.`;
+const EVIDENCE_GEN_SYSTEM = `ROLE: You are building the exhibit and witness list for a California criminal case, together with the voiced material the motion hearing and the trial will use.
+
+TASK: Produce at least 3 evidence exhibits and at least 2 witnesses.
+
+RULES:
+1. Score "relevanceScore" and "credibilityScore" as whole numbers from 1 to 10, where 10 is the most relevant exhibit or the most credible witness. These are ratings on a 1-to-10 scale, not probabilities and not fractions.
+2. Write a "defenseObjection" for every exhibit whose "objectionRisk" is MEDIUM or HIGH — those are the exhibits the defense fights. Set "defenseObjection" to null only when "objectionRisk" is LOW.
+3. Cover both outcomes in every "rulingOptions" array: at least one option with choice "ADMITTED" and at least one with choice "EXCLUDED".
+4. Point each exhibit's "targetElementId" at one of the element ids you are given, or set it to null.
+5. Give every exhibit and every witness an id unique across the whole case.
+6. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
+7. ${BENCH_TRIAL_RULE}`;
 
 function buildEvidenceGenContents(
   charges: Charge[],
@@ -753,14 +823,30 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
   ],
 };
 
-const FINALIZE_SYSTEM = `You are assembling the final narrative fields of a California criminal case file: a case number, a dry allegations-only docket summary, the People's in-character statement of facts, and both sides' closing arguments. No editorializing in the summary; the statementOfFacts and closingArguments are voiced, in-character. This is a bench trial: the judge alone decides the verdict. There is no jury — closing arguments are addressed to the court, never to a jury.`;
+const FINALIZE_SYSTEM = `ROLE: You are assembling the narrative face of a California criminal case file.
+
+TASK: Write the case number, the docket synopsis, the People's statement of facts, and both sides' closing arguments.
+
+RULES:
+1. Format the case number as two digits, "-CR-", then five digits — for example 24-CR-00042.
+2. Write "summary" as a dry, allegations-only docket synopsis: what is charged and nothing more, in under 1500 characters. Save every party's framing for the fields below.
+3. Write "statementOfFacts" in the prosecutor's own voice, spoken to the court, in under 1500 characters.
+4. Write each closing argument in that advocate's voice, addressed to the court, in under 1200 characters.
+5. ${BENCH_TRIAL_RULE}`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
   const base = `Charges: ${parts.charges.map((c) => c.name).join(', ')}. Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}. Environment: ${parts.environment.description}`;
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
-const REPAIR_SYSTEM = `You are repairing a California criminal case file JSON object that failed schema validation. You will be given the full object and the list of validation issues. Return a complete, corrected JSON object with the same overall shape, fixing every listed issue. This is a bench trial: the judge alone decides every verdict. There is no jury — if any listed issue is about a jury/juror reference, remove it; no field anywhere in the object should mention a jury.`;
+const REPAIR_SYSTEM = `ROLE: You are correcting a California criminal case file that failed schema validation.
+
+TASK: You are given the complete JSON object and the list of validation issues it produced. Return the same object with those issues fixed.
+
+RULES:
+1. Change only what the listed issues require. Every other field was accepted — return it exactly as it came.
+2. Return the whole object, not a fragment and not a description of the changes.
+3. ${BENCH_TRIAL_RULE} Where an issue points at a line that gives the decision to anyone but the judge, rewrite that line to address the court.`;
 
 function buildRepairContents(assembled: unknown, issues: z.ZodError, feedback: string | undefined): string {
   const issueList = issues.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('\n');
@@ -871,7 +957,15 @@ const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   required: ['prosecutionRationale', 'defenseRationale', 'allocution', 'pleaReactions', 'pleaRulingOptions'],
 };
 
-const PLEA_NARRATIVE_SYSTEM = `You are writing the plea-negotiation narrative for a California criminal court simulation, spoken on the record by each party — never privileged strategy or internal deliberation. This is a bench trial: if the case goes to trial, the judge alone hears it and decides the verdict. There is no jury — never write a party asking for, wanting, or referencing a jury trial.`;
+const PLEA_NARRATIVE_SYSTEM = `ROLE: You are counsel for both sides, stating your plea positions on the record.
+
+TASK: Write each party's plea rationale as spoken in open court — and, where the case carries an offer, the defendant's allocution, the courtroom's reaction to each possible ruling, and the judge's selectable ruling lines.
+
+RULES:
+1. Write only what a party would say aloud, on the record, with the other side listening. Keep strategy, internal deliberation, and privileged advice out of it.
+2. Cover both outcomes in "pleaRulingOptions": at least one option with choice "ACCEPT" and at least one with choice "REJECT".
+3. Keep each rationale under 1000 characters, the allocution under 800, judge lines under 300, and reaction lines under 600.
+4. ${BENCH_TRIAL_RULE} Both sides are weighing this offer against a trial before this judge.`;
 
 function buildPleaNarrativeContents(payload: CasePayload, feedback: string | undefined): string {
   const base = `Case: ${payload.charges.map((c) => c.name).join(', ')}. Defendant: ${payload.defendant.firstName} ${payload.defendant.lastName}.`;
@@ -926,7 +1020,14 @@ const AFTERMATH_GEMINI_SCHEMA: GeminiSchema = {
   required: ['narrative'],
 };
 
-const AFTERMATH_SYSTEM = `You are writing the aftermath narrative for a California criminal court simulation: public reaction, consequences, and press coverage conditioned on how the case actually resolved. 1-4000 characters. This is a bench trial: the judge alone decided the verdict. There is no jury — press coverage and public reaction should never reference a jury or jury trial.`;
+const AFTERMATH_SYSTEM = `ROLE: You are a court reporter writing the follow-up story once a California criminal case has closed.
+
+TASK: Write the aftermath — public reaction, the consequences for those involved, and how the press covered it.
+
+RULES:
+1. Ground every claim in the outcome you are given: the plea or the verdict that actually happened, and the sentence the judge actually imposed.
+2. Write between 1 and 4000 characters.
+3. This was a bench trial: the judge alone heard the case and decided it. Write the coverage around the judge's decision — that is what reporters and the public would be reacting to.`;
 
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
   const base = [
