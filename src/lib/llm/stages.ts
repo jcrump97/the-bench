@@ -609,7 +609,16 @@ function buildEvidenceGenSchema(interrogationRequired: boolean) {
 const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    evidence: { type: 'array', minItems: 3, items: EVIDENCE_GEMINI_SCHEMA },
+    // No minItems here, deliberately: Gemini rejects the whole request with a
+    // bare 400 INVALID_ARGUMENT when minItems is set on an array whose item
+    // schema contains the nullable nested `interrogation` object. Verified by
+    // bisection against the live API — the identical schema is accepted with
+    // this one constraint removed, and accepted with minItems restored once
+    // `interrogation` is dropped from the item. `witnesses` below keeps its
+    // minItems (its items have no nested nullable object), as do `charges`,
+    // `elements`, and `maximumPenalties`. Zod's `.min(3)` still enforces the
+    // count, and EVIDENCE_GEN_SYSTEM states it in the prompt.
+    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
     witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
   },
   required: ['evidence', 'witnesses'],
@@ -705,7 +714,16 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
     charges: { type: 'array', minItems: 1, items: CHARGE_GEMINI_SCHEMA },
     statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
     witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
-    evidence: { type: 'array', minItems: 3, items: EVIDENCE_GEMINI_SCHEMA },
+    // No minItems here, deliberately: Gemini rejects the whole request with a
+    // bare 400 INVALID_ARGUMENT when minItems is set on an array whose item
+    // schema contains the nullable nested `interrogation` object. Verified by
+    // bisection against the live API — the identical schema is accepted with
+    // this one constraint removed, and accepted with minItems restored once
+    // `interrogation` is dropped from the item. `witnesses` below keeps its
+    // minItems (its items have no nested nullable object), as do `charges`,
+    // `elements`, and `maximumPenalties`. Zod's `.min(3)` still enforces the
+    // count, and EVIDENCE_GEN_SYSTEM states it in the prompt.
+    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
     summary: { type: 'string', minLength: 1, maxLength: 1500 },
     statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
     closingArguments: {
