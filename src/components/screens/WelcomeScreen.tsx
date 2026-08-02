@@ -16,6 +16,8 @@ export function WelcomeScreen() {
   const setActivePleaNarrative = useGameStore((state) => state.setActivePleaNarrative);
   const setPhase = useGameStore((state) => state.setPhase);
   const resetBeatCursor = useUIStore((state) => state.resetBeatCursor);
+  const setLastGenerationError = useUIStore((state) => state.setLastGenerationError);
+  const clearLastGenerationError = useUIStore((state) => state.clearLastGenerationError);
 
   const vault = useSecurityStore((state) => state.vault);
   const setVault = useSecurityStore((state) => state.setVault);
@@ -32,6 +34,7 @@ export function WelcomeScreen() {
   const startCase = (source: CaseSource) => {
     if (generating) return;
     setGenerating(true);
+    clearLastGenerationError();
     void source
       .generateCase()
       .then(({ payload, pleaNarrative }) => {
@@ -40,7 +43,14 @@ export function WelcomeScreen() {
         resetBeatCursor();
         setPhase('ACT_1_INTAKE');
       })
-      .catch(() => setPhase('ERROR_STATE'))
+      .catch((err: unknown) => {
+        console.error('[GameService] generateCase failed:', err);
+        setLastGenerationError({
+          stage: 'generateCase',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        setPhase('ERROR_STATE');
+      })
       .finally(() => setGenerating(false));
   };
 

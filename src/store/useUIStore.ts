@@ -8,10 +8,21 @@ export type ActiveModal =
   | { type: 'EVENT' }
   | null;
 
+// Diagnostic-only record of the last GameService failure (case generation or
+// aftermath), for the ErrorScreen's collapsed technical-details line and
+// devtools. Deliberately unvalidated like the rest of this store — nothing
+// here crosses a trust boundary, it just carries whatever message the thrown
+// GameServiceError/GeminiError happened to have.
+export interface LastGenerationError {
+  stage: string;
+  message: string;
+}
+
 interface UIState {
   casePanelOpen: boolean;
   evidencePanelOpen: boolean;
   activeModal: ActiveModal;
+  lastGenerationError: LastGenerationError | null;
   // How many beats of the courtroom script have been revealed. Pure view
   // state by design: the script itself is derived from validated game state,
   // so the worst a cursor bug can do is pace the reveal wrong — it can never
@@ -40,6 +51,8 @@ interface UIState {
   // Fires the hint (and marks it spent); ends when the animation finishes.
   beginPanelHint: () => void;
   endPanelHint: () => void;
+  setLastGenerationError: (error: LastGenerationError) => void;
+  clearLastGenerationError: () => void;
 }
 
 // Both panels default open on desktop, closed on mobile and tablet. 1024px
@@ -58,6 +71,7 @@ export const useUIStore = create<UIState>((set) => ({
   casePanelOpen: isDesktop,
   evidencePanelOpen: isDesktop,
   activeModal: null,
+  lastGenerationError: null,
   beatCursor: 0,
   panelHintActive: false,
   panelHintPlayed: false,
@@ -73,4 +87,6 @@ export const useUIStore = create<UIState>((set) => ({
   resetBeatCursor: () => set({ beatCursor: 0 }),
   beginPanelHint: () => set({ panelHintActive: true, panelHintPlayed: true }),
   endPanelHint: () => set({ panelHintActive: false }),
+  setLastGenerationError: (error) => set({ lastGenerationError: error }),
+  clearLastGenerationError: () => set({ lastGenerationError: null }),
 }));

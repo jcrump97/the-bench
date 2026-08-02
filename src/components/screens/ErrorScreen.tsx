@@ -1,7 +1,9 @@
 import { useGameStore } from '../../store/useGameStore';
+import { useUIStore } from '../../store/useUIStore';
 
 export function ErrorScreen() {
   const setPhase = useGameStore((state) => state.setPhase);
+  const lastGenerationError = useUIStore((state) => state.lastGenerationError);
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-(--bg) px-4 text-center">
@@ -11,6 +13,14 @@ export function ErrorScreen() {
           Something went wrong and the case state could not be recovered. The proceedings have
           been vacated.
         </p>
+        {lastGenerationError && (
+          <details className="mt-3 max-w-md text-left text-xs text-(--text-muted)">
+            <summary className="cursor-pointer select-none">Technical details</summary>
+            <p className="mt-1 break-words">
+              [{lastGenerationError.stage}] {lastGenerationError.message}
+            </p>
+          </details>
+        )}
       </div>
       <button
         type="button"

@@ -30,6 +30,8 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
   const setAftermathNarrative = useGameStore((state) => state.setAftermathNarrative);
   const setPhase = useGameStore((state) => state.setPhase);
   const advanceBeat = useUIStore((state) => state.advanceBeat);
+  const setLastGenerationError = useUIStore((state) => state.setLastGenerationError);
+  const clearLastGenerationError = useUIStore((state) => state.clearLastGenerationError);
   const postureResult = usePleaPosture();
   const caseSource = useCaseSource();
 
@@ -66,7 +68,10 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
     setSubmitting(true);
     const imposedSentence = anyGuilty ? buildSentences(exposure.maximumPenalties, amounts) : [];
     setImposedSentence(imposedSentence);
+    clearLastGenerationError();
     if (caseSource === null) {
+      console.error('[GameService] generateAftermath failed: no case source available');
+      setLastGenerationError({ stage: 'generateAftermath', message: 'No case source available' });
       setPhase('ERROR_STATE');
       return;
     }
@@ -80,7 +85,12 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
       setAftermathNarrative(aftermath);
       setPhase('END_STATE');
       advanceBeat();
-    } catch {
+    } catch (err) {
+      console.error('[GameService] generateAftermath failed:', err);
+      setLastGenerationError({
+        stage: 'generateAftermath',
+        message: err instanceof Error ? err.message : String(err),
+      });
       setPhase('ERROR_STATE');
     }
   };

@@ -7,7 +7,7 @@ const INITIAL = {
 };
 
 beforeEach(() => {
-  useUIStore.setState({ ...INITIAL, activeModal: null, beatCursor: 0 });
+  useUIStore.setState({ ...INITIAL, activeModal: null, beatCursor: 0, lastGenerationError: null });
 });
 
 describe('useUIStore', () => {
@@ -71,5 +71,19 @@ describe('useUIStore — beatCursor', () => {
     useUIStore.getState().setBeatCursor(9);
     useUIStore.getState().resetBeatCursor();
     expect(useUIStore.getState().beatCursor).toBe(0);
+  });
+});
+
+describe('useUIStore — lastGenerationError', () => {
+  it('starts null', () => {
+    expect(useUIStore.getState().lastGenerationError).toBeNull();
+  });
+
+  it('records a stage and message, and clears back to null', () => {
+    useUIStore.getState().setLastGenerationError({ stage: 'generateCase', message: 'boom' });
+    expect(useUIStore.getState().lastGenerationError).toEqual({ stage: 'generateCase', message: 'boom' });
+
+    useUIStore.getState().clearLastGenerationError();
+    expect(useUIStore.getState().lastGenerationError).toBeNull();
   });
 });
