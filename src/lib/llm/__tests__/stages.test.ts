@@ -24,6 +24,17 @@ const API_KEY = 'AIzaTestKey1234567890123456789';
 const MODEL = 'gemini-flash-lite-latest';
 
 const charge = validCase.charges[0]!;
+// StatuteSelection now emits ChargeCore only; the voiced verdict layer is
+// added in a later stage. Responses to that stage must omit verdictReactions
+// and verdictOptions so the strict schema accepts them.
+const chargeCore = {
+  id: charge.id,
+  name: charge.name,
+  classification: charge.classification,
+  elements: charge.elements,
+  mandatoryMinimums: charge.mandatoryMinimums,
+  maximumPenalties: charge.maximumPenalties,
+};
 const environment = validCase.environment;
 const defendant = validCase.defendant;
 const witnesses = validCase.witnesses;
@@ -43,7 +54,7 @@ beforeEach(() => {
 
 describe('runStatuteSelection', () => {
   it('succeeds on the first valid response', async () => {
-    mockCallsWith(JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }));
+    mockCallsWith(JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }));
 
     const result = await runStatuteSelection(API_KEY, MODEL);
     expect(result.charges).toHaveLength(1);
@@ -53,7 +64,7 @@ describe('runStatuteSelection', () => {
   it('retries once after invalid JSON then succeeds', async () => {
     mockCallsWith(
       'not json',
-      JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }),
+      JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }),
     );
 
     const result = await runStatuteSelection(API_KEY, MODEL);
@@ -81,7 +92,7 @@ describe('runStatuteSelection', () => {
     // transient call failure killed the whole stage.
     const mock = vi.mocked(callGemini);
     mock.mockRejectedValueOnce(new GeminiError('server error', 503));
-    mock.mockResolvedValueOnce(JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }));
+    mock.mockResolvedValueOnce(JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }));
 
     const result = await runStatuteSelection(API_KEY, MODEL);
     expect(result.charges).toHaveLength(1);

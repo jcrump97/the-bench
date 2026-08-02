@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ChargeSchema,
+  ChargeCoreSchema,
   EnvironmentSchema,
   CharacterSchema,
   WitnessSchema,
@@ -8,10 +8,12 @@ import {
   InterrogationSchema,
   ReactionBeatSchema,
   PleaDecisionSchema,
+  VerdictValueSchema,
   PleaNarrativeSchema,
   CaseSchema,
   AftermathNarrativeSchema,
   type Charge,
+  type ChargeCore,
   type Environment,
   type PleaNarrative,
   type CasePayload,
@@ -202,7 +204,7 @@ function judgeLineOptionsGeminiSchema(choices: string[]): GeminiSchema {
   };
 }
 
-const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
+const CHARGE_CORE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', minLength: 1, maxLength: 40 },
@@ -219,6 +221,14 @@ const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
     },
     mandatoryMinimums: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
     maximumPenalties: { type: 'array', minItems: 1, items: SENTENCE_GEMINI_SCHEMA },
+  },
+  required: ['id', 'name', 'classification', 'elements', 'mandatoryMinimums', 'maximumPenalties'],
+};
+
+const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
+  type: 'object',
+  properties: {
+    ...CHARGE_CORE_GEMINI_SCHEMA.properties,
     verdictReactions: {
       type: 'object',
       properties: { GUILTY: reactionBeatGeminiSchema(), NOT_GUILTY: reactionBeatGeminiSchema() },
@@ -227,15 +237,34 @@ const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
     verdictOptions: judgeLineOptionsGeminiSchema(['GUILTY', 'NOT_GUILTY']),
   },
   required: [
-    'id',
-    'name',
-    'classification',
-    'elements',
-    'mandatoryMinimums',
-    'maximumPenalties',
+    ...(CHARGE_CORE_GEMINI_SCHEMA.required ?? []),
     'verdictReactions',
     'verdictOptions',
   ],
+};
+
+const VERDICT_VOICE_GEMINI_SCHEMA: GeminiSchema = {
+  type: 'object',
+  properties: {
+    charges: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', minLength: 1, maxLength: 40 },
+          verdictReactions: {
+            type: 'object',
+            properties: { GUILTY: reactionBeatGeminiSchema(), NOT_GUILTY: reactionBeatGeminiSchema() },
+            required: ['GUILTY', 'NOT_GUILTY'],
+          },
+          verdictOptions: judgeLineOptionsGeminiSchema(['GUILTY', 'NOT_GUILTY']),
+        },
+        required: ['id', 'verdictReactions', 'verdictOptions'],
+      },
+    },
+  },
+  required: ['charges'],
 };
 
 const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
@@ -412,14 +441,14 @@ const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
 // Stage 1 — StatuteSelection
 // ============================================================================
 const StatuteSelectionSchema = z.object({
-  charges: z.array(ChargeSchema).min(1),
+  charges: z.array(ChargeCoreSchema).min(1),
   statuteContexts: z.array(z.string().max(500)).min(1),
 });
 
 const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    charges: { type: 'array', minItems: 1, items: CHARGE_GEMINI_SCHEMA },
+    charges: { type: 'array', minItems: 1, items: CHARGE_CORE_GEMINI_SCHEMA },
     statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
   },
   required: ['charges', 'statuteContexts'],
@@ -459,15 +488,14 @@ const SENTENCE_SHAPE = `A sentence object carries "type", "unit", and a positive
 
 const STATUTE_SELECTION_SYSTEM = `ROLE: You are a California deputy district attorney drafting the charging document for a criminal case.
 
-TASK: Invent one or more realistic charges under California law. Give each charge its elements, its statutory sentencing range, the courtroom's voiced reaction to each possible verdict, and the judge's selectable verdict lines.
+TASK: Invent one or more realistic charges under California law. Give each charge its elements and statutory sentencing range. Do not write verdict reactions or verdict lines — those are authored in a later stage once the defendant exists.
 
 RULES:
 1. Give every charge and every element an id that is unique across the whole case.
 2. Match each mandatory minimum with a maximum penalty of the same "type" that is at least as large. A charge whose minimum is 180 DAYS of JAIL needs a JAIL maximum as well, even when it also carries a PRISON maximum.
-3. Cover both outcomes in every "verdictOptions" array: at least one option with choice "GUILTY" and at least one with choice "NOT_GUILTY". The judge has to be able to speak either result from the bench.
-4. Keep each judge line to one or two sentences under 300 characters, and each reaction line under 600.
-5. Use fictional names throughout.
-6. ${BENCH_TRIAL_RULE}
+3. Keep charge names and element descriptions factual; do not name or anticipate the defendant, who does not exist yet.
+4. Use fictional names throughout.
+5. ${BENCH_TRIAL_RULE}
 
 EXAMPLE: ${SENTENCE_SHAPE}`;
 
@@ -479,7 +507,7 @@ function buildStatuteSelectionContents(feedback: string | undefined): string {
 export async function runStatuteSelection(
   apiKey: string,
   model: string,
-): Promise<{ charges: Charge[]; statuteContexts: string[] }> {
+): Promise<{ charges: ChargeCore[]; statuteContexts: string[] }> {
   return generateValidated(
     apiKey,
     model,
@@ -510,12 +538,12 @@ RULES:
 1. Keep the description under 500 characters and concrete — the physical detail an investigator would put in a report.
 2. Choose "N/A" for weather when the scene is indoors or digital.`;
 
-function buildEnvironmentGenContents(charges: Charge[], feedback: string | undefined): string {
+function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the environment for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
-export async function runEnvironmentGen(apiKey: string, model: string, charges: Charge[]): Promise<Environment> {
+export async function runEnvironmentGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Environment> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -551,12 +579,12 @@ RULES:
 
 EXAMPLE: ${SENTENCE_SHAPE}`;
 
-function buildCharacterGenContents(charges: Charge[], feedback: string | undefined): string {
+function buildCharacterGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the defendant for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
-export async function runCharacterGen(apiKey: string, model: string, charges: Charge[]): Promise<Defendant> {
+export async function runCharacterGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Defendant> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -716,7 +744,7 @@ RULES:
 8. ${BENCH_TRIAL_RULE}`;
 
 function buildEvidenceGenContents(
-  charges: Charge[],
+  charges: ChargeCore[],
   environment: Environment,
   defendant: Defendant,
   interrogation: z.infer<typeof InterrogationSchema> | null,
@@ -739,7 +767,7 @@ function buildEvidenceGenContents(
 export async function runEvidenceGen(
   apiKey: string,
   model: string,
-  charges: Charge[],
+  charges: ChargeCore[],
   environment: Environment,
   defendant: Defendant,
   interrogation: z.infer<typeof InterrogationSchema> | null,
@@ -943,6 +971,70 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     RepairCaseSchema,
     2,
   );
+}
+
+// ============================================================================
+// Stage 6b — VerdictVoice (verdict reactions + judge lines, authored after
+// the defendant exists so the lines can name the defendant and reach for
+// their circumstances).
+// ============================================================================
+const VerdictVoiceSchema = z.object({
+  charges: z.array(
+    z.strictObject({
+      id: z.string().min(1).max(40),
+      verdictReactions: z.strictObject({
+        GUILTY: ReactionBeatSchema,
+        NOT_GUILTY: ReactionBeatSchema,
+      }),
+      verdictOptions: z.array(z.strictObject({
+        choice: VerdictValueSchema,
+        lineText: z.string().min(1).max(300),
+      })).min(2).max(6),
+    }).superRefine((charge, ctx) => {
+      const missing = requireChoiceCoverage(charge.verdictOptions, VerdictValueSchema.options);
+      if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
+    }),
+  ).min(1),
+});
+
+const VERDICT_VOICE_SYSTEM = `ROLE: You are a courtroom clerk preparing the voiced verdict layer for each charge.
+
+TASK: For every charge in the case, write the courtroom's reaction to each possible verdict and the judge's selectable verdict lines from the bench.
+
+RULES:
+1. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
+2. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
+3. Keep each judge line under 300 characters and each reaction line under 600.
+4. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.`;
+
+function buildVerdictVoiceContents(
+  charges: ChargeCore[],
+  defendant: Defendant,
+  feedback: string | undefined,
+): string {
+  const base = [
+    `Charges: ${charges.map((c) => `${c.id} = ${c.name}`).join(', ')}.`,
+    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+  ].join('\n');
+  return feedback ? `${base}\n\n${feedback}` : base;
+}
+
+export async function runVerdictVoice(
+  apiKey: string,
+  model: string,
+  charges: ChargeCore[],
+  defendant: Defendant,
+): Promise<Pick<Charge, 'id' | 'verdictReactions' | 'verdictOptions'>[]> {
+  const data = await generateValidated(
+    apiKey,
+    model,
+    'VerdictVoice',
+    VERDICT_VOICE_SYSTEM,
+    (feedback) => buildVerdictVoiceContents(charges, defendant, feedback),
+    VERDICT_VOICE_GEMINI_SCHEMA,
+    VerdictVoiceSchema,
+  );
+  return data.charges;
 }
 
 // ============================================================================

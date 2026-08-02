@@ -10,6 +10,7 @@ vi.mock('../stages', () => ({
   runCharacterGen: vi.fn(),
   runInterrogationGen: vi.fn(),
   runEvidenceGen: vi.fn(),
+  runVerdictVoice: vi.fn(),
   finalizeCasePayload: vi.fn(),
   runPleaNarrative: vi.fn(),
   runAftermath: vi.fn(),
@@ -22,6 +23,7 @@ import {
   runCharacterGen,
   runInterrogationGen,
   runEvidenceGen,
+  runVerdictVoice,
   finalizeCasePayload,
   runPleaNarrative,
   runAftermath,
@@ -45,6 +47,9 @@ beforeEach(() => {
     evidence: validCase.evidence,
     witnesses: validCase.witnesses,
   });
+  vi.mocked(runVerdictVoice).mockReset().mockResolvedValue(
+    validCase.charges.map((c) => ({ id: c.id, verdictReactions: c.verdictReactions, verdictOptions: c.verdictOptions })),
+  );
   vi.mocked(finalizeCasePayload).mockReset().mockResolvedValue(validCase);
   vi.mocked(runPleaNarrative).mockReset().mockResolvedValue(pleaNarrative);
   vi.mocked(runAftermath).mockReset().mockResolvedValue('The community absorbed the verdict quietly.');
@@ -74,6 +79,7 @@ describe('createGameService().generateCase', () => {
       validCase.defendant,
       null,
     );
+    expect(runVerdictVoice).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, validCase.defendant);
     expect(finalizeCasePayload).toHaveBeenCalledWith(API_KEY, MODEL, {
       charges: validCase.charges,
       statuteContexts: validCase.statuteContexts,

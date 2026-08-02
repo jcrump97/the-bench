@@ -1,6 +1,7 @@
 import { assessProsecution, derivePleaOfferTerms, assessDefense } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource';
+import type { Charge } from '../../schemas/gameSchemas';
 import { getOrSelectModel } from './modelSelection';
 import {
   runStatuteSelection,
@@ -8,6 +9,7 @@ import {
   runCharacterGen,
   runInterrogationGen,
   runEvidenceGen,
+  runVerdictVoice,
   finalizeCasePayload,
   runPleaNarrative,
   runAftermath,
@@ -42,8 +44,15 @@ export function createGameService(apiKey: string): CaseSource {
         interrogation,
       );
 
+      const chargeVoices = await runVerdictVoice(apiKey, model, charges, defendant);
+      const chargesWithVoice: Charge[] = charges.map((charge) => {
+        const voice = chargeVoices.find((c) => c.id === charge.id);
+        if (!voice) throw new Error(`VerdictVoice missing for charge ${charge.id}`);
+        return { ...charge, ...voice };
+      });
+
       const payload = await finalizeCasePayload(apiKey, model, {
-        charges,
+        charges: chargesWithVoice,
         statuteContexts,
         environment,
         defendant,
