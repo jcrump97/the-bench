@@ -62,10 +62,18 @@ describe('selectModel', () => {
   });
 
   it('falls back to the candidate constant when discovery rejects', async () => {
+    // fetchWithRetry's hardened backoff (5 attempts, up to ~15s ceiling) is
+    // real wall-clock time without fake timers — this exercises every
+    // retry, so it needs them to stay fast.
+    vi.useFakeTimers();
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockRejectedValueOnce(new Error('network down'));
+    fetchMock.mockRejectedValue(new Error('network down'));
 
-    await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-lite-latest');
+    const promise = selectModel('AIzaTestKey1234567890123456789');
+    const expectation = expect(promise).resolves.toBe('gemini-flash-lite-latest');
+    await vi.runAllTimersAsync();
+    await expectation;
+    vi.useRealTimers();
   });
 
   it('falls back to the candidate constant when no model matches', async () => {

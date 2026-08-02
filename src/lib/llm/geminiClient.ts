@@ -2,8 +2,15 @@
 // is locked (see CLAUDE.md), and this surface is small enough not to need one.
 
 const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
-const MAX_ATTEMPTS = 3;
+// A pipeline makes 6+ of these calls; a sustained burst of 429s (e.g. a
+// short-window testing cadence hitting the same key repeatedly) used to
+// exhaust in ~1.5s (3 attempts, 500/1000ms backoff) and fail the whole case
+// generation. 5 attempts with jitter (avoids retries landing in lockstep)
+// and Retry-After honored when Gemini sends one gives real rate-limit
+// recovery a chance instead of guessing at a backoff.
+const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 15_000;
 
 export class GeminiError extends Error {
   readonly status: number | null;
@@ -48,12 +55,24 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Gemini's 429s often carry a Retry-After header (seconds) — honoring it
+// beats guessing at a backoff. null when absent or unparseable.
+function retryAfterMs(response: Response): number | null {
+  const header = response.headers.get('retry-after');
+  if (header === null) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+}
+
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
   let lastError: unknown;
+  let nextDelayMs = 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      await sleep(BASE_BACKOFF_MS * 2 ** (attempt - 1));
-    }
+    if (nextDelayMs > 0) await sleep(nextDelayMs);
+    // ±50% jitter so concurrent retries don't land in lockstep.
+    const jitter = 0.5 + Math.random() * 0.5;
+    nextDelayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt * jitter, MAX_BACKOFF_MS);
+
     try {
       const response = await fetch(url, init);
       if (response.ok) return response;
@@ -64,6 +83,8 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
           response.status,
         );
       }
+      const retryAfter = retryAfterMs(response);
+      if (retryAfter !== null) nextDelayMs = Math.min(retryAfter, MAX_BACKOFF_MS);
       lastError = new GeminiError(`Gemini request failed with status ${response.status}`, response.status);
     } catch (err) {
       if (err instanceof GeminiError) throw err;
@@ -94,6 +115,11 @@ export async function callGemini(
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: options.contents }] }],
       generationConfig: {
+        // Structured JSON output is measurably more schema-compliant at
+        // lower temperature; 0.7 keeps case-to-case narrative variety (the
+        // point of live generation) while cutting down on malformed/schema-
+        // violating responses that otherwise burn a generateValidated retry.
+        temperature: 0.7,
         responseMimeType: 'application/json',
         responseSchema: options.responseSchema,
       },

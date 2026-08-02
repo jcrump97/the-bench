@@ -18,7 +18,7 @@ vi.mock('../geminiClient', async () => {
   return { ...actual, callGemini: vi.fn() };
 });
 
-import { callGemini } from '../geminiClient';
+import { callGemini, GeminiError } from '../geminiClient';
 
 const API_KEY = 'AIzaTestKey1234567890123456789';
 const MODEL = 'gemini-flash-lite-latest';
@@ -73,6 +73,29 @@ describe('runStatuteSelection', () => {
     // untraceable before this was added.
     vi.mocked(callGemini).mockResolvedValue('not json');
     await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(/^\[StatuteSelection\]/);
+  });
+
+  it('retries a transient GeminiError (network/429/5xx) and succeeds on a later attempt', async () => {
+    // Previously a thrown GeminiError propagated straight out of
+    // generateValidated, burning none of its own retry budget — a single
+    // transient call failure killed the whole stage.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValueOnce(new GeminiError('server error', 503));
+    mock.mockResolvedValueOnce(JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }));
+
+    const result = await runStatuteSelection(API_KEY, MODEL);
+    expect(result.charges).toHaveLength(1);
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rethrows a non-retryable GeminiError immediately without spending the retry budget', async () => {
+    // A bad request/bad key (never 429 or 5xx) fails identically on retry —
+    // retrying it would just waste time.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValue(new GeminiError('bad request', 400));
+
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(GeminiError);
+    expect(mock).toHaveBeenCalledTimes(1);
   });
 });
 

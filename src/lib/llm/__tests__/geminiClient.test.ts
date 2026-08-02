@@ -42,6 +42,23 @@ describe('callGemini', () => {
     expect(String(call?.[0])).toContain('gemini-flash-latest:generateContent');
   });
 
+  it('sets a moderate temperature for schema-compliant-but-varied output', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    const call = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.generationConfig.temperature).toBe(0.7);
+  });
+
   it('retries on a 429 then succeeds', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
@@ -73,7 +90,35 @@ describe('callGemini', () => {
     const expectation = expect(promise).rejects.toThrow(GeminiError);
     await vi.runAllTimersAsync();
     await expectation;
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('honors a Retry-After header on a 429 instead of the computed backoff', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const retryAfterResponse = new Response('rate limited', {
+      status: 429,
+      headers: { 'Retry-After': '3' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(retryAfterResponse)
+      .mockResolvedValueOnce(
+        jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+      );
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    // Advancing by less than the header's 3s shouldn't be enough to fire the
+    // second attempt yet.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    await expect(promise).resolves.toBe('{"ok":true}');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('throws immediately on a 4xx without retrying', async () => {

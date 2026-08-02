@@ -18,7 +18,7 @@ import {
 } from '../../schemas/gameSchemas';
 import type { InterrogationProfile } from '../interrogation';
 import type { AftermathContext } from '../caseSource';
-import { callGemini, type GeminiSchema } from './geminiClient';
+import { callGemini, GeminiError, type GeminiSchema } from './geminiClient';
 
 export class GameServiceError extends Error {
   constructor(message: string) {
@@ -52,11 +52,27 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   let lastError = 'unknown error';
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const text = await callGemini(apiKey, model, {
-      systemInstruction,
-      contents: buildContents(feedback),
-      responseSchema,
-    });
+    let text: string;
+    try {
+      text = await callGemini(apiKey, model, {
+        systemInstruction,
+        contents: buildContents(feedback),
+        responseSchema,
+      });
+    } catch (err) {
+      // A non-retryable client error (bad request, bad key — never 429 or
+      // 5xx) will fail identically on retry, so it isn't worth spending the
+      // stage's budget on: surface it immediately. Everything else
+      // (network errors, and 429/5xx that already exhausted
+      // fetchWithRetry's own attempts) gets the same retry-with-feedback
+      // budget a validation failure does, instead of aborting the whole
+      // stage on one transient call failure.
+      if (err instanceof GeminiError && err.status !== null && err.status !== 429 && err.status < 500) {
+        throw err;
+      }
+      lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
+      continue;
+    }
 
     let raw: unknown;
     try {
