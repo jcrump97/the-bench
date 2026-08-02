@@ -370,7 +370,16 @@ const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
   required: ['charges', 'statuteContexts'],
 };
 
-const STATUTE_SELECTION_SYSTEM = `You are generating the statutory charges for a California criminal court simulation. Invent one or more realistic charges under California law, each with its own elements, statutory sentencing ranges, and voiced verdict reactions/options. Every id must be unique. Do not include any real person's name. This is a bench trial: the judge alone decides every verdict. There is no jury — never write a verdict reaction or judge-line option that references a jury, jurors, or a jury trial.`;
+// A sentence's `conditions` array is valid on a PROBATION sentence only (at
+// least one item) and must be omitted entirely for PRISON/JAIL/FINE/
+// COMMUNITY_SERVICE — the Gemini responseSchema exposes `conditions` as an
+// optional field on every sentence type (Gemini's schema format can't express
+// a discriminated union), so nothing else stops the model from attaching an
+// empty or stray `conditions` array to a non-PROBATION sentence, which the
+// real Zod validation (a strict discriminated union) then rejects.
+const SENTENCE_CONDITIONS_INSTRUCTION = `For any sentence object: include "conditions" only when "type" is "PROBATION", and in that case give it at least one item; omit "conditions" entirely for PRISON, JAIL, FINE, and COMMUNITY_SERVICE sentences.`;
+
+const STATUTE_SELECTION_SYSTEM = `You are generating the statutory charges for a California criminal court simulation. Invent one or more realistic charges under California law, each with its own elements, statutory sentencing ranges, and voiced verdict reactions/options. Every id must be unique. Do not include any real person's name. This is a bench trial: the judge alone decides every verdict. There is no jury — never write a verdict reaction or judge-line option that references a jury, jurors, or a jury trial. ${SENTENCE_CONDITIONS_INSTRUCTION}`;
 
 function buildStatuteSelectionContents(feedback: string | undefined): string {
   const base = 'Generate the charges and statuteContexts for a new case.';
@@ -434,7 +443,7 @@ const CHARACTER_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['defendant'],
 };
 
-const CHARACTER_GEN_SYSTEM = `You are generating the defendant for a California criminal court simulation: a fictional person with demographics, criminal history, and OCEAN personality traits (openness, conscientiousness, extraversion, agreeableness, neuroticism, each 1-10). These traits are hidden behavior drivers — never state them as numbers in any prose fields elsewhere. Do not use any real person's identity.`;
+const CHARACTER_GEN_SYSTEM = `You are generating the defendant for a California criminal court simulation: a fictional person with demographics, criminal history, and OCEAN personality traits (openness, conscientiousness, extraversion, agreeableness, neuroticism, each 1-10). These traits are hidden behavior drivers — never state them as numbers in any prose fields elsewhere. Do not use any real person's identity. Each past conviction's sentences follow the same rule as any other sentence: ${SENTENCE_CONDITIONS_INSTRUCTION}`;
 
 function buildCharacterGenContents(charges: Charge[], feedback: string | undefined): string {
   const base = `Generate the defendant for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
@@ -580,6 +589,7 @@ function buildEvidenceGenContents(
     `Valid element ids: ${elementIds.join(', ')}.`,
     `Environment: ${environment.description}`,
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    'Produce at least 3 evidence items and at least 2 witnesses — the response is rejected if either count falls short.',
     interrogation !== null
       ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
       : 'Do not include any evidence item with type "INTERROGATION" — no usable tape exists for this defendant.',
