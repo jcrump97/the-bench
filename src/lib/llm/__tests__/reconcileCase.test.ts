@@ -155,4 +155,16 @@ describe('reconcileCrossStageIds', () => {
 
     expect(result).toEqual(parts);
   });
+
+  it('keeps a null targetElementId as null (no target)', () => {
+    const untargetedEvidence = { ...evidence1!, targetElementId: null };
+
+    const result = reconcileCrossStageIds({
+      charges: [charge],
+      evidence: [untargetedEvidence],
+      witnesses: [witness1!],
+    });
+
+    expect(result.evidence[0]!.targetElementId).toBeNull();
+  });
 });
