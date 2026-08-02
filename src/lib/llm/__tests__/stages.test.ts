@@ -97,6 +97,46 @@ describe('runStatuteSelection', () => {
     await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(GeminiError);
     expect(mock).toHaveBeenCalledTimes(1);
   });
+
+  it('prefixes a rethrown non-retryable GeminiError with the stage name and preserves its status', async () => {
+    // Same call-failure path as above, but asserting the two things the
+    // Mistrial screen actually needs: which stage failed (the message
+    // prefix) and that it is still classifiable as a GeminiError with its
+    // original status intact, not just some generic Error.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValue(new GeminiError('Request contains an invalid argument', 400));
+
+    let caught: unknown;
+    try {
+      await runStatuteSelection(API_KEY, MODEL);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(GeminiError);
+    expect((caught as GeminiError).status).toBe(400);
+    expect((caught as GeminiError).message).toMatch(/^\[StatuteSelection\]/);
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it('feeds the previous raw response back into the retry contents, not just the Zod issue message', async () => {
+    // A reported mistrial burned all three attempts on the identical field
+    // because the model only ever saw the Zod error text ("age: Invalid
+    // input") and never the object it produced — it had nothing to repair,
+    // so it re-rolled from scratch each time. The fix (buildRetryFeedback)
+    // echoes the failed response back verbatim; this asserts that echo
+    // actually reaches the second call's contents, not just the issue list.
+    const badResponse = JSON.stringify({ defendant: { ...defendant, age: 5 } });
+    mockCallsWith(badResponse, JSON.stringify({ defendant }));
+
+    await runCharacterGen(API_KEY, MODEL, [charge]);
+
+    const mock = vi.mocked(callGemini);
+    expect(mock).toHaveBeenCalledTimes(2);
+    const secondCallArgs = mock.mock.calls[1];
+    const secondCallOptions = secondCallArgs?.[2] as { contents: string };
+    expect(secondCallOptions.contents).toContain(badResponse);
+  });
 });
 
 describe('runEnvironmentGen', () => {

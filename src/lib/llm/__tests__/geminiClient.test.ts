@@ -147,6 +147,109 @@ describe('callGemini', () => {
       }),
     ).rejects.toThrow(/no candidate text/i);
   });
+
+  it('throws with reason NO_CANDIDATE when the response has no candidate text', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ candidates: [] }));
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'NO_CANDIDATE' });
+  });
+
+  it('throws with reason MAX_TOKENS on a truncated candidate, even when partial text is present', async () => {
+    // Handing truncated text back as if it were a complete response is the
+    // exact bug this guards against: a MAX_TOKENS finish always means the
+    // JSON is cut off mid-object, regardless of what text did make it through.
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [
+          { content: { parts: [{ text: '{"evidence": [{"id": "e1", "name": "Partial' }] }, finishReason: 'MAX_TOKENS' },
+        ],
+      }),
+    );
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'MAX_TOKENS' });
+  });
+
+  it('throws with reason SAFETY when promptFeedback carries a blockReason', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [], promptFeedback: { blockReason: 'SAFETY' } }),
+    );
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'SAFETY' });
+  });
+
+  it('throws with reason SAFETY when a candidate finishes with finishReason SAFETY', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [{ content: { parts: [{ text: '{"partial":' }] }, finishReason: 'SAFETY' }],
+      }),
+    );
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'SAFETY' });
+  });
+
+  it('has no reason on a normal successful response', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] }, finishReason: 'STOP' }] }),
+    );
+
+    const result = await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    expect(result).toBe('{"ok":true}');
+  });
+
+  it('sends safetySettings and a generationConfig.maxOutputTokens in the request body', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    const call = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(typeof body.generationConfig.maxOutputTokens).toBe('number');
+    expect(Array.isArray(body.safetySettings)).toBe(true);
+    expect(body.safetySettings.length).toBeGreaterThan(0);
+    expect(body.safetySettings[0]).toHaveProperty('category');
+    expect(body.safetySettings[0]).toHaveProperty('threshold');
+  });
 });
 
 describe('listModels', () => {
