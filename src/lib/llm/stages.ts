@@ -903,9 +903,23 @@ RULES:
 2. Return the whole object, not a fragment and not a description of the changes.
 3. ${BENCH_TRIAL_RULE} Where an issue points at a line that gives the decision to anyone but the judge, rewrite that line to address the court.`;
 
+// On a repair retry, the model's own previous response is the current best
+// version of the object. Re-embedding the original broken assembly on the
+// second retry feeds stale context back in; use the previous response as the
+// object instead when it is available.
+function extractPreviousResponse(feedback: string | undefined): string | null {
+  if (!feedback) return null;
+  const marker = 'Your previous response was:\n';
+  const idx = feedback.indexOf(marker);
+  if (idx === -1) return null;
+  return feedback.slice(idx + marker.length);
+}
+
 function buildRepairContents(assembled: unknown, issues: z.ZodError, feedback: string | undefined): string {
   const issueList = issues.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('\n');
-  const base = `Object:\n${JSON.stringify(assembled)}\n\nValidation issues:\n${issueList}`;
+  const previousResponse = extractPreviousResponse(feedback);
+  const object = previousResponse ?? JSON.stringify(assembled);
+  const base = `Object:\n${object}\n\nValidation issues:\n${issueList}`;
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
