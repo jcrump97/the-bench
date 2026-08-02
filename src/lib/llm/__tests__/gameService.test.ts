@@ -84,7 +84,10 @@ describe('createGameService().generateCase', () => {
     });
     // assessProsecution(validCase) scores 41 (MODERATE) — see fixtures.ts's
     // header comment on why the numbers land there.
-    expect(runPleaNarrative).toHaveBeenCalledWith(API_KEY, MODEL, validCase, 'MODERATE');
+    expect(runPleaNarrative).toHaveBeenCalledWith(API_KEY, MODEL, validCase, 'MODERATE', {
+      pleadsToChargeIds: validCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'REJECT');
   });
 
   it('asks getOrSelectModel (not the raw discovery call) for the model on every stage that needs one', async () => {

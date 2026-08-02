@@ -319,7 +319,7 @@ describe('runPleaNarrative', () => {
     mockCallsWith(JSON.stringify({ prosecutionRationale: 'The People decline to offer given the thin proof.' }));
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
     expect(result.prosecutionRationale).toBeTruthy();
     expect(result.defenseRationale).toBeUndefined();
     expect(result.allocution).toBeUndefined();
@@ -343,7 +343,10 @@ describe('runPleaNarrative', () => {
     );
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'REJECT');
     expect(result.defenseRationale).toBeTruthy();
     expect(result.allocution).toBeTruthy();
     expect(result.pleaReactions).toBeDefined();
@@ -372,7 +375,10 @@ describe('runPleaNarrative', () => {
     );
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'STRONG');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'STRONG', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
+    }, 'REJECT');
     expect(result.pleaRulingOptions).toHaveLength(2);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
   });

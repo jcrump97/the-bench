@@ -15,6 +15,7 @@ import {
   type Environment,
   type PleaNarrative,
   type CasePayload,
+  type Sentence,
 } from '../../schemas/gameSchemas';
 import type { InterrogationProfile } from '../interrogation';
 import type { AftermathContext } from '../caseSource';
@@ -1001,8 +1002,32 @@ RULES:
 3. Keep each rationale under 1000 characters, the allocution under 800, judge lines under 300, and reaction lines under 600.
 4. ${BENCH_TRIAL_RULE} Both sides are weighing this offer against a trial before this judge.`;
 
-function buildPleaNarrativeContents(payload: CasePayload, feedback: string | undefined): string {
-  const base = `Case: ${payload.charges.map((c) => c.name).join(', ')}. Defendant: ${payload.defendant.firstName} ${payload.defendant.lastName}.`;
+function buildPleaNarrativeContents(
+  payload: CasePayload,
+  band: 'WEAK' | 'MODERATE' | 'STRONG',
+  offerTerms: { pleadsToChargeIds: string[]; proposedSentence: Sentence[] } | null,
+  defensePosture: 'ACCEPT' | 'REJECT',
+  feedback: string | undefined,
+): string {
+  const chargeNames = payload.charges.map((c) => c.name).join(', ');
+  const defendantName = `${payload.defendant.firstName} ${payload.defendant.lastName}`;
+
+  let base: string;
+  if (band === 'WEAK' || offerTerms === null) {
+    base = `Case: ${chargeNames}. Defendant: ${defendantName}. The prosecution is not extending an offer; write the People's rationale for proceeding without one.`;
+  } else {
+    const sentenceText = offerTerms.proposedSentence
+      .map((s) => `${s.amount} ${s.unit} ${s.type}${s.type === 'PROBATION' ? ` (${s.conditions.join(', ')})` : ''}`)
+      .join('; ');
+    base = [
+      `Case: ${chargeNames}.`,
+      `Defendant: ${defendantName}.`,
+      `Offer terms: defendant pleads to ${offerTerms.pleadsToChargeIds.length === payload.charges.length ? 'all charges' : `charges ${offerTerms.pleadsToChargeIds.join(', ')}`}.`,
+      `Proposed sentence: ${sentenceText}.`,
+      `Defense posture: ${defensePosture} the offer.`,
+      'Write the parties\' rationales, allocution, reactions, and ruling lines to match these exact terms.'
+    ].join('\n');
+  }
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
@@ -1011,6 +1036,8 @@ export async function runPleaNarrative(
   model: string,
   payload: CasePayload,
   band: 'WEAK' | 'MODERATE' | 'STRONG',
+  offerTerms: { pleadsToChargeIds: string[]; proposedSentence: Sentence[] } | null,
+  defensePosture: 'ACCEPT' | 'REJECT',
 ): Promise<PleaNarrative> {
   if (band === 'WEAK') {
     const data = await generateValidated(
@@ -1018,7 +1045,7 @@ export async function runPleaNarrative(
       model,
       'PleaNarrative.weak',
       PLEA_NARRATIVE_SYSTEM,
-      (feedback) => buildPleaNarrativeContents(payload, feedback),
+      (feedback) => buildPleaNarrativeContents(payload, band, null, defensePosture, feedback),
       WEAK_PLEA_GEMINI_SCHEMA,
       WeakPleaNarrativeSchema,
     );
@@ -1030,7 +1057,7 @@ export async function runPleaNarrative(
     model,
     'PleaNarrative.offer',
     PLEA_NARRATIVE_SYSTEM,
-    (feedback) => buildPleaNarrativeContents(payload, feedback),
+    (feedback) => buildPleaNarrativeContents(payload, band, offerTerms, defensePosture, feedback),
     OFFER_PLEA_GEMINI_SCHEMA,
     OfferPleaNarrativeSchema,
   );

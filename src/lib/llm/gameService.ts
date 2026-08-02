@@ -1,4 +1,4 @@
-import { assessProsecution } from '../pleaAssessment';
+import { assessProsecution, derivePleaOfferTerms, assessDefense } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource';
 import { getOrSelectModel } from './modelSelection';
@@ -52,7 +52,9 @@ export function createGameService(apiKey: string): CaseSource {
       });
 
       const { band } = assessProsecution(payload);
-      const pleaNarrative = await runPleaNarrative(apiKey, model, payload, band);
+      const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
+      const defensePosture = offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
+      const pleaNarrative = await runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture);
 
       return { payload, pleaNarrative };
     },
