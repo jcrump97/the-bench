@@ -240,7 +240,7 @@ the session transcript; this is the consolidated action list.
 
 **Major**
 
-- [ ] **R1 — `addDefendantNameIssues` false-positives on the defendant's own
+- [x] **R1 — `addDefendantNameIssues` false-positives on the defendant's own
       first name.** `gameSchemas.ts:33` matches `defendant <Name>` and
       compares against `fullName` or `lastName`, never `firstName`. A
       verdict line "the court finds defendant Jordan guilty" where Jordan is
@@ -250,7 +250,8 @@ the session transcript; this is the consolidated action list.
       but VerdictVoice could legitimately produce it and burn a repair round
       or exhaust retries into a Mistrial. Fix: add a `firstName` accept
       branch and a test for the "defendant `<FirstName>`" form.
-- [ ] **R2 — `credibilityScore`/`relevanceScore` Zod allows floats; Gemini
+      *(Fixed in `07d9817`.)*
+- [x] **R2 — `credibilityScore`/`relevanceScore` Zod allows floats; Gemini
       schema says `integer`.** `gameSchemas.ts:285,303` use
       `z.number().min(1).max(10)` (accepts `7.5`); `stages.ts:371,408`
       declare `type: 'integer'`. The Gemini gate is stricter than the Zod
@@ -260,6 +261,7 @@ the session transcript; this is the consolidated action list.
       because `integer` happens to reject floats at the API. Fix:
       `z.number().int().min(1).max(10)` in both places, matching the
       `amount` field at `gameSchemas.ts:116`.
+      *(Fixed in `479c63d`.)*
 
 **Minor**
 
