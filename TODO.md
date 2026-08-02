@@ -130,6 +130,60 @@ rather than quietly dropped.**
   all three attempts because the retry never showed the model its own output
   (C7) — so it regenerated blind and made the same mistake three times.
 
+## Cross-stage context starvation (qa-agent findings, 2026-08-02 — OPEN)
+
+Found by the first `qa-agent` run after it was given case memory. Every
+finding is a *content coherence* problem, not a validation failure — none of
+these cause a mistrial, and all of them pass every schema. They share one
+root cause: **a stage authors voiced content about facts another stage
+decides, and is never told them.** Ranked by how visible the damage is.
+
+1. **The verdict names the wrong person.** `runStatuteSelection` is stage 1
+   and authors `verdictOptions[].lineText` — the words the judge actually
+   speaks when calling the count — but the defendant is not generated until
+   stage 3 (`runCharacterGen`). The model has no name, so it invents one. In
+   the observed run the court convicted "Arthur Pendelton", who was a
+   *prosecution witness*; the defendant was Marcus Vance. This is the
+   climax of the game reading as gibberish. Options: author judge lines in a
+   later stage, pass the defendant back for a line-only rewrite, or forbid
+   naming anyone in `lineText` and let the UI supply the name.
+2. **The plea narrative contradicts the plea offer.** `runPleaNarrative`
+   receives the payload and the `band`, but not the `PleaPosture`
+   `buildPleaPosture` derives — so it does not know the charge partition or
+   the proposed sentence. Observed: the People argued for "four years" on
+   "second-degree burglary" beside a header offering six years on first
+   degree, and defense counsel said the defendant would accept while the
+   computed posture was `REJECTED_BY_DEFENSE` (the next beat then read
+   "with no plea before the bench").
+3. **Closings argue facts not in evidence.** `buildFinalizeContents` passes
+   only charge names, the defendant's name, and the environment description
+   — not the exhibits or witnesses. Observed: the People's closing rested on
+   "DNA on the broken glass" when no DNA exhibit existed, and the statement
+   of facts cited surveillance footage that was never disclosed. Flagged as
+   a known weakness when the reliability work was planned; the qa-agent has
+   now confirmed it empirically.
+4. **The interrogation invents its own scene.** `buildInterrogationGenContents`
+   passes the defendant's name and the derived profile, not the environment.
+   Observed: the detective questioned the defendant about "Elm Street" when
+   the scene was 742 Evergreen Terrace.
+5. **`directExamination` is written as a Q&A blob.** The field is the
+   witness's spoken testimony, but the model returned counsel's questions and
+   the witness's answers merged into one string, so the witness appears to
+   ask and answer their own examination.
+
+The fix shape for 2-5 is the same and cheap: pass the missing context into
+the stage's `build*Contents`. Item 1 is the only structural one — it is a
+pipeline *ordering* problem, not a missing-argument problem.
+
+Not attempted here: the reliability work was scoped to validation failures,
+and these are a different (larger) problem that deserves its own plan.
+
+**Note on qa-agent false positives:** two MEDIUM `UI_UX` findings reported the
+court's ruling text as unreadably low contrast. It is the beat-reveal fade-in
+caught mid-animation — `beat-021.png` shows the same text at full contrast one
+beat later. Worth teaching the tester about the reveal transition before
+trusting its UI findings.
+
 ## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
 
 Nine issues in one push, eight commits (`feat(schema)` → `feat(demo)`),
