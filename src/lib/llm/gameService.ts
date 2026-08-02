@@ -31,7 +31,7 @@ export function createGameService(apiKey: string): CaseSource {
       const defendant = await runCharacterGen(apiKey, model, charges);
 
       const interrogationProfile = deriveInterrogationProfile(defendant);
-      const interrogation = await runInterrogationGen(apiKey, model, defendant, interrogationProfile);
+      const interrogation = await runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile);
 
       const { evidence, witnesses } = await runEvidenceGen(
         apiKey,

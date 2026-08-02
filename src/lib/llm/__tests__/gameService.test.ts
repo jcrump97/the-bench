@@ -62,7 +62,7 @@ describe('createGameService().generateCase', () => {
     expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL);
     expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
     expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
-    expect(runInterrogationGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.defendant, {
+    expect(runInterrogationGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.defendant, validCase.environment, {
       outcome: 'DENIAL',
       challengeGround: 'MIRANDA',
     });

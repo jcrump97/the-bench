@@ -568,11 +568,7 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
 // ============================================================================
 const InterrogationGenSchema = z.object({ interrogation: InterrogationSchema });
 
-const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { interrogation: INTERROGATION_GEMINI_SCHEMA },
-  required: ['interrogation'],
-};
+
 
 const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
 
@@ -581,15 +577,22 @@ TASK: Write the interview transcript — 4 to 24 lines, alternating naturally be
 RULES:
 1. Dramatize exactly the outcome you are given, and echo that "outcome" and "challengeGround" back unchanged. What the interview produced, and the ground the defense will attack it on, are already decided; your job is how the room actually sounded.
 2. Write spoken dialogue — the detective's questions and the defendant's answers, as a tape would capture them.
-3. Keep each line under 400 characters.
-4. ${BENCH_TRIAL_RULE}`;
+3. Ground the interview in the scene you are given (the location, time, and weather). The questions and answers must refer to that setting, not a generic one.
+4. Keep each line under 400 characters.
+5. ${BENCH_TRIAL_RULE}`;
 
 function buildInterrogationGenContents(
   defendant: Defendant,
+  environment: Environment,
   profile: Extract<InterrogationProfile, { outcome: 'FULL_CONFESSION' | 'PARTIAL_ADMISSION' | 'DENIAL' }>,
   feedback: string | undefined,
 ): string {
-  const base = `Defendant: ${defendant.firstName} ${defendant.lastName}. Required outcome: ${profile.outcome}. Required challengeGround: ${profile.challengeGround}.`;
+  const base = [
+    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Scene: ${environment.description}`,
+    `Required outcome: ${profile.outcome}.`,
+    `Required challengeGround: ${profile.challengeGround}.`,
+  ].join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
@@ -597,6 +600,7 @@ export async function runInterrogationGen(
   apiKey: string,
   model: string,
   defendant: Defendant,
+  environment: Environment,
   profile: InterrogationProfile,
 ): Promise<z.infer<typeof InterrogationSchema> | null> {
   if (profile.outcome === 'INVOKED_COUNSEL') return null;
@@ -606,8 +610,8 @@ export async function runInterrogationGen(
     model,
     'InterrogationGen',
     INTERROGATION_GEN_SYSTEM,
-    (feedback) => buildInterrogationGenContents(defendant, profile, feedback),
-    INTERROGATION_GEN_GEMINI_SCHEMA,
+    (feedback) => buildInterrogationGenContents(defendant, environment, profile, feedback),
+    INTERROGATION_GEMINI_SCHEMA,
     InterrogationGenSchema,
   );
 

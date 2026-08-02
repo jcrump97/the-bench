@@ -167,7 +167,7 @@ describe('runCharacterGen', () => {
 
 describe('runInterrogationGen', () => {
   it('skips the call entirely for an INVOKED_COUNSEL profile', async () => {
-    const result = await runInterrogationGen(API_KEY, MODEL, defendant, { outcome: 'INVOKED_COUNSEL' });
+    const result = await runInterrogationGen(API_KEY, MODEL, defendant, environment, { outcome: 'INVOKED_COUNSEL' });
     expect(result).toBeNull();
     expect(vi.mocked(callGemini)).not.toHaveBeenCalled();
   });
@@ -179,7 +179,7 @@ describe('runInterrogationGen', () => {
       }),
     );
 
-    const result = await runInterrogationGen(API_KEY, MODEL, defendant, {
+    const result = await runInterrogationGen(API_KEY, MODEL, defendant, environment, {
       outcome: 'DENIAL',
       challengeGround: 'MIRANDA',
     });
