@@ -19,6 +19,7 @@ import {
 import type { InterrogationProfile } from '../interrogation';
 import type { AftermathContext } from '../caseSource';
 import { callGemini, GeminiError, type GeminiSchema } from './geminiClient';
+import { reportAttemptFailure } from './generationObserver';
 
 export class GameServiceError extends Error {
   constructor(message: string) {
@@ -71,6 +72,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
         throw err;
       }
       lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
+      reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError] });
       continue;
     }
 
@@ -79,6 +81,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
       raw = JSON.parse(text);
     } catch (err) {
       lastError = `Response was not valid JSON: ${String(err)}`;
+      reportAttemptFailure({ stage: stageName, attempt, kind: 'BAD_JSON', issues: [lastError] });
       feedback = lastError;
       continue;
     }
@@ -86,7 +89,9 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     const result = zodSchema.safeParse(raw);
     if (result.success) return result.data;
 
-    lastError = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+    const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+    reportAttemptFailure({ stage: stageName, attempt, kind: 'SCHEMA', issues });
+    lastError = issues.join('; ');
     feedback = `Your previous response failed validation with these issues — fix them and return a complete, corrected JSON object: ${lastError}`;
   }
 
