@@ -94,7 +94,14 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
       // budget a validation failure does, instead of aborting the whole
       // stage on one transient call failure.
       if (err instanceof GeminiError && err.status !== null && err.status !== 429 && err.status < 500) {
-        throw err;
+        // Tagged with the stage on the way out. A bare "status 400: Request
+        // contains an invalid argument" names none of the seven response
+        // schemas the API might have rejected — which is exactly what made a
+        // malformed schema undebuggable from the player's Mistrial screen,
+        // and cost a live bisection to work out. The GeminiError type and
+        // status are preserved so callers still classify it the same way.
+        reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [err.message] });
+        throw new GeminiError(`[${stageName}] ${err.message}`, err.status);
       }
       lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
       reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError] });
