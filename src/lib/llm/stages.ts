@@ -41,6 +41,7 @@ type Witness = CasePayload['witnesses'][number];
 async function generateValidated<Schema extends z.ZodTypeAny>(
   apiKey: string,
   model: string,
+  stageName: string,
   systemInstruction: string,
   buildContents: (feedback: string | undefined) => string,
   responseSchema: GeminiSchema,
@@ -73,7 +74,10 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     feedback = `Your previous response failed validation with these issues — fix them and return a complete, corrected JSON object: ${lastError}`;
   }
 
-  throw new GameServiceError(`Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}`);
+  // The stage name is what actually makes this actionable in
+  // console.error/lastGenerationError.message — a pipeline runs 6+ of these,
+  // and "Failed to produce valid output" alone doesn't say which one.
+  throw new GameServiceError(`[${stageName}] Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}`);
 }
 
 function requireChoiceCoverage(options: { choice: string }[], allChoices: readonly string[]): string | null {
@@ -364,6 +368,7 @@ export async function runStatuteSelection(
   return generateValidated(
     apiKey,
     model,
+    'StatuteSelection',
     STATUTE_SELECTION_SYSTEM,
     buildStatuteSelectionContents,
     STATUTE_SELECTION_GEMINI_SCHEMA,
@@ -393,6 +398,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
   const data = await generateValidated(
     apiKey,
     model,
+    'EnvironmentGen',
     ENVIRONMENT_GEN_SYSTEM,
     (feedback) => buildEnvironmentGenContents(charges, feedback),
     ENVIRONMENT_GEN_GEMINI_SCHEMA,
@@ -423,6 +429,7 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
   const data = await generateValidated(
     apiKey,
     model,
+    'CharacterGen',
     CHARACTER_GEN_SYSTEM,
     (feedback) => buildCharacterGenContents(charges, feedback),
     CHARACTER_GEN_GEMINI_SCHEMA,
@@ -464,6 +471,7 @@ export async function runInterrogationGen(
   const data = await generateValidated(
     apiKey,
     model,
+    'InterrogationGen',
     INTERROGATION_GEN_SYSTEM,
     (feedback) => buildInterrogationGenContents(defendant, profile, feedback),
     INTERROGATION_GEN_GEMINI_SCHEMA,
@@ -574,6 +582,7 @@ export async function runEvidenceGen(
   const data = await generateValidated(
     apiKey,
     model,
+    'EvidenceGen',
     EVIDENCE_GEN_SYSTEM,
     (feedback) => buildEvidenceGenContents(charges, environment, defendant, interrogation, feedback),
     EVIDENCE_GEN_GEMINI_SCHEMA,
@@ -680,6 +689,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   const finalFields = await generateValidated(
     apiKey,
     model,
+    'FinalizeCasePayload',
     FINALIZE_SYSTEM,
     (feedback) => buildFinalizeContents(parts, feedback),
     FINALIZE_GEMINI_SCHEMA,
@@ -713,6 +723,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   return generateValidated(
     apiKey,
     model,
+    'FinalizeCasePayload.repair',
     REPAIR_SYSTEM,
     (feedback) => buildRepairContents(assembled, initial.error, feedback),
     FULL_CASE_GEMINI_SCHEMA,
@@ -785,6 +796,7 @@ export async function runPleaNarrative(
     const data = await generateValidated(
       apiKey,
       model,
+      'PleaNarrative.weak',
       PLEA_NARRATIVE_SYSTEM,
       (feedback) => buildPleaNarrativeContents(payload, feedback),
       WEAK_PLEA_GEMINI_SCHEMA,
@@ -796,6 +808,7 @@ export async function runPleaNarrative(
   const data = await generateValidated(
     apiKey,
     model,
+    'PleaNarrative.offer',
     PLEA_NARRATIVE_SYSTEM,
     (feedback) => buildPleaNarrativeContents(payload, feedback),
     OFFER_PLEA_GEMINI_SCHEMA,
@@ -838,6 +851,7 @@ export async function runAftermath(apiKey: string, model: string, ctx: Aftermath
   const data = await generateValidated(
     apiKey,
     model,
+    'Aftermath',
     AFTERMATH_SYSTEM,
     (feedback) => buildAftermathContents(ctx, feedback),
     AFTERMATH_GEMINI_SCHEMA,

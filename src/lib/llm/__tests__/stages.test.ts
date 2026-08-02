@@ -66,6 +66,14 @@ describe('runStatuteSelection', () => {
     await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(GameServiceError);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(3);
   });
+
+  it('prefixes the thrown message with the stage name', async () => {
+    // A pipeline runs 6+ of these — "Failed to produce valid output" alone
+    // doesn't say which stage, which is exactly what made mistrials
+    // untraceable before this was added.
+    vi.mocked(callGemini).mockResolvedValue('not json');
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(/^\[StatuteSelection\]/);
+  });
 });
 
 describe('runEnvironmentGen', () => {
