@@ -32,12 +32,37 @@ type Defendant = CasePayload['defendant'];
 type Evidence = CasePayload['evidence'][number];
 type Witness = CasePayload['witnesses'][number];
 
+// A retry only works if the model can see what it got wrong. Feeding back
+// the Zod issues alone ("evidence.0.relevanceScore: Invalid input") asks the
+// model to correct an object it is no longer holding — so it regenerates from
+// scratch and re-rolls the same odds. That is how a reported mistrial burned
+// all three attempts on the identical field three times running.
+//
+// Pairing the issues with the response that produced them turns the retry
+// into what it was always meant to be: a repair. Phrased as a task rather
+// than an accusation, and naming the corrected object as the deliverable, for
+// the same reason — the model needs a target to hit, not a verdict.
+const MAX_ECHOED_RESPONSE_CHARS = 60_000;
+
+function buildRetryFeedback(issues: string[], previousResponse: string): string {
+  const echoed = previousResponse.length > MAX_ECHOED_RESPONSE_CHARS
+    ? `${previousResponse.slice(0, MAX_ECHOED_RESPONSE_CHARS)}\n...[truncated]`
+    : previousResponse;
+  return [
+    'Return the same JSON object again with only these fields corrected:',
+    ...issues.map((issue) => `- ${issue}`),
+    '',
+    'Everything else in the object was accepted — keep it as it is. Your previous response was:',
+    echoed,
+  ].join('\n');
+}
+
 // ============================================================================
-// Generic "generate, parse, validate, retry-with-feedback" loop shared by
-// every pipeline stage. Gemini's structured-output mode shapes the response;
-// the Zod schema is the real trust boundary — the same one hand-authored
-// demo cases cross. A validation failure feeds the Zod issues back into the
-// next prompt as corrective feedback, up to `maxRetries` extra attempts.
+// Generic "generate, parse, validate, retry-with-repair" loop shared by every
+// pipeline stage. Gemini's structured-output mode shapes the response; the
+// Zod schema is the real trust boundary — the same one hand-authored demo
+// cases cross. A validation failure feeds the Zod issues *and the failed
+// response* back into the next prompt, up to `maxRetries` extra attempts.
 // ============================================================================
 async function generateValidated<Schema extends z.ZodTypeAny>(
   apiKey: string,
@@ -82,7 +107,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     } catch (err) {
       lastError = `Response was not valid JSON: ${String(err)}`;
       reportAttemptFailure({ stage: stageName, attempt, kind: 'BAD_JSON', issues: [lastError] });
-      feedback = lastError;
+      feedback = buildRetryFeedback([lastError], text);
       continue;
     }
 
@@ -92,7 +117,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
     reportAttemptFailure({ stage: stageName, attempt, kind: 'SCHEMA', issues });
     lastError = issues.join('; ');
-    feedback = `Your previous response failed validation with these issues — fix them and return a complete, corrected JSON object: ${lastError}`;
+    feedback = buildRetryFeedback(issues, text);
   }
 
   // The stage name is what actually makes this actionable in
