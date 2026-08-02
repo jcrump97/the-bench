@@ -284,7 +284,7 @@ export const WitnessSchema = z.strictObject({
   role: WitnessRoleEnum,
   bias: BiasIndicatorEnum,
   statement: noJury(z.string().max(1000)).describe("A summary of their expected testimony."),
-  credibilityScore: z.number().min(1).max(10),
+  credibilityScore: z.number().int().min(1).max(10),
   // Voiced testimony beats for the trial phase. Which side conducts direct
   // (and which crosses) is derived from `bias` — PROSECUTION/NEUTRAL
   // witnesses are the People's, DEFENSE witnesses are the defense's.
@@ -302,7 +302,7 @@ export const EvidenceSchema = z.strictObject({
   // counsel-voiced — the full detail stays hidden until the exhibit is
   // actually offered.
   disclosureSummary: noJury(z.string().min(1).max(400)).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
-  relevanceScore: z.number().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
+  relevanceScore: z.number().int().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
   objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
   isAdmitted: z.boolean().optional().transform((): boolean => false).describe("Always initialized to false. Mutated by player action during the trial phase."),

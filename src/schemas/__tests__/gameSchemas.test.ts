@@ -425,3 +425,29 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
     expect(CasePayloadSchema.safeParse(legacy).success).toBe(false);
   });
 });
+
+describe('integer score fields match Gemini schema (R2)', () => {
+  it('rejects a non-integer credibilityScore', () => {
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      witnesses: [{ ...rawValidCase.witnesses[0], credibilityScore: 7.5 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a non-integer relevanceScore', () => {
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      evidence: [
+        { ...rawValidCase.evidence[0], relevanceScore: 3.5 },
+        rawValidCase.evidence[1],
+        rawValidCase.evidence[2],
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('still accepts integer scores in the 1-10 range', () => {
+    expect(CasePayloadSchema.safeParse(rawValidCase).success).toBe(true);
+  });
+});
