@@ -30,42 +30,78 @@ Amplified by two structural problems: `generateValidated`'s retry never shows
 the model the JSON it produced (so it regenerates blind rather than repairing),
 and seven independent stages multiply — 85% each is 32% end to end.
 
-- [ ] **C1** — this entry (`docs(todo)`).
-- [ ] **C2** — `onAttemptFailure` hook + `pipelineDiagnostic.live.test.ts`
-      (5 runs, ranked stage × issue table). Baseline recorded below.
-- [ ] **C3** — `normalizeResponse.ts`: `dropNullInterrogation` moved here plus
-      `stripInapplicableConditions`, wired into StatuteSelection, CharacterGen,
-      and the repair preprocess.
-- [ ] **C4** — deterministic id/`targetElementId` reconciliation in
-      `finalizeCasePayload` before the LLM repair round.
-- [ ] **C5** — `minLength`/`maxLength`/`minimum`/`maximum`/`pattern` carried
-      into the response schema for ~20 fields.
-- [ ] **C6** — every `*_SYSTEM` rebuilt on affirmative, exemplified
+- [x] **C1** — this entry (`docs(todo)`).
+- [x] **C2** — observability seam (`generationObserver.ts`) +
+      `pipelineDiagnostic.live.test.ts` (N runs, ranked stage × issue table
+      written to a file — vitest's reporter swallowed console output).
+- [x] **C5** — `minLength`/`maxLength`/`minimum`/`maximum`/`pattern` carried
+      into the response schema, ~60 constraints. **The confirmed fix.** The
+      two scores that broke are additionally `integer` with the 1-10 scale
+      named in a `description`.
+- [x] **C5a** — `fix`: dropped the `evidence` `minItems` C5 added. Gemini
+      rejects the entire request with a bare 400 `INVALID_ARGUMENT` when
+      `minItems` is set on an array whose item schema contains a nullable
+      nested object (here, `interrogation`). Took the pipeline 5/5 → 0/5 and
+      was caught within one sweep because the change was measured, not
+      assumed. `witnesses`/`charges`/`elements`/`maximumPenalties` keep theirs.
+- [x] **C7** — retry carries the previous response, so it repairs instead of
+      regenerating blind.
+- [x] **C7a** — a non-retryable `GeminiError` is rethrown with `[StageName]`
+      prefixed. Without it the 400 above showed no stage at all and cost a
+      live bisection to locate.
+- [x] **C8** — `MAX_TOKENS` and safety blocks surface as typed errors
+      (`GeminiError.reason`); explicit `maxOutputTokens`; `safetySettings` at
+      `BLOCK_ONLY_HIGH`.
+- [x] **C9** — **no thinking config, deliberately.** `thinkingBudget: 0` is
+      rejected outright by the model `gemini-flash-lite-latest` resolves to;
+      the parameter is split by family (`thinkingBudget` 2.5 /
+      `thinkingLevel` 3.x, both together a 400) while `modelSelection` prefers
+      version-less `-latest` aliases, so the family can't be derived from the
+      resolved name; and there is no measured failure for a budget to buy
+      back. Recorded as a comment in `geminiClient.ts` so the next person to
+      "optimize" it finds the 400 documented rather than in production.
+- [x] **C6** — every `*_SYSTEM` rebuilt on affirmative, exemplified
       instruction (ROLE / TASK / RULES / EXAMPLE).
-- [ ] **C7** — retry carries the previous response, so it repairs.
-- [ ] **C8** — `MAX_TOKENS` and safety blocks surface as typed errors;
-      `safetySettings` at `BLOCK_ONLY_HIGH`.
-- [ ] **C9** — per-stage temperature and model-aware thinking config
-      (`thinkingBudget` for 2.5, `thinkingLevel` for 3, never both).
-- [ ] **C10** — regression tests over Gemini-shaped raw responses.
-- [ ] **C11** *(conditional)* — split `runEvidenceGen` only if it still
-      dominates the post-fix table.
-- [ ] **C12/C13** — `qa-agent`: case memory (it is asked to find cross-beat
-      contradictions it structurally cannot see), plus bounded per-beat
-      screenshot and inference cost.
+- [x] **C4** — deterministic id/`targetElementId` reconciliation
+      (`reconcileCase.ts`) before `CaseSchema` validates, so the full-case LLM
+      repair round is reached only by genuinely narrative failures.
+- [x] **C12/C13** — `qa-agent`: case memory (it was asked to find cross-beat
+      contradictions while structurally unable to see earlier beats), plus
+      bounded per-beat screenshot and inference cost.
+- [ ] **C10** — regression tests over the new transport errors, the
+      repair-shaped retry, and `reconcileCrossStageIds`.
 - [ ] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
       README status, and the stale four-cases/five-runs drift at
       `AGENTS.md:74`/`:88`).
+
+**Dropped, with reasons:**
+
+- **C3** (`stripInapplicableConditions`) — the planned normalizer guarded
+  Gemini emitting `conditions: []` on non-PROBATION sentences. Twelve-plus
+  live runs never produced one. Gemini materializes fields marked
+  `nullable: true` as an explicit `null` (which is how `interrogation` was
+  found) but simply *omits* plain non-required fields. Adding speculative
+  normalization to a validated trust boundary to fix a problem that does not
+  exist is the opposite of what this schema layer is for.
+- **C11** (splitting `runEvidenceGen`) — conditional on EvidenceGen still
+  dominating the post-fix table. It does not: zero failed attempts. The extra
+  API calls and latency would buy nothing.
 
 ### Measurements
 
 Before/after end-to-end `generateCase` success across 5 live runs, from the
 C2 diagnostic (`/tmp/bench-pipeline-diagnostic.txt`).
 
-| Sweep | Success rate | Dominant failures |
+| Sweep | Success rate | Failed attempts |
 |---|---|---|
-| Baseline 2026-08-02 | **5/5 (100%)** | EvidenceGen first attempt failed in 3/5 runs on `relevanceScore`/`credibilityScore` `>= 1`; all recovered on retry |
-| Post-C9 | _pending_ | _pending_ |
+| Baseline 2026-08-02 | 5/5 (100%) | EvidenceGen first attempt failed in 3/5 runs on `relevanceScore`/`credibilityScore` `>= 1`; all recovered on retry |
+| After C5 + C7 | 5/5 (100%) | **zero** |
+| After C6 (prompt rebuild) | 5/5 (100%) | **zero** |
+
+The headline number was already 100% at baseline, so the honest measure of
+this work is the *failed-attempt* column: three wasted EvidenceGen attempts
+across five runs, now none. That gap is the whole story — every attempt that
+failed was one retry closer to the exhaustion the player actually hit.
 
 **The baseline contradicts two of the three hypotheses above — recorded here
 rather than quietly dropped.**
@@ -81,14 +117,18 @@ rather than quietly dropped.**
   `relevanceScore`/`credibilityScore` on a 0-1 normalized scale because nothing
   in the response schema says the range is 1-10. That makes **C5 the confirmed
   highest-value fix**, and it is promoted ahead of C3/C4.
-- **The reported "mistrials most of the time" is not reproducible from the
-  pipeline alone** at this key and model. The store hydration path was checked
-  and is correct (`WelcomeScreen` sets case → narrative → phase, all while
-  `WELCOME`). Remaining candidates are all *invisible* in the current code, which
-  is itself the bug C8 fixes: rate-limit exhaustion, a safety block, or a
-  `MAX_TOKENS` truncation are today reported as "no candidate text" or "not
-  valid JSON" with no way to tell them apart. Needs the actual `[stage] message`
-  from the player's Mistrial screen to close out.
+- **Root cause confirmed by the player's own error text**, which read:
+
+      [generateCase] [EvidenceGen] Failed to produce valid output after 3
+      attempt(s): evidence.0.relevanceScore: Invalid input; ...
+      witnesses.1.credibilityScore: Invalid input
+
+  Same fields, same stage the diagnostic flagged. Note `Invalid input` rather
+  than `Too small`: Zod emits that for a *wrong type* (null, a string, NaN),
+  where the diagnostic caught the sibling case of an in-type-but-out-of-range
+  0-1 score. One unconstrained field, two ways to get it wrong. It exhausted
+  all three attempts because the retry never showed the model its own output
+  (C7) — so it regenerated blind and made the same mistake three times.
 
 ## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
 
