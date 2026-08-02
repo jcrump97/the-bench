@@ -348,6 +348,20 @@ describe('CaseSchema defendant-name backstop', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts a verdict line that uses only the defendant\'s first name', () => {
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      charges: [{
+        ...rawValidCase.charges[0],
+        verdictOptions: [
+          { choice: 'GUILTY', lineText: 'The court finds defendant Jordan guilty.' },
+          { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+        ],
+      }],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('does not flag ordinary "the defendant" phrasing or possessive "defendant\'s"', () => {
     const result = CasePayloadSchema.safeParse({
       ...rawValidCase,

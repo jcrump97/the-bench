@@ -24,6 +24,7 @@ function addDefendantNameIssues(
   ctx: z.RefinementCtx,
 ): void {
   const fullName = `${caseData.defendant.firstName} ${caseData.defendant.lastName}`.trim();
+  const firstName = caseData.defendant.firstName.trim();
   const lastName = caseData.defendant.lastName.trim();
   if (fullName.length === 0) return;
 
@@ -68,7 +69,8 @@ function addDefendantNameIssues(
       const found = match[1]!.trim();
       const foundFull = found === fullName;
       const foundLast = found === lastName;
-      if (!foundFull && !foundLast) {
+      const foundFirst = found === firstName;
+      if (!foundFull && !foundLast && !foundFirst) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `${label} names "defendant ${found}" but the defendant is ${fullName}`,
