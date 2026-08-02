@@ -20,6 +20,7 @@ import type { InterrogationProfile } from '../interrogation';
 import type { AftermathContext } from '../caseSource';
 import { callGemini, GeminiError, type GeminiSchema } from './geminiClient';
 import { reportAttemptFailure } from './generationObserver';
+import { reconcileCrossStageIds } from './reconcileCase';
 
 export class GameServiceError extends Error {
   constructor(message: string) {
@@ -874,14 +875,22 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     CaseFinalizationFieldsSchema,
   );
 
+  // Fix the two mechanical cross-stage failures before validating, so the
+  // LLM repair round below is reached only by something genuinely narrative.
+  // Each stage validated its own output in isolation; an id collision or a
+  // dangling element reference can only appear once the pieces are assembled,
+  // and asking Gemini to regenerate the whole case to fix a duplicate id is a
+  // wildly disproportionate answer to a solved problem.
+  const reconciled = reconcileCrossStageIds(parts);
+
   const assembled = {
     caseId: finalFields.caseId,
     defendant: parts.defendant,
     environment: parts.environment,
-    charges: parts.charges,
+    charges: reconciled.charges,
     statuteContexts: parts.statuteContexts,
-    witnesses: parts.witnesses,
-    evidence: parts.evidence,
+    witnesses: reconciled.witnesses,
+    evidence: reconciled.evidence,
     summary: finalFields.summary,
     statementOfFacts: finalFields.statementOfFacts,
     closingArguments: finalFields.closingArguments,

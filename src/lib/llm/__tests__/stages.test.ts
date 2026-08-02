@@ -241,10 +241,13 @@ describe('finalizeCasePayload', () => {
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
   });
 
-  it('runs a repair round when the assembled payload fails cross-stage validation', async () => {
+  it('fixes duplicate ids deterministically instead of spending a repair round', async () => {
     // Two charges sharing the same element id — a cross-stage uniqueness
     // violation finalizeCasePayload's own finalize-fields call can't fix,
-    // since it never touches charges.
+    // since it never touches charges. Regenerating the entire case through
+    // Gemini to resolve a duplicate id is wildly disproportionate, so
+    // reconcileCrossStageIds renames the collision in code and the LLM repair
+    // round is never reached: one call, not two.
     const duplicateElementParts = {
       ...parts,
       charges: [charge, { ...charge, id: 'c2' }],
@@ -257,23 +260,17 @@ describe('finalizeCasePayload', () => {
         statementOfFacts: rawValidCase.statementOfFacts,
         closingArguments: rawValidCase.closingArguments,
       }),
-      JSON.stringify({
-        caseId: rawValidCase.caseId,
-        defendant,
-        environment,
-        charges: [charge],
-        statuteContexts: rawValidCase.statuteContexts,
-        witnesses,
-        evidence,
-        summary: rawValidCase.summary,
-        statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
-      }),
     );
 
     const result = await finalizeCasePayload(API_KEY, MODEL, duplicateElementParts);
     expect(CaseSchema.safeParse(result).success).toBe(true);
-    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+
+    // The first claimant keeps its id so existing references stay valid; only
+    // the later collision is renamed.
+    const elementIds = result.charges.flatMap((c) => c.elements.map((e) => e.id));
+    expect(new Set(elementIds).size).toBe(elementIds.length);
+    expect(elementIds[0]).toBe(charge.elements[0]!.id);
   });
 });
 
