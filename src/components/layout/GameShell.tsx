@@ -19,14 +19,18 @@ function PanelDrawer({ side, open, hint, children }: { side: 'left' | 'right'; o
       : `right-0 ${open ? 'translate-x-0' : 'translate-x-full'}`;
   const desktopWidth = open ? 'lg:w-80' : 'lg:w-0';
   const border = side === 'left' ? 'lg:border-r' : 'lg:border-l';
-  // The first-run peek only animates the closed mobile drawer (the CSS
-  // no-ops it at lg:, where the panels are open static columns and the
-  // toggle-button pop carries the hint instead).
+  // The first-run hint animates whichever state the panel is actually in:
+  // closed (mobile/tablet drawer) peeks out and retreats; open (desktop
+  // static column, or a panel a player already opened) flashes an inset
+  // highlight instead, since there's no closed edge to peek from. Either
+  // way the toggle buttons (panel-hint-toggle, delayed via CSS) glow next
+  // to point at the control that shows/hides it.
   const peek = hint && !open ? (side === 'left' ? 'panel-hint-left' : 'panel-hint-right') : '';
+  const highlight = hint && open ? 'panel-hint-highlight' : '';
 
   return (
     <aside
-      className={`fixed inset-y-0 z-40 w-[85vw] max-w-xs transform bg-(--bg-panel) transition-transform ${mobilePosition} ${peek} lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${desktopWidth} lg:max-w-none lg:overflow-hidden ${border} lg:border-(--border)`}
+      className={`fixed inset-y-0 z-40 w-[85vw] max-w-xs transform bg-(--bg-panel) transition-transform ${mobilePosition} ${peek} ${highlight} lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${desktopWidth} lg:max-w-none lg:overflow-hidden ${border} lg:border-(--border)`}
     >
       <div className="h-full w-[85vw] max-w-xs overflow-y-auto lg:w-80 lg:max-w-none">{children}</div>
     </aside>
@@ -41,13 +45,21 @@ export function GameShell() {
 
   // Fire the collapse-affordance hint the first time the courtroom mounts
   // this session; the timeout outlives the longest animation so the classes
-  // come off cleanly even if animationend never fires (reduced motion).
+  // come off cleanly even if animationend never fires (reduced motion). The
+  // sequence is panel highlight (900ms) then, via CSS animation-delay, the
+  // toggle-button glow (550ms x2 = 1100ms starting at 900ms) — 2000ms total.
+  // Deliberately no cleanup-cancel: React 18 StrictMode's dev-only
+  // mount→cleanup→mount double-invoke would otherwise cancel this same
+  // timer on the first cleanup, and the second mount's panelHintPlayed
+  // guard (already flipped true by the first) would skip scheduling a
+  // replacement — leaving panelHintActive stuck true forever. Letting the
+  // original timer run past its own unmount is harmless: endPanelHint()
+  // only writes to the store.
   useEffect(() => {
     const { panelHintPlayed, beginPanelHint, endPanelHint } = useUIStore.getState();
     if (panelHintPlayed) return;
     beginPanelHint();
-    const timer = setTimeout(endPanelHint, 1500);
-    return () => clearTimeout(timer);
+    setTimeout(endPanelHint, 2200);
   }, []);
 
   return (
