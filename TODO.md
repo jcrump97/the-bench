@@ -1,10 +1,11 @@
 # TODO
 
-## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — IN PROGRESS)
+## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
 
 Player-reported: the live Gemini pipeline lands on `ErrorScreen` ("Mistrial")
-most of the time. Plan: `~/.claude/plans/peaceful-wandering-wigderson.md`.
-Branch: `fix/pipeline-reliability`.
+most of the time. Branch: `fix/pipeline-reliability`, 17 commits
+(`docs(todo)` → `docs`). The commit messages are the record; the plan file has
+since been overwritten by the cross-stage plan below.
 
 **Root cause is not model flakiness.** Three compounding gaps, each verified
 by reading `src/lib/llm/` against `src/schemas/gameSchemas.ts`:
@@ -175,8 +176,105 @@ The fix shape for 2-5 is the same and cheap: pass the missing context into
 the stage's `build*Contents`. Item 1 is the only structural one — it is a
 pipeline *ordering* problem, not a missing-argument problem.
 
-Not attempted here: the reliability work was scoped to validation failures,
-and these are a different (larger) problem that deserves its own plan.
+### Plan (approved 2026-08-02) — `~/.claude/plans/peaceful-wandering-wigderson.md`
+
+Two decisions were taken rather than assumed. For item 1, the choice was
+between forbidding names in stage-1 text (what the demo cases already do) and
+giving the stage the facts; **giving it the facts won**, because a verdict
+reaction that can reach for the defendant's circumstances — Webb's "two boys
+waiting on a custody schedule" — is the texture the demo docket sets as the
+standard. And the wrong-person class gets a **schema backstop**, not just a
+prompt, on the same reasoning as `noJury`.
+
+New pipeline order (`VerdictVoice` placed after EvidenceGen for the richest
+context; nothing between needs the voiced fields):
+
+```
+StatuteSelection(core) → EnvironmentGen → CharacterGen → InterrogationGen
+  → EvidenceGen → VerdictVoice → finalizeCasePayload → PleaNarrative
+```
+
+The plea circularity turned out to be only apparent, which is what makes
+item 2 tractable: `pleadsToChargeIds`, `proposedSentence`, the `assessDefense`
+result and therefore `status` are all derived from `caseData` and `band` alone
+(`pleaAssessment.ts:193-222`) — the rationales are pure pass-through. So the
+offer can be derived *before* the narrative that argues about it.
+
+- [ ] **D1** — this entry.
+- [ ] **D2** — `environment` threaded into InterrogationGen (finding 4).
+- [ ] **D3** — exhibits and witnesses into the finalize prompt (finding 3).
+- [ ] **D4** — examination fields written as testimony, not Q&A (finding 5).
+- [ ] **D5** — extract `derivePleaOfferTerms`; `buildPleaPosture` calls it so
+      there is one derivation and no drift.
+- [ ] **D6** — offer terms and the defense's accept/reject into the plea
+      narrative prompt (finding 2).
+- [ ] **D7** — `ChargeSchema` split into `ChargeCoreSchema` + a voiced half.
+      It is a `strictObject(...).superRefine(...)`, so `.omit()` is
+      unavailable; the split shares a shape object and `ChargeSchema` itself
+      stays byte-identical in behaviour so demo cases cross the same gate.
+- [ ] **D8** — new `VerdictVoice` stage (finding 1). **Probe its response
+      schema against the live API before wiring it in** — a `minItems`
+      constraint and a `thinkingBudget: 0` have each already broken this
+      pipeline on plausible-sounding reasoning.
+- [ ] **D9** — `CaseSchema` refinement: the phrase "defendant &lt;Name&gt;" must
+      name the defendant (finding 6). All five demo cases must still pass.
+- [ ] **D10/D11/D12** — outstanding items from the skeptical review: a
+      degraded `qa-agent` review judgment currently reads as a clean beat, the
+      repair round re-embeds stale context on its second retry, and
+      `reconcileCrossStageIds` has one untested branch.
+- [ ] **D13** — docs sync, including the README pipeline diagram and stating
+      the `BLOCK_ONLY_HIGH` safety threshold as an accepted decision.
+
+Noted, not actioned: `MAX_ECHOED_RESPONSE_CHARS = 60_000` now applies to every
+stage's retry rather than only the repair round it was sized for. Fine at
+current payload sizes; revisit if a stage ever produces much larger output.
+
+### Handoff notes (anyone picking this up cold)
+
+Branch `fix/pipeline-reliability`, cut from `main`, nothing pushed. Work items
+above are in dependency order; D2/D3/D4 and D10/D11/D12 are independent of
+everything else and can be done in any order.
+
+Where each item lives:
+
+| Item | Files |
+|---|---|
+| D2 | `src/lib/llm/stages.ts` (`runInterrogationGen`, `buildInterrogationGenContents`), `src/lib/llm/gameService.ts` (already holds `environment`) |
+| D3 | `src/lib/llm/stages.ts` (`buildFinalizeContents` — `parts` already carries `evidence`/`witnesses`, they are just not put in the prompt) |
+| D4 | `src/lib/llm/stages.ts` (`WITNESS_GEMINI_SCHEMA.directExamination` description, `EVIDENCE_GEN_SYSTEM`). Quality bar: `src/lib/demoCases/webb.ts:127` |
+| D5/D6 | `src/lib/pleaAssessment.ts:193-222`, `src/lib/llm/stages.ts` (`runPleaNarrative`, `buildPleaNarrativeContents`), `src/lib/llm/gameService.ts:54` |
+| D7 | `src/schemas/gameSchemas.ts:161-180` |
+| D8 | `src/lib/llm/stages.ts`, `src/lib/llm/gameService.ts` |
+| D9 | `src/schemas/gameSchemas.ts:396` (`CaseSchema`'s existing `superRefine`) |
+| D10 | `.claude/skills/qa-agent/qa-agent.mjs` (`judgeContent`'s degraded return), `SKILL.md` |
+| D11 | `src/lib/llm/stages.ts` (`buildRepairContents`) |
+| D12 | `src/lib/llm/__tests__/reconcileCase.test.ts` |
+
+Hard-won constraints, all verified against the live API — **do not "optimize"
+past these without probing first** (see also the comment on `generationConfig`
+in `geminiClient.ts`):
+
+- `minItems` on an array whose item schema contains a nullable nested object
+  makes Gemini reject the whole request with a bare 400. This is why
+  `evidence` has no `minItems`.
+- `thinkingBudget: 0` is rejected by the model `gemini-flash-lite-latest`
+  resolves to; the thinking parameter is split by model family and the family
+  cannot be derived from a `-latest` alias. The pipeline sends none.
+- Gemini materializes `nullable: true` fields as an explicit `null` but omits
+  plain non-required ones.
+
+Verification (`AGENTS.md` has the full command list):
+
+```bash
+npm run lint && npm test && npm run build     # per commit; pre-commit hook runs lint+build
+npm run test:live                             # 5-run diagnostic; must stay 5/5, zero failed attempts
+node .claude/skills/run-the-bench/driver.mjs  # needs `npm run dev` first; six runs, five demo cases
+node .claude/skills/qa-agent/qa-agent.mjs     # live playthrough; the only check that reads the prose
+```
+
+Baselines to hold: `npm test` is at 293 passing; the live diagnostic is at 5/5
+with **zero** failed attempts (report lands at `/tmp/bench-pipeline-diagnostic.txt`,
+override with `DIAGNOSTIC_REPORT`/`DIAGNOSTIC_RUNS`).
 
 **Note on qa-agent false positives:** two MEDIUM `UI_UX` findings reported the
 court's ruling text as unreadably low contrast. It is the beat-reveal fade-in
