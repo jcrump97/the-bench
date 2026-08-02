@@ -494,6 +494,19 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           const submitButton = actionBar.getByRole('button', { name: /Impose Sentence|Adjourn/ });
           await submitButton.scrollIntoViewIfNeeded();
           await submitButton.click();
+          // handleSubmit() kicks off a real generateAftermath() Gemini call
+          // and only unmounts this form (setPhase to END_STATE or, on
+          // failure, ERROR_STATE) once it resolves — the button stays in
+          // the DOM (disabled) for however long that takes. Looping back
+          // immediately re-detects this same, already-submitted sentencing
+          // UI as a fresh actionable state (the number inputs are never
+          // disabled), causing a redundant second fill+click that later
+          // hangs waiting on a button that vanishes mid-wait once the first
+          // call finally resolves. Wait for it to actually go before moving
+          // on to the next beat.
+          await submitButton
+            .waitFor({ state: 'detached', timeout: Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000) })
+            .catch(() => {});
         } else {
           const texts = [];
           for (let i = 0; i < plainCount; i++) texts.push((await plainButtons.nth(i).innerText()).trim());
@@ -502,7 +515,20 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           const result = await judgeContent(model, { promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
           actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx] });
-          await plainButtons.nth(clickIdx).click();
+          const clicked = plainButtons.nth(clickIdx);
+          const isSubmit = /Impose Sentence|Adjourn/.test(texts[clickIdx]);
+          await clicked.click();
+          // On a full acquittal, SentencingControl's only control is this
+          // plain "Adjourn" button — same handleSubmit()/generateAftermath()
+          // path as the sentence-input branch above, and the same
+          // stays-mounted-while-disabled problem: looping back immediately
+          // re-detects the still-present (now-disabled) button as a fresh
+          // actionable state and clicks it again. Wait for it to actually go.
+          if (isSubmit) {
+            await clicked
+              .waitFor({ state: 'detached', timeout: Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000) })
+              .catch(() => {});
+          }
         }
 
         lastRowCount = rows.length;
