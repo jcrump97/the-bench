@@ -24,6 +24,17 @@ const API_KEY = 'AIzaTestKey1234567890123456789';
 const MODEL = 'gemini-flash-lite-latest';
 
 const charge = validCase.charges[0]!;
+// StatuteSelection now emits ChargeCore only; the voiced verdict layer is
+// added in a later stage. Responses to that stage must omit verdictReactions
+// and verdictOptions so the strict schema accepts them.
+const chargeCore = {
+  id: charge.id,
+  name: charge.name,
+  classification: charge.classification,
+  elements: charge.elements,
+  mandatoryMinimums: charge.mandatoryMinimums,
+  maximumPenalties: charge.maximumPenalties,
+};
 const environment = validCase.environment;
 const defendant = validCase.defendant;
 const witnesses = validCase.witnesses;
@@ -43,7 +54,7 @@ beforeEach(() => {
 
 describe('runStatuteSelection', () => {
   it('succeeds on the first valid response', async () => {
-    mockCallsWith(JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }));
+    mockCallsWith(JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }));
 
     const result = await runStatuteSelection(API_KEY, MODEL);
     expect(result.charges).toHaveLength(1);
@@ -53,7 +64,7 @@ describe('runStatuteSelection', () => {
   it('retries once after invalid JSON then succeeds', async () => {
     mockCallsWith(
       'not json',
-      JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }),
+      JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }),
     );
 
     const result = await runStatuteSelection(API_KEY, MODEL);
@@ -81,7 +92,7 @@ describe('runStatuteSelection', () => {
     // transient call failure killed the whole stage.
     const mock = vi.mocked(callGemini);
     mock.mockRejectedValueOnce(new GeminiError('server error', 503));
-    mock.mockResolvedValueOnce(JSON.stringify({ charges: [charge], statuteContexts: rawValidCase.statuteContexts }));
+    mock.mockResolvedValueOnce(JSON.stringify({ charges: [chargeCore], statuteContexts: rawValidCase.statuteContexts }));
 
     const result = await runStatuteSelection(API_KEY, MODEL);
     expect(result.charges).toHaveLength(1);
@@ -96,6 +107,46 @@ describe('runStatuteSelection', () => {
 
     await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toThrow(GeminiError);
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefixes a rethrown non-retryable GeminiError with the stage name and preserves its status', async () => {
+    // Same call-failure path as above, but asserting the two things the
+    // Mistrial screen actually needs: which stage failed (the message
+    // prefix) and that it is still classifiable as a GeminiError with its
+    // original status intact, not just some generic Error.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValue(new GeminiError('Request contains an invalid argument', 400));
+
+    let caught: unknown;
+    try {
+      await runStatuteSelection(API_KEY, MODEL);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(GeminiError);
+    expect((caught as GeminiError).status).toBe(400);
+    expect((caught as GeminiError).message).toMatch(/^\[StatuteSelection\]/);
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it('feeds the previous raw response back into the retry contents, not just the Zod issue message', async () => {
+    // A reported mistrial burned all three attempts on the identical field
+    // because the model only ever saw the Zod error text ("age: Invalid
+    // input") and never the object it produced — it had nothing to repair,
+    // so it re-rolled from scratch each time. The fix (buildRetryFeedback)
+    // echoes the failed response back verbatim; this asserts that echo
+    // actually reaches the second call's contents, not just the issue list.
+    const badResponse = JSON.stringify({ defendant: { ...defendant, age: 5 } });
+    mockCallsWith(badResponse, JSON.stringify({ defendant }));
+
+    await runCharacterGen(API_KEY, MODEL, [charge]);
+
+    const mock = vi.mocked(callGemini);
+    expect(mock).toHaveBeenCalledTimes(2);
+    const secondCallArgs = mock.mock.calls[1];
+    const secondCallOptions = secondCallArgs?.[2] as { contents: string };
+    expect(secondCallOptions.contents).toContain(badResponse);
   });
 });
 
@@ -127,7 +178,7 @@ describe('runCharacterGen', () => {
 
 describe('runInterrogationGen', () => {
   it('skips the call entirely for an INVOKED_COUNSEL profile', async () => {
-    const result = await runInterrogationGen(API_KEY, MODEL, defendant, { outcome: 'INVOKED_COUNSEL' });
+    const result = await runInterrogationGen(API_KEY, MODEL, defendant, environment, { outcome: 'INVOKED_COUNSEL' });
     expect(result).toBeNull();
     expect(vi.mocked(callGemini)).not.toHaveBeenCalled();
   });
@@ -139,7 +190,7 @@ describe('runInterrogationGen', () => {
       }),
     );
 
-    const result = await runInterrogationGen(API_KEY, MODEL, defendant, {
+    const result = await runInterrogationGen(API_KEY, MODEL, defendant, environment, {
       outcome: 'DENIAL',
       challengeGround: 'MIRANDA',
     });
@@ -241,10 +292,13 @@ describe('finalizeCasePayload', () => {
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
   });
 
-  it('runs a repair round when the assembled payload fails cross-stage validation', async () => {
+  it('fixes duplicate ids deterministically instead of spending a repair round', async () => {
     // Two charges sharing the same element id — a cross-stage uniqueness
     // violation finalizeCasePayload's own finalize-fields call can't fix,
-    // since it never touches charges.
+    // since it never touches charges. Regenerating the entire case through
+    // Gemini to resolve a duplicate id is wildly disproportionate, so
+    // reconcileCrossStageIds renames the collision in code and the LLM repair
+    // round is never reached: one call, not two.
     const duplicateElementParts = {
       ...parts,
       charges: [charge, { ...charge, id: 'c2' }],
@@ -257,23 +311,17 @@ describe('finalizeCasePayload', () => {
         statementOfFacts: rawValidCase.statementOfFacts,
         closingArguments: rawValidCase.closingArguments,
       }),
-      JSON.stringify({
-        caseId: rawValidCase.caseId,
-        defendant,
-        environment,
-        charges: [charge],
-        statuteContexts: rawValidCase.statuteContexts,
-        witnesses,
-        evidence,
-        summary: rawValidCase.summary,
-        statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
-      }),
     );
 
     const result = await finalizeCasePayload(API_KEY, MODEL, duplicateElementParts);
     expect(CaseSchema.safeParse(result).success).toBe(true);
-    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+
+    // The first claimant keeps its id so existing references stay valid; only
+    // the later collision is renamed.
+    const elementIds = result.charges.flatMap((c) => c.elements.map((e) => e.id));
+    expect(new Set(elementIds).size).toBe(elementIds.length);
+    expect(elementIds[0]).toBe(charge.elements[0]!.id);
   });
 });
 
@@ -282,7 +330,7 @@ describe('runPleaNarrative', () => {
     mockCallsWith(JSON.stringify({ prosecutionRationale: 'The People decline to offer given the thin proof.' }));
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
     expect(result.prosecutionRationale).toBeTruthy();
     expect(result.defenseRationale).toBeUndefined();
     expect(result.allocution).toBeUndefined();
@@ -306,7 +354,10 @@ describe('runPleaNarrative', () => {
     );
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'REJECT');
     expect(result.defenseRationale).toBeTruthy();
     expect(result.allocution).toBeTruthy();
     expect(result.pleaReactions).toBeDefined();
@@ -335,7 +386,10 @@ describe('runPleaNarrative', () => {
     );
 
     const parsedCase = CaseSchema.parse(rawValidCase);
-    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'STRONG');
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'STRONG', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 10 }],
+    }, 'REJECT');
     expect(result.pleaRulingOptions).toHaveLength(2);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
   });

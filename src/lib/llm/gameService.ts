@@ -1,6 +1,7 @@
-import { assessProsecution } from '../pleaAssessment';
+import { assessProsecution, derivePleaOfferTerms, assessDefense } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource';
+import type { Charge } from '../../schemas/gameSchemas';
 import { getOrSelectModel } from './modelSelection';
 import {
   runStatuteSelection,
@@ -8,6 +9,7 @@ import {
   runCharacterGen,
   runInterrogationGen,
   runEvidenceGen,
+  runVerdictVoice,
   finalizeCasePayload,
   runPleaNarrative,
   runAftermath,
@@ -31,7 +33,7 @@ export function createGameService(apiKey: string): CaseSource {
       const defendant = await runCharacterGen(apiKey, model, charges);
 
       const interrogationProfile = deriveInterrogationProfile(defendant);
-      const interrogation = await runInterrogationGen(apiKey, model, defendant, interrogationProfile);
+      const interrogation = await runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile);
 
       const { evidence, witnesses } = await runEvidenceGen(
         apiKey,
@@ -42,8 +44,15 @@ export function createGameService(apiKey: string): CaseSource {
         interrogation,
       );
 
+      const chargeVoices = await runVerdictVoice(apiKey, model, charges, defendant);
+      const chargesWithVoice: Charge[] = charges.map((charge) => {
+        const voice = chargeVoices.find((c) => c.id === charge.id);
+        if (!voice) throw new Error(`VerdictVoice missing for charge ${charge.id}`);
+        return { ...charge, ...voice };
+      });
+
       const payload = await finalizeCasePayload(apiKey, model, {
-        charges,
+        charges: chargesWithVoice,
         statuteContexts,
         environment,
         defendant,
@@ -52,7 +61,9 @@ export function createGameService(apiKey: string): CaseSource {
       });
 
       const { band } = assessProsecution(payload);
-      const pleaNarrative = await runPleaNarrative(apiKey, model, payload, band);
+      const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
+      const defensePosture = offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
+      const pleaNarrative = await runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture);
 
       return { payload, pleaNarrative };
     },

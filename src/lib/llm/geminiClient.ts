@@ -12,13 +12,23 @@ const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 15_000;
 
+// Why a call produced no usable text, when the HTTP request itself succeeded.
+// A 200 with no content used to surface as one generic "no candidate text",
+// which is three very different problems wearing the same message: the model
+// ran out of output budget mid-JSON, a safety filter stopped it, or the
+// prompt itself was blocked before generation. They need different responses
+// and, from the Mistrial screen, they need to be told apart.
+export type GeminiFailureReason = 'MAX_TOKENS' | 'SAFETY' | 'NO_CANDIDATE';
+
 export class GeminiError extends Error {
   readonly status: number | null;
+  readonly reason: GeminiFailureReason | null;
 
-  constructor(message: string, status: number | null) {
+  constructor(message: string, status: number | null, reason: GeminiFailureReason | null = null) {
     super(message);
     this.name = 'GeminiError';
     this.status = status;
+    this.reason = reason;
   }
 }
 
@@ -34,13 +44,39 @@ export interface GeminiSchema {
   nullable?: boolean;
   minItems?: number;
   maxItems?: number;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  pattern?: string;
+  propertyOrdering?: string[];
 }
 
 export interface GeminiCallOptions {
   systemInstruction: string;
   contents: string;
   responseSchema: GeminiSchema;
+  maxOutputTokens?: number;
 }
+
+// The pipeline's largest response (EvidenceGen: several exhibits with their
+// prose, reaction beats and ruling options, plus witnesses and a transcript)
+// needs real headroom. Left unset, an overrun truncates the JSON mid-object
+// and the failure reads as "not valid JSON" — a diagnosis that sends you
+// looking at the wrong thing entirely. Verified accepted by the API.
+const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
+
+// This is a crime simulation: assault, weapons, narcotics, and custodial
+// interrogation are the subject matter, not an accident. Default thresholds
+// are tuned for general-purpose use and will stop legitimate case generation,
+// so the configurable categories are relaxed to BLOCK_ONLY_HIGH — still
+// blocking genuinely harmful output, but not ordinary criminal-court content.
+const SAFETY_SETTINGS = [
+  'HARM_CATEGORY_HARASSMENT',
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+].map((category) => ({ category, threshold: 'BLOCK_ONLY_HIGH' }));
 
 interface RawModel {
   name: string;
@@ -114,12 +150,33 @@ export async function callGemini(
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: options.contents }] }],
+      safetySettings: SAFETY_SETTINGS,
+      // No thinkingConfig here, and that is a decision rather than an
+      // oversight. Three findings, each probed against the live API:
+      //
+      // 1. `thinkingBudget: 0` — the documented way to switch thinking off —
+      //    is rejected outright with 400 INVALID_ARGUMENT by the model
+      //    `gemini-flash-lite-latest` currently resolves to. Only a positive
+      //    budget and -1 (dynamic) are accepted. Hardcoding the "disable"
+      //    value would break every call, which is exactly how the evidence
+      //    array's minItems broke this pipeline.
+      // 2. The parameter is split by model family (`thinkingBudget` for 2.5,
+      //    `thinkingLevel` for 3.x, and sending both is a 400) — but
+      //    modelSelection deliberately prefers `-latest` *aliases*, whose
+      //    names carry no version. There is no reliable way to pick the right
+      //    parameter from the name we actually resolve.
+      // 3. The pipeline measures 5/5 with zero failed attempts on the model's
+      //    default. There is no failure here for a thinking budget to buy back.
+      //
+      // So the model's own default stands. If a future stage does need
+      // bounded reasoning, add it per-stage behind a probe — never a constant.
       generationConfig: {
         // Structured JSON output is measurably more schema-compliant at
         // lower temperature; 0.7 keeps case-to-case narrative variety (the
         // point of live generation) while cutting down on malformed/schema-
         // violating responses that otherwise burn a generateValidated retry.
         temperature: 0.7,
+        maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         responseMimeType: 'application/json',
         responseSchema: options.responseSchema,
       },
@@ -127,11 +184,36 @@ export async function callGemini(
   });
 
   const data = (await response.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+    promptFeedback?: { blockReason?: string };
   };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  // A blocked prompt never reaches generation, so there are no candidates at
+  // all — check it before looking for text that cannot exist.
+  const blockReason = data.promptFeedback?.blockReason;
+  if (blockReason !== undefined) {
+    throw new GeminiError(`Gemini blocked the prompt (${blockReason})`, null, 'SAFETY');
+  }
+
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
+
+  // Order matters: a MAX_TOKENS candidate can carry partial text, and handing
+  // that back as if it were complete is how a truncation gets misreported as
+  // malformed JSON. Name the real cause instead.
+  if (candidate?.finishReason === 'MAX_TOKENS') {
+    throw new GeminiError(
+      `Gemini stopped at the output token limit (${options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS}); the JSON is truncated, not malformed`,
+      null,
+      'MAX_TOKENS',
+    );
+  }
+  if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'PROHIBITED_CONTENT') {
+    throw new GeminiError(`Gemini stopped generating for ${candidate.finishReason}`, null, 'SAFETY');
+  }
   if (text === undefined) {
-    throw new GeminiError('Gemini response contained no candidate text', null);
+    const detail = candidate?.finishReason === undefined ? '' : ` (finishReason: ${candidate.finishReason})`;
+    throw new GeminiError(`Gemini response contained no candidate text${detail}`, null, 'NO_CANDIDATE');
   }
   return text;
 }

@@ -23,10 +23,14 @@ response *shape*, never prose content.
 
 **Every run spends real, billed Gemini API quota twice over**: once for the
 actual case-generation pipeline (the same multi-stage `GameService` calls
-BYOK players trigger) and again for every beat's QA-judgment call (text +
-screenshot). A full case is commonly 20–60 beats. This is not free and not
-fast (multi-stage generation alone can take a minute or more; expect a
-10–20 minute full run).
+BYOK players trigger) and again for every beat's QA-judgment call (text,
+and — per the screenshot policy below — sometimes an attached screenshot).
+A full case is commonly 20–60 beats. This is not free and not fast
+(multi-stage generation alone can take a minute or more; expect a 10–20
+minute full run). Image tokens used to dominate per-beat cost by attaching a
+screenshot on every single call; throttling that (see below) meaningfully
+cuts cost and latency without dropping visual coverage of decision beats,
+which still always get one.
 
 Both the generated case *and* the QA judgments are live LLM output, so
 findings and even the exact path taken through the game will differ between
@@ -69,11 +73,24 @@ Knobs (all optional):
   `screenshots/` subdirectory (one PNG per beat) land here.
 - `QA_MAX_ITERATIONS` — default `150`. Safety cap so a stuck run doesn't spin
   forever.
+- `QA_MEMORY_CHARS` — default `12000`. How much of the already-read record is
+  carried into each judgment call (see below). Past the budget the record is
+  kept head-and-tail rather than truncated, so the Act 1 facts a contradiction
+  is measured against survive alongside recent context.
 - `QA_GENERATION_TIMEOUT_MS` — default `480000` (8 min). How long to wait for
   BYOK case generation before treating it as a hard failure. The six-plus
   sequential Gemini calls behind generation can each retry-with-feedback on a
   validation failure, plus one bounded repair round — a slow run can
   legitimately take several minutes.
+- `QA_SHOT_EVERY` — default `5`. See "Screenshot policy" below.
+- `QA_TEMPERATURE` — default `0.2`. Passed as the judgment call's
+  `generationConfig.temperature`. A grader's severity ratings should be
+  comparable between runs; the API default of `1.0` makes the same beat flip
+  between "no findings" and "HIGH severity" on a re-run for reasons that have
+  nothing to do with the content.
+- `QA_MAX_OUTPUT_TOKENS` — default `2048`. Passed as
+  `generationConfig.maxOutputTokens`, so an unusually long findings array
+  can't truncate the response mid-JSON.
 
 ## What it does
 
@@ -82,8 +99,10 @@ Knobs (all optional):
    the courtroom or fail into `ErrorScreen` ("Mistrial") — the latter is a
    hard FAIL, not retried.
 2. At every beat, reads the newly-revealed transcript text (`main` innerText,
-   diffed against what was already reviewed) and a screenshot, and enumerates
-   the current `[data-action-bar]` controls:
+   diffed against what was already reviewed), prepends **the record it has
+   already read plus the rulings it has already made**, and enumerates the
+   current `[data-action-bar]` controls — attaching a screenshot to the
+   judgment call only per the screenshot policy below:
    - **A single button** (a statement continue, or a forced transition like
      "Order Trial"/"Adjourn") → review-only judgment call, then click it.
      "Skip to Next Decision" is deliberately never the chosen button — a real
@@ -109,6 +128,48 @@ Exit code is non-zero if generation failed, the run got stuck past
 `QA_MAX_ITERATIONS`, or any finding was `HIGH` severity. `MEDIUM`/`LOW`
 findings are informational and don't fail the run.
 
+## Screenshot policy
+
+Every beat still gets a screenshot written to
+`$QA_REPORT_DIR/screenshots/beat-NNN.png` — the human-facing record is always
+complete. What's throttled is only what the *judgment model* sees, since a
+plain statement-advance beat's layout is usually pixel-identical to the one
+before it and an attached image buys nothing but tokens. The model gets a
+screenshot when any of:
+- the beat is a decision beat (motion/plea/verdict ruling) or sentencing,
+- it's the first judged beat of the run (nothing to compare the starting
+  state against yet),
+- it's the final aftermath review (the "New Case" beat), or
+- `beat % QA_SHOT_EVERY === 0` (default every 5th beat), as a periodic visual
+  sanity check on the plain-advance beats in between.
+
+## Why the tester carries the record
+
+Each judgment call used to receive only the *delta* since the last look, with
+no history and no conversation state — while the persona asked it to flag
+"facts that don't match earlier details". That finding class was structurally
+impossible to produce: there was nothing to compare a new line against. Every
+call now leads with `THE RECORD SO FAR` and the rulings already made, which is
+what makes cross-beat contradictions (a witness's age changing, an exhibit
+renamed, a date that moved) detectable at all.
+
+## When a judgment call fails validation
+
+Each judgment call gets one retry, and that retry now includes the previous
+raw response text (not just the Zod error) so the model can see exactly what
+it got wrong instead of correcting blind. If both attempts still fail to
+validate, the run no longer aborts: it logs a `console.warn` and degrades to
+a neutral, mode-appropriate result — an empty findings array, plus
+`chosenIndex: 0` for a decision or an empty `amounts` array for sentencing —
+and keeps going. The returned result is marked `degraded`, and the driver
+adds a LOW `VERBIAGE` finding plus a `(degraded — judgment call failed
+validation twice)` annotation in the action log so the beat is not reported
+as a clean review. The existing downstream fallback logic (out-of-range
+`chosenIndex` → first option, missing `amounts` → each line's statutory
+floor) absorbs that neutral result the same way it absorbs any other invalid
+response, so a single bad judgment call can no longer discard an entire
+10–20 minute run.
+
 ## Gotchas
 
 - Uses its own small, standalone Gemini client and `.env` loader — it can't
@@ -122,3 +183,8 @@ findings are informational and don't fail the run.
   `GameService` model selection, untouched by this script.
 - If the dev server is on a non-default port (Vite picks 5174+ when 5173 is
   busy), set `BASE_URL` to match, same as `run-the-bench`.
+- The judgment call's "thinking" config is derived from the resolved model
+  name (`gemini-2.5*` → `thinkingBudget`, `gemini-3*` → `thinkingLevel`, any
+  other family → no thinking field at all), never hardcoded — Gemini rejects
+  a request with HTTP 400 if both fields are present at once, and the model
+  actually in use isn't known until `selectQaModel` resolves it at runtime.

@@ -18,6 +18,7 @@ npm run build      # tsc -b && vite build (enforces @ts-expect-error gates)
 npm run lint       # ESLint across src
 npm test           # vitest run (node env; fast, no browser)
 npm run test:watch # vitest in watch mode
+npm run test:live  # live Gemini API tests — needs GEMINI_API_KEY, costs real calls, never in CI
 npm run preview    # serve dist/ locally
 ```
 
@@ -71,7 +72,7 @@ npm run dev &
 node .claude/skills/run-the-bench/driver.mjs
 ```
 
-The driver plays the full demo docket — five runs across the four cases in `src/lib/demoCases/` (Webb plea + trial, Boone, Reyes, Vaughn's split verdict) — asserting demo data and screenshotting every stage. If a demo case or the ledger/action-bar/welcome UI changes intentionally, update `driver.mjs` to match.
+The driver plays the full demo docket — six runs across all five cases in `src/lib/demoCases/` (Webb plea + trial, Boone, Reyes, Vaughn's split verdict, Navarro's guided tutorial) — asserting demo data and screenshotting every stage. If a demo case or the ledger/action-bar/welcome UI changes intentionally, update `driver.mjs` to match.
 
 ## Architecture Reminders
 
@@ -85,7 +86,7 @@ The driver plays the full demo docket — five runs across the four cases in `sr
 - Schemas & types: `src/schemas/gameSchemas.ts`
 - State machine & phase rules: `src/store/useGameStore.ts`
 - Security vault: `src/store/useSecurityStore.ts`; view state: `src/store/useUIStore.ts`
-- Demo docket (four cases + registry): `src/lib/demoCases/`
+- Demo docket (five cases + registry): `src/lib/demoCases/`
 - Case source seam (demo vs. future LLM pipeline): `src/lib/caseSource.ts`
 - Deterministic derivations (plea, sentencing, modifiers): `src/lib/pleaAssessment.ts`, `src/lib/sentencingExposure.ts`, `src/lib/sentenceBounds.ts`
 - Courtroom script projection (beats + decisions): `src/lib/courtroomScript.ts`

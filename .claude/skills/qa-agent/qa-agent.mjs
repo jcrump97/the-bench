@@ -62,6 +62,29 @@ const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
 
+// A grader's severity ratings need to be comparable between runs — the API's
+// default temperature of 1.0 makes the same beat flip between "no findings"
+// and "HIGH severity" on a re-run for no reason tied to the content itself.
+const QA_TEMPERATURE = Number(process.env.QA_TEMPERATURE ?? 0.2);
+// An unbounded findings array can run long enough to truncate the JSON
+// mid-object, which fails validation for a reason that has nothing to do
+// with the judgment itself. Bound it generously instead.
+const QA_MAX_OUTPUT_TOKENS = Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 2048);
+
+// Gemini's "thinking" knob is split by model family: 2.5-series models take a
+// numeric thinkingBudget, Gemini 3 models take a thinkingLevel enum, and
+// sending both fields in the same request returns HTTP 400. selectQaModel
+// resolves the model name at runtime — nothing here is hardcoded — so which
+// field (if either) applies has to be derived from that resolved name rather
+// than assumed. This skill prefers the plain `flash` tier (see selectQaModel
+// below), where thinking is otherwise on by default with an unbounded
+// dynamic budget; capping it keeps judgment latency and cost predictable.
+function resolveThinkingConfig(model) {
+  if (/gemini-2\.5/.test(model)) return { thinkingConfig: { thinkingBudget: 512 } };
+  if (/gemini-3/.test(model)) return { thinkingConfig: { thinkingLevel: 'low' } };
+  return {};
+}
+
 function isRetryableStatus(status) {
   return status === 429 || status >= 500;
 }
@@ -145,7 +168,13 @@ async function callGeminiJson(apiKey, model, { systemInstruction, parts, respons
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema,
+        temperature: QA_TEMPERATURE,
+        maxOutputTokens: QA_MAX_OUTPUT_TOKENS,
+        ...resolveThinkingConfig(model),
+      },
     }),
   });
   const data = await response.json();
@@ -209,16 +238,61 @@ const SENTENCING_GEMINI_SCHEMA = {
 
 const PERSONA = `You are a meticulous, technically literate human QA tester playing "The Bench" for the first time — a California courtroom simulation where the PLAYER is the judge.
 
-Critical fact about this game: it is ALWAYS a bench trial. The judge (the player) alone rules on every objection and decides every verdict. There is NEVER a jury. Any dialogue that references a jury, jurors, or asks for a jury trial is a HIGH severity REALISM finding.
+Critical fact about this game: it is ALWAYS a bench trial. The judge (the player) alone rules on every objection and decides every verdict. Every party addresses the court directly — "Your Honor", "the Court". Dialogue that hands the decision to a jury, that addresses jurors, or that asks for a jury trial is a HIGH severity REALISM finding.
 
-Also flag, when genuinely present:
-- REALISM: anachronisms, internal contradictions (facts that don't match earlier details), courtroom procedure that wouldn't make sense in a bench trial, tonal breaks.
-- VERBIAGE: awkward phrasing, redundant text, confusing button/label text, typos.
-- UI_UX: anything wrong or confusing visible in the attached screenshot — layout glitches, unreadable or overlapping text, misalignment, unclear affordances.
+Each turn you are given THE RECORD SO FAR — everything you have already read — followed by the newly revealed lines. Check the new lines against the established record: names, ages, dates, locations, amounts, exhibit and witness names, and who said what. A fact in the new lines that contradicts the earlier record is the single most valuable finding you can report.
 
-Only report real issues — don't invent nitpicks about ordinary courtroom formality or stylistic flourish. Quote the exact offending text in "quote" (empty string if the finding is purely visual/UI). Keep "note" to one or two sentences on why it's a problem. If nothing is wrong, return an empty findings array — don't manufacture findings to have something to say.`;
+Report findings in these categories:
+- REALISM: contradictions with the earlier record, anachronisms, courtroom procedure that would not happen in a bench trial, tonal breaks.
+- VERBIAGE: awkward phrasing, redundant text, confusing button or label text, typos.
+- UI_UX: problems visible in the attached screenshot — layout glitches, unreadable or overlapping text, misalignment, unclear affordances.
 
-async function judgeContent(model, { promptText, screenshot, mode }) {
+Report a finding when you can quote the specific offending text in "quote", or — for a purely visual issue — name the specific element in "note" and leave "quote" an empty string. Keep "note" to one or two sentences on why it is a problem. Ordinary courtroom formality and stylistic flourish are correct for this game and belong in no finding. An empty findings array is the expected, correct answer for a beat that reads well.`;
+
+// How much of the already-read record to carry into each judgment call.
+const MEMORY_CHARS = Number(process.env.QA_MEMORY_CHARS ?? 12_000);
+
+// The tester used to see only the delta since its last look, with no memory of
+// any earlier beat — while PERSONA asked it to flag "facts that don't match
+// earlier details". That finding class was structurally impossible to produce:
+// there was nothing to compare against. This rebuilds the context on every
+// call: the record already read, plus the rulings this tester has already made.
+//
+// Past the budget, keep the head and the tail rather than truncating. Act 1
+// carries the durable facts a contradiction is measured against (the case
+// call, the charges, the People's statement of facts, the discovery
+// disclosures); the tail carries what just happened.
+function buildCaseMemory(priorRows, actionLog) {
+  if (priorRows.length === 0) {
+    return 'THE RECORD SO FAR: nothing yet — this is the opening of the case.';
+  }
+
+  let record = priorRows.join('\n\n');
+  if (record.length > MEMORY_CHARS) {
+    const head = Math.floor(MEMORY_CHARS * 0.6);
+    const tail = MEMORY_CHARS - head;
+    record = `${record.slice(0, head)}\n\n[... middle of the record omitted for length ...]\n\n${record.slice(-tail)}`;
+  }
+
+  const rulings = actionLog
+    .filter((a) => a.type === 'DECISION' || a.type === 'SENTENCING')
+    .map((a) =>
+      a.type === 'DECISION'
+        ? `- Beat ${a.beat}: you ruled "${a.chosen}".`
+        : `- Beat ${a.beat}: you imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}].`,
+    )
+    .join('\n');
+
+  return [
+    'THE RECORD SO FAR (already reviewed — check the new lines against these facts):',
+    record,
+    rulings.length > 0 ? `RULINGS YOU HAVE ALREADY MADE:\n${rulings}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+async function judgeContent(model, { memory, promptText, screenshot, mode }) {
   const schema =
     mode === 'decide' ? REVIEW_AND_DECIDE_GEMINI_SCHEMA
     : mode === 'sentencing' ? SENTENCING_GEMINI_SCHEMA
@@ -228,25 +302,55 @@ async function judgeContent(model, { promptText, screenshot, mode }) {
     : mode === 'sentencing' ? SentencingSchema
     : ReviewOnlySchema;
 
-  const imagePart = { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } };
+  // Screenshots are throttled upstream (see QA_SHOT_EVERY) — most beats now
+  // call this with no image at all, so the image part is only included when
+  // one was actually captured for this beat.
+  const imagePart = screenshot
+    ? { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } }
+    : null;
+
+  const composed = `${memory}\n\n---\n\n${promptText}`;
 
   let lastError = null;
+  let lastRaw = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    // Include the actual response that failed, not just the Zod error — the
+    // error message alone ("expected number, received string") gives the
+    // model nothing to anchor the fix to; the raw text lets it see exactly
+    // which field it got wrong.
     const text = attempt === 0
-      ? promptText
-      : `${promptText}\n\nYour previous response failed validation: ${lastError}. Return corrected JSON only.`;
+      ? composed
+      : `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw}\n\nReturn corrected JSON only.`;
+    const parts = imagePart ? [{ text }, imagePart] : [{ text }];
     const raw = await callGeminiJson(API_KEY, model, {
       systemInstruction: PERSONA,
-      parts: [{ text }, imagePart],
+      parts,
       responseSchema: schema,
     });
+    lastRaw = raw;
     try {
       return zodSchema.parse(JSON.parse(raw));
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
-  throw new Error(`QA judgment call failed validation twice in a row: ${lastError}`);
+
+  // A live run's whole point is surviving a 10-20 minute playthrough — one
+  // beat's judgment call failing validation twice shouldn't discard the rest
+  // of it. Degrade to a neutral, mode-appropriate result and let the run
+  // continue; the downstream fallback logic (out-of-range chosenIndex ->
+  // first option, missing amounts -> each line's floor) already exists to
+  // absorb exactly this shape of result, so this leans on it rather than
+  // duplicating it. Mark the returned result as degraded so the report does
+  // not present a defaulted beat as a clean one.
+  console.warn(`QA judgment call failed validation twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
+  if (mode === 'decide') {
+    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.', degraded: true };
+  }
+  if (mode === 'sentencing') {
+    return { findings: [], amounts: [], reasoning: 'QA judgment call failed validation twice; defaulted to the statutory floor.', degraded: true };
+  }
+  return { findings: [], degraded: true };
 }
 
 // ---------- Prompt builders ----------
@@ -274,9 +378,9 @@ function buildReport({ startedAt, model, caseTitle, findings, actionLog, transcr
 
   const actionText = actionLog
     .map((a) => {
-      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}").`;
-      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''} — ${a.reasoning}`;
-      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}] — ${a.reasoning}`;
+      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}")${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''}.`;
+      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''}${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
+      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}]${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
       return `Beat ${a.beat}: ${a.type}`;
     })
     .join('\n');
@@ -310,6 +414,14 @@ const REPORT_DIR = process.env.QA_REPORT_DIR ?? '/tmp/bench-qa-report';
 const SHOTS_DIR = process.env.QA_SHOTS_DIR ?? path.join(REPORT_DIR, 'screenshots');
 const MAX_ITERATIONS = Number(process.env.QA_MAX_ITERATIONS ?? 150);
 const STUCK_TIMEOUT_MS = Number(process.env.QA_STUCK_TIMEOUT_MS ?? 60_000);
+// Screenshots dominate per-beat token cost, and most plain statement-advance
+// beats look pixel-identical to the one before — nothing in the layout
+// changed, so there's nothing new for the model to see. Decision/sentencing
+// beats and the first judged beat of the run always get one regardless of
+// this cadence; this only throttles the plain-advance beats in between. Every
+// beat still gets a screenshot written to disk — this only limits what the
+// *model* sees.
+const QA_SHOT_EVERY = Number(process.env.QA_SHOT_EVERY ?? 5);
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
 
 async function gotoWithRetry(page, url, attempts = 20) {
@@ -361,6 +473,11 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   let lastRowCount = 0;
   let outcome = 'IN_PROGRESS';
   const startedAt = new Date();
+  // Tracks whether any beat has been sent to the judgment model yet — the
+  // very first judged beat always gets a screenshot (nothing to diff it
+  // against, so err toward showing the model the starting state), regardless
+  // of QA_SHOT_EVERY.
+  let hasJudgedFirstBeat = false;
 
   function recordFindings(list, beat) {
     for (const f of list) findings.push({ ...f, beat });
@@ -387,9 +504,16 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
         if ((await page.getByRole('button', { name: 'New Case' }).count()) > 0) {
           const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();
           const delta = rows.slice(lastRowCount).join('\n\n');
+          // The final aftermath review always gets a screenshot — it's the
+          // one review-mode call the shot-cadence throttle never applies to.
           const screenshot = await page.screenshot({ type: 'png' });
-          const result = await judgeContent(model, { promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
+          const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
+          const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the final review was defaulted, not judged.' }], beat);
+          }
           outcome = 'PASS: case completed';
           break;
         }
@@ -431,8 +555,15 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
         // "truncated text" VERBIAGE findings).
         const rows = await page.locator('main li[data-entry-kind]').allInnerTexts();
         const delta = rows.slice(lastRowCount).join('\n\n');
-        const screenshot = await page.screenshot({ type: 'png' });
-        await page.screenshot({ path: path.join(SHOTS_DIR, `beat-${String(beat).padStart(3, '0')}.png`) });
+        // Captured once and reused for both purposes: the human-facing
+        // screenshot record on disk gets every beat regardless of judgment
+        // policy, and the same buffer is handed to the model only when the
+        // attach policy below says so — this used to be two separate
+        // page.screenshot() calls, doubling render cost for no reason.
+        const screenshotBuffer = await page.screenshot({ type: 'png' });
+        fs.writeFileSync(path.join(SHOTS_DIR, `beat-${String(beat).padStart(3, '0')}.png`), screenshotBuffer);
+        const memory = buildCaseMemory(rows.slice(0, lastRowCount), actionLog);
+        const isFirstJudgedBeat = !hasJudgedFirstBeat;
 
         if (choiceCount >= 2) {
           const options = [];
@@ -442,12 +573,20 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               text: (await choiceButtons.nth(i).innerText()).trim(),
             });
           }
-          const result = await judgeContent(model, { promptText: decidePrompt(delta, options), screenshot, mode: 'decide' });
+          // Decision beats always get a screenshot — the whole point of the
+          // shot-cadence throttle is to skip beats where the layout can't
+          // have meaningfully changed, and a decision beat is exactly the
+          // opposite of that (a fresh action bar, often new case-file panels).
+          const result = await judgeContent(model, { memory, promptText: decidePrompt(delta, options), screenshot: screenshotBuffer, mode: 'decide' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
           let idx = result.chosenIndex;
           let fallback = false;
           if (!Number.isInteger(idx) || idx < 0 || idx >= choiceCount) { idx = 0; fallback = true; }
-          actionLog.push({ beat, type: 'DECISION', chosen: options[idx].text, reasoning: result.reasoning, fallback });
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the beat was defaulted, not judged.' }], beat);
+          }
+          actionLog.push({ beat, type: 'DECISION', chosen: options[idx].text, reasoning: result.reasoning, fallback, degraded: result.degraded === true });
           await choiceButtons.nth(idx).click();
         } else if (sentenceCount >= 1) {
           const ranges = [];
@@ -463,8 +602,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               label,
             });
           }
-          const result = await judgeContent(model, { promptText: sentencingPrompt(delta, ranges), screenshot, mode: 'sentencing' });
+          // Sentencing is a decision beat too — always attach.
+          const result = await judgeContent(model, { memory, promptText: sentencingPrompt(delta, ranges), screenshot: screenshotBuffer, mode: 'sentencing' });
           recordFindings(result.findings, beat);
+          hasJudgedFirstBeat = true;
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the sentence was defaulted, not judged.' }], beat);
+          }
           const amounts = ranges.map((r, i) => {
             const amt = result.amounts[i];
             return Number.isInteger(amt) && amt >= r.min && amt <= r.max ? amt : r.min;
@@ -486,7 +630,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               filled.push(null); // left at whatever was already seeded
             }
           }
-          actionLog.push({ beat, type: 'SENTENCING', amounts: filled, reasoning: result.reasoning });
+          actionLog.push({ beat, type: 'SENTENCING', amounts: filled, reasoning: result.reasoning, degraded: result.degraded === true });
           // A live run found this button can render clipped by the viewport
           // (Gemini's own vision finding independently flagged the same
           // symptom) — scroll it into view first rather than trusting it's
@@ -512,9 +656,25 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           for (let i = 0; i < plainCount; i++) texts.push((await plainButtons.nth(i).innerText()).trim());
           const candidateIdx = texts.findIndex((t) => t !== 'Skip to Next Decision');
           const clickIdx = candidateIdx === -1 ? 0 : candidateIdx;
-          const result = await judgeContent(model, { promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
+          // A plain statement-advance beat's layout is identical to the last
+          // one — no new panel, no new action bar shape — so most of these
+          // are judged on text alone. Still send the image on the very first
+          // judged beat (nothing to compare the starting state against) and
+          // every QA_SHOT_EVERY'th beat thereafter, as a periodic visual
+          // sanity check between the guaranteed looks at decision beats.
+          const attachScreenshot = isFirstJudgedBeat || beat % QA_SHOT_EVERY === 0;
+          const result = await judgeContent(model, {
+            memory,
+            promptText: reviewOnlyPrompt(delta),
+            screenshot: attachScreenshot ? screenshotBuffer : null,
+            mode: 'review',
+          });
           recordFindings(result.findings, beat);
-          actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx] });
+          hasJudgedFirstBeat = true;
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; this review was defaulted, not judged.' }], beat);
+          }
+          actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx], degraded: result.degraded === true });
           const clicked = plainButtons.nth(clickIdx);
           const isSubmit = /Impose Sentence|Adjourn/.test(texts[clickIdx]);
           await clicked.click();

@@ -176,6 +176,17 @@ export type PleaPostureResult = {
 //   const input = strength.band === 'WEAK'
 //     ? { band: 'WEAK', prosecutionRationale }
 //     : { band: strength.band, prosecutionRationale, defenseRationale };
+export function derivePleaOfferTerms(
+  caseData: CasePayload,
+  band: 'MODERATE' | 'STRONG'
+): { pleadsToChargeIds: string[]; proposedSentence: Sentence[] } {
+  const discount = SENTENCE_DISCOUNT[band];
+  const pleadsToChargeIds = caseData.charges.map(c => c.id);
+  const exposure = deriveSentencingExposure(caseData.charges);
+  const proposedSentence = discountSentences(exposure.maximumPenalties, discount, exposure.mandatoryMinimums);
+  return { pleadsToChargeIds, proposedSentence };
+}
+
 export function buildPleaPosture(
   caseData: CasePayload,
   input: PleaPostureInput
@@ -194,13 +205,7 @@ export function buildPleaPosture(
 
   // input is narrowed to MODERATE | STRONG: defenseRationale is a guaranteed
   // string and the discount lookup is a guaranteed number.
-  const discount = SENTENCE_DISCOUNT[input.band];
-
-  // Construct offer terms: defendant pleads to all charges; discount applied to max sentence
-  const pleadsToChargeIds = caseData.charges.map(c => c.id);
-  const exposure = deriveSentencingExposure(caseData.charges);
-  const proposedSentence = discountSentences(exposure.maximumPenalties, discount, exposure.mandatoryMinimums);
-
+  const { pleadsToChargeIds, proposedSentence } = derivePleaOfferTerms(caseData, input.band);
   const defenseRisk = assessDefense(caseData, proposedSentence);
 
   const status = defenseRisk.posture === 'ACCEPT'

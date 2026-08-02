@@ -1,5 +1,399 @@
 # TODO
 
+## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
+
+Player-reported: the live Gemini pipeline lands on `ErrorScreen` ("Mistrial")
+most of the time. Branch: `fix/pipeline-reliability`, 17 commits
+(`docs(todo)` → `docs`). The commit messages are the record; the plan file has
+since been overwritten by the cross-stage plan below.
+
+**Root cause is not model flakiness.** Three compounding gaps, each verified
+by reading `src/lib/llm/` against `src/schemas/gameSchemas.ts`:
+
+1. **The Zod schemas enforce ~15 constraints Gemini is never told about.** The
+   hand-written `GeminiSchema` type (`geminiClient.ts:27-37`) cannot express
+   length, range, or pattern, and no prompt states the cross-field refinements
+   — judge-line choice coverage, `objectionRisk`/`defenseObjection`, a
+   mandatory minimum needing a same-type maximum, the `caseId` pattern. The
+   model is graded on a rubric it was never shown.
+2. **Gemini materializes every declared property, and `SentenceSchema` is
+   strict.** `stages.ts:518-534` already documents this for `interrogation:
+   null`; the same thing happens to `conditions: []` on every sentence, which
+   `SentenceSchema` rejects as an unrecognized key on PRISON/JAIL/FINE/
+   COMMUNITY_SERVICE and as too-small on PROBATION. Guarded only by a prompt
+   sentence. A two-charge case with two priors rolls this die ~10 times.
+3. **Prompts suppress bad output instead of producing good output**, and the
+   inference parameters are half-configured — no `maxOutputTokens`, no
+   `finishReason` check, no safety config, and no thinking config on a
+   `flash-lite` tier that does not think by default.
+
+Amplified by two structural problems: `generateValidated`'s retry never shows
+the model the JSON it produced (so it regenerates blind rather than repairing),
+and seven independent stages multiply — 85% each is 32% end to end.
+
+- [x] **C1** — this entry (`docs(todo)`).
+- [x] **C2** — observability seam (`generationObserver.ts`) +
+      `pipelineDiagnostic.live.test.ts` (N runs, ranked stage × issue table
+      written to a file — vitest's reporter swallowed console output).
+- [x] **C5** — `minLength`/`maxLength`/`minimum`/`maximum`/`pattern` carried
+      into the response schema, ~60 constraints. **The confirmed fix.** The
+      two scores that broke are additionally `integer` with the 1-10 scale
+      named in a `description`.
+- [x] **C5a** — `fix`: dropped the `evidence` `minItems` C5 added. Gemini
+      rejects the entire request with a bare 400 `INVALID_ARGUMENT` when
+      `minItems` is set on an array whose item schema contains a nullable
+      nested object (here, `interrogation`). Took the pipeline 5/5 → 0/5 and
+      was caught within one sweep because the change was measured, not
+      assumed. `witnesses`/`charges`/`elements`/`maximumPenalties` keep theirs.
+- [x] **C7** — retry carries the previous response, so it repairs instead of
+      regenerating blind.
+- [x] **C7a** — a non-retryable `GeminiError` is rethrown with `[StageName]`
+      prefixed. Without it the 400 above showed no stage at all and cost a
+      live bisection to locate.
+- [x] **C8** — `MAX_TOKENS` and safety blocks surface as typed errors
+      (`GeminiError.reason`); explicit `maxOutputTokens`; `safetySettings` at
+      `BLOCK_ONLY_HIGH`.
+- [x] **C9** — **no thinking config, deliberately.** `thinkingBudget: 0` is
+      rejected outright by the model `gemini-flash-lite-latest` resolves to;
+      the parameter is split by family (`thinkingBudget` 2.5 /
+      `thinkingLevel` 3.x, both together a 400) while `modelSelection` prefers
+      version-less `-latest` aliases, so the family can't be derived from the
+      resolved name; and there is no measured failure for a budget to buy
+      back. Recorded as a comment in `geminiClient.ts` so the next person to
+      "optimize" it finds the 400 documented rather than in production.
+- [x] **C6** — every `*_SYSTEM` rebuilt on affirmative, exemplified
+      instruction (ROLE / TASK / RULES / EXAMPLE).
+- [x] **C4** — deterministic id/`targetElementId` reconciliation
+      (`reconcileCase.ts`) before `CaseSchema` validates, so the full-case LLM
+      repair round is reached only by genuinely narrative failures.
+- [x] **C12/C13** — `qa-agent`: case memory (it was asked to find cross-beat
+      contradictions while structurally unable to see earlier beats), plus
+      bounded per-beat screenshot and inference cost.
+- [ ] **C10** — regression tests over the new transport errors, the
+      repair-shaped retry, and `reconcileCrossStageIds`.
+- [ ] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
+      README status, and the stale four-cases/five-runs drift at
+      `AGENTS.md:74`/`:88`).
+
+**Dropped, with reasons:**
+
+- **C3** (`stripInapplicableConditions`) — the planned normalizer guarded
+  Gemini emitting `conditions: []` on non-PROBATION sentences. Twelve-plus
+  live runs never produced one. Gemini materializes fields marked
+  `nullable: true` as an explicit `null` (which is how `interrogation` was
+  found) but simply *omits* plain non-required fields. Adding speculative
+  normalization to a validated trust boundary to fix a problem that does not
+  exist is the opposite of what this schema layer is for.
+- **C11** (splitting `runEvidenceGen`) — conditional on EvidenceGen still
+  dominating the post-fix table. It does not: zero failed attempts. The extra
+  API calls and latency would buy nothing.
+
+### Measurements
+
+Before/after end-to-end `generateCase` success across 5 live runs, from the
+C2 diagnostic (`/tmp/bench-pipeline-diagnostic.txt`).
+
+| Sweep | Success rate | Failed attempts |
+|---|---|---|
+| Baseline 2026-08-02 | 5/5 (100%) | EvidenceGen first attempt failed in 3/5 runs on `relevanceScore`/`credibilityScore` `>= 1`; all recovered on retry |
+| After C5 + C7 | 5/5 (100%) | **zero** |
+| After C6 (prompt rebuild) | 5/5 (100%) | **zero** |
+
+The headline number was already 100% at baseline, so the honest measure of
+this work is the *failed-attempt* column: three wasted EvidenceGen attempts
+across five runs, now none. That gap is the whole story — every attempt that
+failed was one retry closer to the exhaustion the player actually hit.
+
+**The baseline contradicts two of the three hypotheses above — recorded here
+rather than quietly dropped.**
+
+- **Hypothesis 2 (`conditions: []`) did not reproduce.** Gemini never emitted a
+  stray `conditions` array. The likely reason: it materializes fields marked
+  `nullable: true` as an explicit `null` (which is how `interrogation` was
+  found), but simply *omits* plain non-required fields like `conditions`.
+  `stripInapplicableConditions` therefore lands as cheap insurance against a
+  model-behavior change, not as the fix for an observed failure.
+- **Hypothesis 1 is confirmed, but narrowly.** The only violation actually
+  observed is exactly the missing-numeric-range case: the model emits
+  `relevanceScore`/`credibilityScore` on a 0-1 normalized scale because nothing
+  in the response schema says the range is 1-10. That makes **C5 the confirmed
+  highest-value fix**, and it is promoted ahead of C3/C4.
+- **Root cause confirmed by the player's own error text**, which read:
+
+      [generateCase] [EvidenceGen] Failed to produce valid output after 3
+      attempt(s): evidence.0.relevanceScore: Invalid input; ...
+      witnesses.1.credibilityScore: Invalid input
+
+  Same fields, same stage the diagnostic flagged. Note `Invalid input` rather
+  than `Too small`: Zod emits that for a *wrong type* (null, a string, NaN),
+  where the diagnostic caught the sibling case of an in-type-but-out-of-range
+  0-1 score. One unconstrained field, two ways to get it wrong. It exhausted
+  all three attempts because the retry never showed the model its own output
+  (C7) — so it regenerated blind and made the same mistake three times.
+
+## Cross-stage context starvation (qa-agent findings, 2026-08-02 — OPEN)
+
+Found by the first `qa-agent` run after it was given case memory. Every
+finding is a *content coherence* problem, not a validation failure — none of
+these cause a mistrial, and all of them pass every schema. They share one
+root cause: **a stage authors voiced content about facts another stage
+decides, and is never told them.** Ranked by how visible the damage is.
+
+1. **The verdict names the wrong person.** `runStatuteSelection` is stage 1
+   and authors `verdictOptions[].lineText` — the words the judge actually
+   speaks when calling the count — but the defendant is not generated until
+   stage 3 (`runCharacterGen`). The model has no name, so it invents one. In
+   the observed run the court convicted "Arthur Pendelton", who was a
+   *prosecution witness*; the defendant was Marcus Vance. This is the
+   climax of the game reading as gibberish. Options: author judge lines in a
+   later stage, pass the defendant back for a line-only rewrite, or forbid
+   naming anyone in `lineText` and let the UI supply the name.
+2. **The plea narrative contradicts the plea offer.** `runPleaNarrative`
+   receives the payload and the `band`, but not the `PleaPosture`
+   `buildPleaPosture` derives — so it does not know the charge partition or
+   the proposed sentence. Observed: the People argued for "four years" on
+   "second-degree burglary" beside a header offering six years on first
+   degree, and defense counsel said the defendant would accept while the
+   computed posture was `REJECTED_BY_DEFENSE` (the next beat then read
+   "with no plea before the bench").
+3. **Closings argue facts not in evidence.** `buildFinalizeContents` passes
+   only charge names, the defendant's name, and the environment description
+   — not the exhibits or witnesses. Observed: the People's closing rested on
+   "DNA on the broken glass" when no DNA exhibit existed, and the statement
+   of facts cited surveillance footage that was never disclosed. Flagged as
+   a known weakness when the reliability work was planned; the qa-agent has
+   now confirmed it empirically.
+4. **The interrogation invents its own scene.** `buildInterrogationGenContents`
+   passes the defendant's name and the derived profile, not the environment.
+   Observed: the detective questioned the defendant about "Elm Street" when
+   the scene was 742 Evergreen Terrace.
+5. **`directExamination` is written as a Q&A blob.** The field is the
+   witness's spoken testimony, but the model returned counsel's questions and
+   the witness's answers merged into one string, so the witness appears to
+   ask and answer their own examination.
+
+The fix shape for 2-5 is the same and cheap: pass the missing context into
+the stage's `build*Contents`. Item 1 is the only structural one — it is a
+pipeline *ordering* problem, not a missing-argument problem.
+
+### Plan (approved 2026-08-02) — `~/.claude/plans/peaceful-wandering-wigderson.md`
+
+Two decisions were taken rather than assumed. For item 1, the choice was
+between forbidding names in stage-1 text (what the demo cases already do) and
+giving the stage the facts; **giving it the facts won**, because a verdict
+reaction that can reach for the defendant's circumstances — Webb's "two boys
+waiting on a custody schedule" — is the texture the demo docket sets as the
+standard. And the wrong-person class gets a **schema backstop**, not just a
+prompt, on the same reasoning as `noJury`.
+
+New pipeline order (`VerdictVoice` placed after EvidenceGen for the richest
+context; nothing between needs the voiced fields):
+
+```
+StatuteSelection(core) → EnvironmentGen → CharacterGen → InterrogationGen
+  → EvidenceGen → VerdictVoice → finalizeCasePayload → PleaNarrative
+```
+
+The plea circularity turned out to be only apparent, which is what makes
+item 2 tractable: `pleadsToChargeIds`, `proposedSentence`, the `assessDefense`
+result and therefore `status` are all derived from `caseData` and `band` alone
+(`pleaAssessment.ts:193-222`) — the rationales are pure pass-through. So the
+offer can be derived *before* the narrative that argues about it.
+
+- [x] **D1** — this entry.
+- [x] **D2** — `environment` threaded into InterrogationGen (finding 4).
+- [x] **D3** — exhibits and witnesses into the finalize prompt (finding 3).
+- [x] **D4** — examination fields written as testimony, not Q&A (finding 5).
+- [x] **D5** — extract `derivePleaOfferTerms`; `buildPleaPosture` calls it so
+      there is one derivation and no drift.
+- [x] **D6** — offer terms and the defense's accept/reject into the plea
+      narrative prompt (finding 2).
+- [x] **D7** — `ChargeSchema` split into `ChargeCoreSchema` + a voiced half.
+      It is a `strictObject(...).superRefine(...)`, so `.omit()` is
+      unavailable; the split shares a shape object and `ChargeSchema` itself
+      stays byte-identical in behaviour so demo cases cross the same gate.
+- [x] **D8** — new `VerdictVoice` stage (finding 1). **Probe its response
+      schema against the live API before wiring it in** — a `minItems`
+      constraint and a `thinkingBudget: 0` have each already broken this
+      pipeline on plausible-sounding reasoning.
+- [x] **D9** — `CaseSchema` refinement: the phrase "defendant &lt;Name&gt;" must
+      name the defendant (finding 6). All five demo cases must still pass.
+- [x] **D10/D11/D12** — outstanding items from the skeptical review: a
+      degraded `qa-agent` review judgment currently reads as a clean beat, the
+      repair round re-embeds stale context on its second retry, and
+      `reconcileCrossStageIds` has one untested branch.
+- [x] **D13** — docs sync, including the README pipeline diagram and stating
+      the `BLOCK_ONLY_HIGH` safety threshold as an accepted decision.
+
+Noted, not actioned: `MAX_ECHOED_RESPONSE_CHARS = 60_000` now applies to every
+stage's retry rather than only the repair round it was sized for. Fine at
+current payload sizes; revisit if a stage ever produces much larger output.
+
+### Multi-approach code review (three independent passes)
+
+Three reviewers ran in parallel — an AI/LLM implementation lens, a
+TypeScript/Zod strict-mode lens, and an architecture/determinism lens. All
+three returned **Ship with minor fixes**; none blocked. Findings below are
+ranked by severity and deduplicated across reviewers (two independently
+flagged the same Major, noted inline). The full per-reviewer output lives in
+the session transcript; this is the consolidated action list.
+
+**Major**
+
+- [x] **R1 — `addDefendantNameIssues` false-positives on the defendant's own
+      first name.** `gameSchemas.ts:33` matches `defendant <Name>` and
+      compares against `fullName` or `lastName`, never `firstName`. A
+      verdict line "the court finds defendant Jordan guilty" where Jordan is
+      the defendant's first name is rejected even though Jordan *is* the
+      defendant. Flagged independently by both the schema and architecture
+      reviewers. Latent today (no demo case uses first-name-only phrasing),
+      but VerdictVoice could legitimately produce it and burn a repair round
+      or exhaust retries into a Mistrial. Fix: add a `firstName` accept
+      branch and a test for the "defendant `<FirstName>`" form.
+      *(Fixed in `07d9817`.)*
+- [x] **R2 — `credibilityScore`/`relevanceScore` Zod allows floats; Gemini
+      schema says `integer`.** `gameSchemas.ts:285,303` use
+      `z.number().min(1).max(10)` (accepts `7.5`); `stages.ts:371,408`
+      declare `type: 'integer'`. The Gemini gate is stricter than the Zod
+      gate — the inverse of the usual direction, and the same class of bug
+      as the original "Mistrial most of the time" root cause (Zod and the
+      Gemini schema disagreeing on a numeric constraint). Currently masked
+      because `integer` happens to reject floats at the API. Fix:
+      `z.number().int().min(1).max(10)` in both places, matching the
+      `amount` field at `gameSchemas.ts:116`.
+      *(Fixed in `479c63d`.)*
+
+**Minor**
+
+- [ ] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
+      that their Zod counterparts enforce.** `crossExamination`
+      (`stages.ts:381` vs `gameSchemas.ts:290`), `defenseObjection`
+      (`stages.ts:415` vs `gameSchemas.ts:310`), and `directExamination`
+      already correct. Model could emit `""`, pass Gemini, fail Zod, burn a
+      retry — exactly the "constraint the model is never told" class this
+      branch set out to eliminate. Fix: add `minLength: 1` to the three.
+- [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
+      /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
+      name passes both gates and renders as an empty speaker line in
+      `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
+      `.min(1)` in both layers for all three fields.
+- [ ] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
+      fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
+      `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
+      schema but fails the downstream `CaseSchema`/`PleaNarrativeSchema`
+      gate, burning a repair round. Defeats the "fail fast at the stage that
+      produced the error" design. Fix: wrap the stage-schema `lineText`
+      fields in `noJury(z.string()...)` for symmetry.
+- [ ] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
+      VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
+      failure carries a `[StageName]` prefix; this one reports as
+      `stage: 'generateCase'` on the Mistrial screen. Fix: throw
+      `new GameServiceError('[VerdictVoice] missing voice for charge …')`,
+      or strengthen `VerdictVoiceSchema` to require every requested charge
+      id be present (a `superRefine`).
+- [ ] **R7 — `addDefendantNameIssues` does not scan `charge.name` or
+      `element.description`.** A charge name like "Theft from defendant
+      Arthur Pendelton" is not caught. Likely intentional (charge names are
+      statutory, not narrative) and prompt-defended, but the scope omission
+      is undocumented. Fix: a one-line comment noting the deliberate scope,
+      or add the fields.
+
+**Nit**
+
+- [ ] **R8 — `new Date().getFullYear()` is evaluated at module load.**
+      `stages.ts:317` and `gameSchemas.ts:355`. Across a year boundary a
+      long-running session uses the stale year. Negligible for this app's
+      usage pattern; note or pin.
+- [ ] **R9 — `MAX_ECHOED_RESPONSE_CHARS` truncation could slice mid-JSON.**
+      `stages.ts:52-54`. Currently safe (largest stage response is well
+      under 60KB), but if EvidenceGen ever grows past 60KB the repair would
+      operate on a truncated object. Worth a comment noting the largest
+      measured stage response size as the safety margin check.
+- [ ] **R10 — `extractPreviousResponse` couples to `buildRetryFeedback`'s
+      exact marker wording with no test.** `stages.ts:910-916` parses by the
+      `"Your previous response was:\n"` string; if the marker is reworded,
+      the repair round silently falls back to the stale `assembled` object —
+      the exact D11 bug. Fix: a unit test asserting the marker round-trips.
+- [ ] **R11 — `ChargeCoreShape` shared-spread has no compile-time drift
+      guard.** `gameSchemas.ts:224-253`. Byte-identical today, but a future
+      edit could desynchronize the two schemas with no type error. Fix: a
+      `Charge extends ChargeCore` compile assertion, or a test that
+      `ChargeSchema` parses every `ChargeCoreSchema`-valid input plus the
+      voiced fields.
+- [ ] **R12 — `CHARGE_GEMINI_SCHEMA` is now repair-only.** `stages.ts:228-
+      244` survives only inside `FULL_CASE_GEMINI_SCHEMA`. A comment noting
+      "repair-round only" would prevent someone simplifying it away.
+
+**Open questions for the author**
+
+1. Has `VERDICT_VOICE_GEMINI_SCHEMA` been probed against the live API? The
+   D8 plan note called for it; the 5/5 diagnostic ran after VerdictVoice
+   was wired in, so presumably yes — confirm no 400s appeared.
+2. Is `temperature: 0.7` still optimal after the prompt rebuild? The 5/5
+   measurement was at 0.7; re-measuring at 0.6/0.8 might find a better
+   operating point now that the model has stronger structural guidance.
+3. Does `assessDefense` mutate the `proposedSentence` array it shares with
+   `derivePleaOfferTerms`? `gameService.ts:64-65` passes the same reference
+   to both. Likely safe (`discountSentences` returns new arrays) but
+   unconfirmed.
+4. Should VerdictVoice receive the evidence/witness inventory too, so
+   verdict *reactions* can reference the evidence that drove the finding?
+   Currently it gets only charge ids+names and the defendant. A content-
+   quality question for a qa-agent sweep.
+
+### Handoff notes (anyone picking this up cold)
+
+Branch `fix/pipeline-reliability`, cut from `main`, nothing pushed. Work items
+above are in dependency order; D2/D3/D4 and D10/D11/D12 are independent of
+everything else and can be done in any order.
+
+Where each item lives:
+
+| Item | Files |
+|---|---|
+| D2 | `src/lib/llm/stages.ts` (`runInterrogationGen`, `buildInterrogationGenContents`), `src/lib/llm/gameService.ts` (already holds `environment`) |
+| D3 | `src/lib/llm/stages.ts` (`buildFinalizeContents` — `parts` already carries `evidence`/`witnesses`, they are just not put in the prompt) |
+| D4 | `src/lib/llm/stages.ts` (`WITNESS_GEMINI_SCHEMA.directExamination` description, `EVIDENCE_GEN_SYSTEM`). Quality bar: `src/lib/demoCases/webb.ts:127` |
+| D5/D6 | `src/lib/pleaAssessment.ts:193-222`, `src/lib/llm/stages.ts` (`runPleaNarrative`, `buildPleaNarrativeContents`), `src/lib/llm/gameService.ts:54` |
+| D7 | `src/schemas/gameSchemas.ts:161-180` |
+| D8 | `src/lib/llm/stages.ts`, `src/lib/llm/gameService.ts` |
+| D9 | `src/schemas/gameSchemas.ts:396` (`CaseSchema`'s existing `superRefine`) |
+| D10 | `.claude/skills/qa-agent/qa-agent.mjs` (`judgeContent`'s degraded return), `SKILL.md` |
+| D11 | `src/lib/llm/stages.ts` (`buildRepairContents`) |
+| D12 | `src/lib/llm/__tests__/reconcileCase.test.ts` |
+
+Hard-won constraints, all verified against the live API — **do not "optimize"
+past these without probing first** (see also the comment on `generationConfig`
+in `geminiClient.ts`):
+
+- `minItems` on an array whose item schema contains a nullable nested object
+  makes Gemini reject the whole request with a bare 400. This is why
+  `evidence` has no `minItems`.
+- `thinkingBudget: 0` is rejected by the model `gemini-flash-lite-latest`
+  resolves to; the thinking parameter is split by model family and the family
+  cannot be derived from a `-latest` alias. The pipeline sends none.
+- Gemini materializes `nullable: true` fields as an explicit `null` but omits
+  plain non-required ones.
+
+Verification (`AGENTS.md` has the full command list):
+
+```bash
+npm run lint && npm test && npm run build     # per commit; pre-commit hook runs lint+build
+npm run test:live                             # 5-run diagnostic; must stay 5/5, zero failed attempts
+node .claude/skills/run-the-bench/driver.mjs  # needs `npm run dev` first; six runs, five demo cases
+node .claude/skills/qa-agent/qa-agent.mjs     # live playthrough; the only check that reads the prose
+```
+
+Baselines to hold: `npm test` is at 293 passing; the live diagnostic is at 5/5
+with **zero** failed attempts (report lands at `/tmp/bench-pipeline-diagnostic.txt`,
+override with `DIAGNOSTIC_REPORT`/`DIAGNOSTIC_RUNS`).
+
+**Note on qa-agent false positives:** two MEDIUM `UI_UX` findings reported the
+court's ruling text as unreadably low contrast. It is the beat-reveal fade-in
+caught mid-animation — `beat-021.png` shows the same text at full contrast one
+beat later. Worth teaching the tester about the reveal transition before
+trusting its UI findings.
+
 ## Courtroom realism overhaul (user feedback, 2026-08-01 — DONE)
 
 Nine issues in one push, eight commits (`feat(schema)` → `feat(demo)`),
