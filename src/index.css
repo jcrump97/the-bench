@@ -129,15 +129,32 @@
      peek from. Either way the toggle buttons glow afterward (delayed past
      the panel's own animation) to point at how to hide/show it. Keyframe
      animations bypass the lg:transition-none on the drawers — that utility
-     only disables transitions. */
+     only disables transitions.
+
+     The closed/open position itself comes from Tailwind's translate-x-full
+     utilities, which set the standalone CSS `translate` property — a
+     separate, additive layer from `transform`. These keyframes must only
+     animate the *delta* on top of that baseline (0 at rest, a nudge back
+     toward center at the peak), not a second absolute translateX(-100%):
+     stacking both once pushed the drawer twice as far off-screen instead
+     of revealing it. */
   @keyframes drawer-peek-left {
-    0%, 100% { transform: translateX(-100%); }
-    35%, 65% { transform: translateX(calc(-100% + 2.5rem)); }
+    0%, 100% { transform: translateX(0); box-shadow: none; }
+    35%, 65% {
+      transform: translateX(2.5rem);
+      /* --bg and --bg-panel are nearly the same dark shade, so the peeking
+         edge is otherwise invisible against the main content behind it —
+         glow it the same way the desktop panel highlight does. */
+      box-shadow: 6px 0 24px 0 var(--accent-bg), inset -3px 0 0 0 var(--accent-border);
+    }
   }
 
   @keyframes drawer-peek-right {
-    0%, 100% { transform: translateX(100%); }
-    35%, 65% { transform: translateX(calc(100% - 2.5rem)); }
+    0%, 100% { transform: translateX(0); box-shadow: none; }
+    35%, 65% {
+      transform: translateX(-2.5rem);
+      box-shadow: -6px 0 24px 0 var(--accent-bg), inset 3px 0 0 0 var(--accent-border);
+    }
   }
 
   @keyframes panel-highlight-fade {
