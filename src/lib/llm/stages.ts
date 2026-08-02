@@ -117,7 +117,7 @@ const SENTENCE_GEMINI_SCHEMA: GeminiSchema = {
   properties: {
     type: { type: 'string', enum: ['PRISON', 'JAIL', 'FINE', 'COMMUNITY_SERVICE', 'PROBATION'] },
     unit: { type: 'string', enum: ['YEARS', 'MONTHS', 'DAYS', 'DOLLARS', 'HOURS'] },
-    amount: { type: 'integer' },
+    amount: { type: 'integer', minimum: 1 },
     conditions: {
       type: 'array',
       items: {
@@ -145,7 +145,7 @@ function reactionBeatGeminiSchema(): GeminiSchema {
       type: 'object',
       properties: {
         speaker: { type: 'string', enum: ['PROSECUTION', 'DEFENSE', 'CLERK'] },
-        text: { type: 'string' },
+        text: { type: 'string', minLength: 1, maxLength: 600 },
       },
       required: ['speaker', 'text'],
     },
@@ -161,7 +161,7 @@ function judgeLineOptionsGeminiSchema(choices: string[]): GeminiSchema {
       type: 'object',
       properties: {
         choice: { type: 'string', enum: choices },
-        lineText: { type: 'string' },
+        lineText: { type: 'string', minLength: 1, maxLength: 300 },
       },
       required: ['choice', 'lineText'],
     },
@@ -171,19 +171,20 @@ function judgeLineOptionsGeminiSchema(choices: string[]): GeminiSchema {
 const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
+    id: { type: 'string', minLength: 1, maxLength: 40 },
+    name: { type: 'string', minLength: 1, maxLength: 200 },
     classification: { type: 'string', enum: ['FELONY', 'MISDEMEANOR', 'INFRACTION'] },
     elements: {
       type: 'array',
+      minItems: 1,
       items: {
         type: 'object',
-        properties: { id: { type: 'string' }, description: { type: 'string' } },
+        properties: { id: { type: 'string', minLength: 1, maxLength: 40 }, description: { type: 'string', maxLength: 500 } },
         required: ['id', 'description'],
       },
     },
     mandatoryMinimums: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
-    maximumPenalties: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
+    maximumPenalties: { type: 'array', minItems: 1, items: SENTENCE_GEMINI_SCHEMA },
     verdictReactions: {
       type: 'object',
       properties: { GUILTY: reactionBeatGeminiSchema(), NOT_GUILTY: reactionBeatGeminiSchema() },
@@ -209,7 +210,7 @@ const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
     locationType: { type: 'string', enum: ['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL'] },
     timeOfDay: { type: 'string', enum: ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'] },
     weather: { type: 'string', enum: ['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A'] },
-    description: { type: 'string' },
+    description: { type: 'string', maxLength: 500 },
   },
   required: ['locationType', 'timeOfDay', 'weather', 'description'],
 };
@@ -217,14 +218,14 @@ const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
 const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    firstName: { type: 'string' },
-    lastName: { type: 'string' },
-    age: { type: 'integer' },
+    firstName: { type: 'string', maxLength: 50 },
+    lastName: { type: 'string', maxLength: 50 },
+    age: { type: 'integer', minimum: 18, maximum: 120 },
     demographics: {
       type: 'object',
       properties: {
         relationshipStatus: { type: 'string', enum: ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED'] },
-        children: { type: 'integer' },
+        children: { type: 'integer', minimum: 0, maximum: 30 },
         employmentStatus: { type: 'string', enum: ['EMPLOYED', 'UNEMPLOYED', 'STUDENT', 'RETIRED'] },
         educationLevel: {
           type: 'string',
@@ -235,7 +236,7 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
           items: {
             type: 'object',
             properties: {
-              substance: { type: 'string' },
+              substance: { type: 'string', maxLength: 100 },
               status: { type: 'string', enum: ['ACTIVE', 'IN_RECOVERY', 'NONE_REPORTED'] },
             },
             required: ['substance', 'status'],
@@ -249,8 +250,8 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
       items: {
         type: 'object',
         properties: {
-          chargeName: { type: 'string' },
-          year: { type: 'integer' },
+          chargeName: { type: 'string', maxLength: 200 },
+          year: { type: 'integer', minimum: 1900, maximum: new Date().getFullYear() },
           sentences: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
         },
         required: ['chargeName', 'year', 'sentences'],
@@ -259,11 +260,11 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
     oceanTraits: {
       type: 'object',
       properties: {
-        openness: { type: 'integer' },
-        conscientiousness: { type: 'integer' },
-        extraversion: { type: 'integer' },
-        agreeableness: { type: 'integer' },
-        neuroticism: { type: 'integer' },
+        openness: { type: 'integer', minimum: 1, maximum: 10 },
+        conscientiousness: { type: 'integer', minimum: 1, maximum: 10 },
+        extraversion: { type: 'integer', minimum: 1, maximum: 10 },
+        agreeableness: { type: 'integer', minimum: 1, maximum: 10 },
+        neuroticism: { type: 'integer', minimum: 1, maximum: 10 },
       },
       required: ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism'],
     },
@@ -274,7 +275,7 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
 const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    detectiveName: { type: 'string' },
+    detectiveName: { type: 'string', minLength: 1, maxLength: 101 },
     outcome: { type: 'string', enum: ['FULL_CONFESSION', 'PARTIAL_ADMISSION', 'DENIAL'] },
     challengeGround: { type: 'string', enum: ['MIRANDA', 'VOLUNTARINESS'] },
     lines: {
@@ -285,7 +286,7 @@ const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
         type: 'object',
         properties: {
           speaker: { type: 'string', enum: ['DETECTIVE', 'DEFENDANT'] },
-          text: { type: 'string' },
+          text: { type: 'string', minLength: 1, maxLength: 400 },
         },
         required: ['speaker', 'text'],
       },
@@ -297,14 +298,19 @@ const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
 const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
+    id: { type: 'string', minLength: 1, maxLength: 40 },
+    name: { type: 'string', maxLength: 101 },
     role: { type: 'string', enum: ['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR'] },
     bias: { type: 'string', enum: ['PROSECUTION', 'DEFENSE', 'NEUTRAL'] },
-    statement: { type: 'string' },
-    credibilityScore: { type: 'number' },
-    directExamination: { type: 'string' },
-    crossExamination: { type: 'string', nullable: true },
+    statement: { type: 'string', maxLength: 1000 },
+    credibilityScore: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 10,
+      description: 'How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
+    },
+    directExamination: { type: 'string', minLength: 1, maxLength: 1200 },
+    crossExamination: { type: 'string', maxLength: 1200, nullable: true },
   },
   required: [
     'id',
@@ -321,19 +327,24 @@ const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
 const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
+    id: { type: 'string', minLength: 1, maxLength: 40 },
+    name: { type: 'string', minLength: 3, maxLength: 100 },
     type: {
       type: 'string',
       enum: ['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL', 'INTERROGATION'],
     },
-    description: { type: 'string' },
-    disclosureSummary: { type: 'string' },
-    relevanceScore: { type: 'number' },
+    description: { type: 'string', maxLength: 600 },
+    disclosureSummary: { type: 'string', minLength: 1, maxLength: 400 },
+    relevanceScore: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 10,
+      description: 'How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
+    },
     objectionRisk: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
-    targetElementId: { type: 'string', nullable: true },
-    prosecutionArgument: { type: 'string' },
-    defenseObjection: { type: 'string', nullable: true },
+    targetElementId: { type: 'string', maxLength: 40, nullable: true },
+    prosecutionArgument: { type: 'string', minLength: 1, maxLength: 600 },
+    defenseObjection: { type: 'string', maxLength: 600, nullable: true },
     rulingReactions: {
       type: 'object',
       properties: { ADMITTED: reactionBeatGeminiSchema(), EXCLUDED: reactionBeatGeminiSchema() },
@@ -369,8 +380,8 @@ const StatuteSelectionSchema = z.object({
 const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    charges: { type: 'array', items: CHARGE_GEMINI_SCHEMA },
-    statuteContexts: { type: 'array', items: { type: 'string' } },
+    charges: { type: 'array', minItems: 1, items: CHARGE_GEMINI_SCHEMA },
+    statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
   },
   required: ['charges', 'statuteContexts'],
 };
@@ -573,8 +584,8 @@ function buildEvidenceGenSchema(interrogationRequired: boolean) {
 const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
-    witnesses: { type: 'array', items: WITNESS_GEMINI_SCHEMA },
+    evidence: { type: 'array', minItems: 3, items: EVIDENCE_GEMINI_SCHEMA },
+    witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
   },
   required: ['evidence', 'witnesses'],
 };
@@ -648,12 +659,12 @@ const CaseFinalizationFieldsSchema = z.object({
 const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    caseId: { type: 'string', description: 'Format YY-CR-XXXXX, e.g. 24-CR-00042' },
-    summary: { type: 'string' },
-    statementOfFacts: { type: 'string' },
+    caseId: { type: 'string', description: 'Format YY-CR-XXXXX, e.g. 24-CR-00042', pattern: '^[0-9]{2}-CR-[0-9]{5}$' },
+    summary: { type: 'string', minLength: 1, maxLength: 1500 },
+    statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
     closingArguments: {
       type: 'object',
-      properties: { prosecution: { type: 'string' }, defense: { type: 'string' } },
+      properties: { prosecution: { type: 'string', minLength: 1, maxLength: 1200 }, defense: { type: 'string', minLength: 1, maxLength: 1200 } },
       required: ['prosecution', 'defense'],
     },
   },
@@ -663,18 +674,18 @@ const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
 const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    caseId: { type: 'string' },
+    caseId: { type: 'string', pattern: '^[0-9]{2}-CR-[0-9]{5}$' },
     defendant: CHARACTER_GEMINI_SCHEMA,
     environment: ENVIRONMENT_GEMINI_SCHEMA,
-    charges: { type: 'array', items: CHARGE_GEMINI_SCHEMA },
-    statuteContexts: { type: 'array', items: { type: 'string' } },
-    witnesses: { type: 'array', items: WITNESS_GEMINI_SCHEMA },
-    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
-    summary: { type: 'string' },
-    statementOfFacts: { type: 'string' },
+    charges: { type: 'array', minItems: 1, items: CHARGE_GEMINI_SCHEMA },
+    statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
+    witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
+    evidence: { type: 'array', minItems: 3, items: EVIDENCE_GEMINI_SCHEMA },
+    summary: { type: 'string', minLength: 1, maxLength: 1500 },
+    statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
     closingArguments: {
       type: 'object',
-      properties: { prosecution: { type: 'string' }, defense: { type: 'string' } },
+      properties: { prosecution: { type: 'string', minLength: 1, maxLength: 1200 }, defense: { type: 'string', minLength: 1, maxLength: 1200 } },
       required: ['prosecution', 'defense'],
     },
   },
@@ -790,16 +801,16 @@ const OfferPleaNarrativeSchema = z
 
 const WEAK_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
-  properties: { prosecutionRationale: { type: 'string' } },
+  properties: { prosecutionRationale: { type: 'string', minLength: 1, maxLength: 1000 } },
   required: ['prosecutionRationale'],
 };
 
 const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    prosecutionRationale: { type: 'string' },
-    defenseRationale: { type: 'string' },
-    allocution: { type: 'string' },
+    prosecutionRationale: { type: 'string', minLength: 1, maxLength: 1000 },
+    defenseRationale: { type: 'string', minLength: 1, maxLength: 1000 },
+    allocution: { type: 'string', minLength: 1, maxLength: 800 },
     pleaReactions: {
       type: 'object',
       properties: { ACCEPT: reactionBeatGeminiSchema(), REJECT: reactionBeatGeminiSchema() },
@@ -861,7 +872,7 @@ const AftermathFieldSchema = z.object({ narrative: AftermathNarrativeSchema });
 
 const AFTERMATH_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
-  properties: { narrative: { type: 'string' } },
+  properties: { narrative: { type: 'string', minLength: 1, maxLength: 4000 } },
   required: ['narrative'],
 };
 

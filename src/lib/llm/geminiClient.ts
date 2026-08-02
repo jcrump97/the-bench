@@ -34,6 +34,12 @@ export interface GeminiSchema {
   nullable?: boolean;
   minItems?: number;
   maxItems?: number;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  pattern?: string;
+  propertyOrdering?: string[];
 }
 
 export interface GeminiCallOptions {
