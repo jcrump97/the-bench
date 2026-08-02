@@ -341,15 +341,16 @@ async function judgeContent(model, { memory, promptText, screenshot, mode }) {
   // continue; the downstream fallback logic (out-of-range chosenIndex ->
   // first option, missing amounts -> each line's floor) already exists to
   // absorb exactly this shape of result, so this leans on it rather than
-  // duplicating it.
+  // duplicating it. Mark the returned result as degraded so the report does
+  // not present a defaulted beat as a clean one.
   console.warn(`QA judgment call failed validation twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
   if (mode === 'decide') {
-    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.' };
+    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.', degraded: true };
   }
   if (mode === 'sentencing') {
-    return { findings: [], amounts: [], reasoning: 'QA judgment call failed validation twice; defaulted to the statutory floor.' };
+    return { findings: [], amounts: [], reasoning: 'QA judgment call failed validation twice; defaulted to the statutory floor.', degraded: true };
   }
-  return { findings: [] };
+  return { findings: [], degraded: true };
 }
 
 // ---------- Prompt builders ----------
@@ -377,9 +378,9 @@ function buildReport({ startedAt, model, caseTitle, findings, actionLog, transcr
 
   const actionText = actionLog
     .map((a) => {
-      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}").`;
-      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''} — ${a.reasoning}`;
-      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}] — ${a.reasoning}`;
+      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}")${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''}.`;
+      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''}${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
+      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}]${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
       return `Beat ${a.beat}: ${a.type}`;
     })
     .join('\n');
@@ -510,6 +511,9 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           const result = await judgeContent(model, { memory, promptText: reviewOnlyPrompt(delta), screenshot, mode: 'review' });
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the final review was defaulted, not judged.' }], beat);
+          }
           outcome = 'PASS: case completed';
           break;
         }
@@ -579,7 +583,10 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           let idx = result.chosenIndex;
           let fallback = false;
           if (!Number.isInteger(idx) || idx < 0 || idx >= choiceCount) { idx = 0; fallback = true; }
-          actionLog.push({ beat, type: 'DECISION', chosen: options[idx].text, reasoning: result.reasoning, fallback });
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the beat was defaulted, not judged.' }], beat);
+          }
+          actionLog.push({ beat, type: 'DECISION', chosen: options[idx].text, reasoning: result.reasoning, fallback, degraded: result.degraded === true });
           await choiceButtons.nth(idx).click();
         } else if (sentenceCount >= 1) {
           const ranges = [];
@@ -599,6 +606,9 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           const result = await judgeContent(model, { memory, promptText: sentencingPrompt(delta, ranges), screenshot: screenshotBuffer, mode: 'sentencing' });
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the sentence was defaulted, not judged.' }], beat);
+          }
           const amounts = ranges.map((r, i) => {
             const amt = result.amounts[i];
             return Number.isInteger(amt) && amt >= r.min && amt <= r.max ? amt : r.min;
@@ -620,7 +630,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
               filled.push(null); // left at whatever was already seeded
             }
           }
-          actionLog.push({ beat, type: 'SENTENCING', amounts: filled, reasoning: result.reasoning });
+          actionLog.push({ beat, type: 'SENTENCING', amounts: filled, reasoning: result.reasoning, degraded: result.degraded === true });
           // A live run found this button can render clipped by the viewport
           // (Gemini's own vision finding independently flagged the same
           // symptom) — scroll it into view first rather than trusting it's
@@ -661,7 +671,10 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           });
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
-          actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx] });
+          if (result.degraded) {
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; this review was defaulted, not judged.' }], beat);
+          }
+          actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx], degraded: result.degraded === true });
           const clicked = plainButtons.nth(clickIdx);
           const isSubmit = /Impose Sentence|Adjourn/.test(texts[clickIdx]);
           await clicked.click();

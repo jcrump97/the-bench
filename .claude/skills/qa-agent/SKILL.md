@@ -161,13 +161,14 @@ it got wrong instead of correcting blind. If both attempts still fail to
 validate, the run no longer aborts: it logs a `console.warn` and degrades to
 a neutral, mode-appropriate result — an empty findings array, plus
 `chosenIndex: 0` for a decision or an empty `amounts` array for sentencing —
-and keeps going. The existing downstream fallback logic (out-of-range
+and keeps going. The returned result is marked `degraded`, and the driver
+adds a LOW `VERBIAGE` finding plus a `(degraded — judgment call failed
+validation twice)` annotation in the action log so the beat is not reported
+as a clean review. The existing downstream fallback logic (out-of-range
 `chosenIndex` → first option, missing `amounts` → each line's statutory
 floor) absorbs that neutral result the same way it absorbs any other invalid
 response, so a single bad judgment call can no longer discard an entire
-10–20 minute run. The report's action log still shows the reasoning text
-("QA judgment call failed validation twice...") so a degraded beat is easy
-to spot.
+10–20 minute run.
 
 ## Gotchas
 
