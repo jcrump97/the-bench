@@ -151,6 +151,25 @@ export async function callGemini(
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: options.contents }] }],
       safetySettings: SAFETY_SETTINGS,
+      // No thinkingConfig here, and that is a decision rather than an
+      // oversight. Three findings, each probed against the live API:
+      //
+      // 1. `thinkingBudget: 0` — the documented way to switch thinking off —
+      //    is rejected outright with 400 INVALID_ARGUMENT by the model
+      //    `gemini-flash-lite-latest` currently resolves to. Only a positive
+      //    budget and -1 (dynamic) are accepted. Hardcoding the "disable"
+      //    value would break every call, which is exactly how the evidence
+      //    array's minItems broke this pipeline.
+      // 2. The parameter is split by model family (`thinkingBudget` for 2.5,
+      //    `thinkingLevel` for 3.x, and sending both is a 400) — but
+      //    modelSelection deliberately prefers `-latest` *aliases*, whose
+      //    names carry no version. There is no reliable way to pick the right
+      //    parameter from the name we actually resolve.
+      // 3. The pipeline measures 5/5 with zero failed attempts on the model's
+      //    default. There is no failure here for a thinking budget to buy back.
+      //
+      // So the model's own default stands. If a future stage does need
+      // bounded reasoning, add it per-stage behind a probe — never a constant.
       generationConfig: {
         // Structured JSON output is measurably more schema-compliant at
         // lower temperature; 0.7 keeps case-to-case narrative variety (the
