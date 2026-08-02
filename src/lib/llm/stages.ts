@@ -370,7 +370,7 @@ const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
   required: ['charges', 'statuteContexts'],
 };
 
-const STATUTE_SELECTION_SYSTEM = `You are generating the statutory charges for a California criminal court simulation. Invent one or more realistic charges under California law, each with its own elements, statutory sentencing ranges, and voiced verdict reactions/options. Every id must be unique. Do not include any real person's name.`;
+const STATUTE_SELECTION_SYSTEM = `You are generating the statutory charges for a California criminal court simulation. Invent one or more realistic charges under California law, each with its own elements, statutory sentencing ranges, and voiced verdict reactions/options. Every id must be unique. Do not include any real person's name. This is a bench trial: the judge alone decides every verdict. There is no jury — never write a verdict reaction or judge-line option that references a jury, jurors, or a jury trial.`;
 
 function buildStatuteSelectionContents(feedback: string | undefined): string {
   const base = 'Generate the charges and statuteContexts for a new case.';
@@ -465,7 +465,7 @@ const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
   required: ['interrogation'],
 };
 
-const INTERROGATION_GEN_SYSTEM = `You are dramatizing a recorded police custodial interrogation for a California criminal court simulation. You are given the exact structural outcome the interview must produce and the exact ground on which the defense will move to suppress it — write a transcript (4-24 lines, alternating detective/defendant naturally) that dramatizes precisely that outcome. Do not deviate from the given outcome or challengeGround.`;
+const INTERROGATION_GEN_SYSTEM = `You are dramatizing a recorded police custodial interrogation for a California criminal court simulation. You are given the exact structural outcome the interview must produce and the exact ground on which the defense will move to suppress it — write a transcript (4-24 lines, alternating detective/defendant naturally) that dramatizes precisely that outcome. Do not deviate from the given outcome or challengeGround. This is a bench trial: the judge alone decides the verdict. There is no jury — neither the detective nor the defendant should reference a jury or jury trial.`;
 
 function buildInterrogationGenContents(
   defendant: Defendant,
@@ -684,7 +684,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
-const REPAIR_SYSTEM = `You are repairing a California criminal case file JSON object that failed schema validation. You will be given the full object and the list of validation issues. Return a complete, corrected JSON object with the same overall shape, fixing every listed issue.`;
+const REPAIR_SYSTEM = `You are repairing a California criminal case file JSON object that failed schema validation. You will be given the full object and the list of validation issues. Return a complete, corrected JSON object with the same overall shape, fixing every listed issue. This is a bench trial: the judge alone decides every verdict. There is no jury — if any listed issue is about a jury/juror reference, remove it; no field anywhere in the object should mention a jury.`;
 
 function buildRepairContents(assembled: unknown, issues: z.ZodError, feedback: string | undefined): string {
   const issueList = issues.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('\n');
@@ -850,7 +850,7 @@ const AFTERMATH_GEMINI_SCHEMA: GeminiSchema = {
   required: ['narrative'],
 };
 
-const AFTERMATH_SYSTEM = `You are writing the aftermath narrative for a California criminal court simulation: public reaction, consequences, and press coverage conditioned on how the case actually resolved. 1-4000 characters.`;
+const AFTERMATH_SYSTEM = `You are writing the aftermath narrative for a California criminal court simulation: public reaction, consequences, and press coverage conditioned on how the case actually resolved. 1-4000 characters. This is a bench trial: the judge alone decided the verdict. There is no jury — press coverage and public reaction should never reference a jury or jury trial.`;
 
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
   const base = [

@@ -184,7 +184,7 @@ export const ChargeSchema = z.strictObject({
 // beat, not document prose.
 export const InterrogationLineSchema = z.strictObject({
   speaker: z.enum(['DETECTIVE', 'DEFENDANT']),
-  text: z.string().min(1).max(400),
+  text: noJury(z.string().min(1).max(400)),
 });
 
 // The recorded custodial interview behind an INTERROGATION exhibit. The
