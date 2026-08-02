@@ -836,11 +836,26 @@ RULES:
 1. Format the case number as two digits, "-CR-", then five digits — for example 24-CR-00042.
 2. Write "summary" as a dry, allegations-only docket synopsis: what is charged and nothing more, in under 1500 characters. Save every party's framing for the fields below.
 3. Write "statementOfFacts" in the prosecutor's own voice, spoken to the court, in under 1500 characters.
-4. Write each closing argument in that advocate's voice, addressed to the court, in under 1200 characters.
+4. Write each closing argument in that advocate's voice, addressed to the court, in under 1200 characters. The closings must argue the actual exhibits and witnesses in the case — do not invent facts (DNA, surveillance footage, tools, witnesses) that the evidence list does not include.
 5. ${BENCH_TRIAL_RULE}`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
-  const base = `Charges: ${parts.charges.map((c) => c.name).join(', ')}. Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}. Environment: ${parts.environment.description}`;
+  const evidenceList = parts.evidence
+    .map((e) => `- ${e.id}: ${e.type} — ${e.name}; relevance ${e.relevanceScore}; objectionRisk ${e.objectionRisk}`)
+    .join('\n');
+  const witnessList = parts.witnesses
+    .map((w) => `- ${w.id}: ${w.name} (${w.role}, bias ${w.bias}); credibility ${w.credibilityScore}`)
+    .join('\n');
+
+  const base = [
+    `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
+    `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
+    `Environment: ${parts.environment.description}`,
+    'Evidence exhibits:',
+    evidenceList,
+    'Witnesses:',
+    witnessList,
+  ].join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
