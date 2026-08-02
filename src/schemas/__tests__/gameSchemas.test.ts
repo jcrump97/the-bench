@@ -302,6 +302,61 @@ describe('PleaNarrativeSchema (1D)', () => {
   });
 });
 
+describe('CaseSchema defendant-name backstop', () => {
+  it('rejects a verdict line that names a different person as the defendant', () => {
+    const badLine = 'On the count of second-degree burglary, the court finds defendant Arthur Pendelton guilty.';
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      charges: [{
+        ...rawValidCase.charges[0],
+        verdictOptions: [
+          { choice: 'GUILTY', lineText: badLine },
+          { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+        ],
+      }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.message.includes('Arthur Pendelton'))).toBe(true);
+  });
+
+  it('accepts a verdict line that names the actual defendant', () => {
+    const goodLine = 'On the count of second-degree burglary, the court finds defendant Jordan Vance guilty.';
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      charges: [{
+        ...rawValidCase.charges[0],
+        verdictOptions: [
+          { choice: 'GUILTY', lineText: goodLine },
+          { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+        ],
+      }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a verdict line that uses only the defendant\'s last name', () => {
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      charges: [{
+        ...rawValidCase.charges[0],
+        verdictOptions: [
+          { choice: 'GUILTY', lineText: 'The court finds defendant Vance guilty.' },
+          { choice: 'NOT_GUILTY', lineText: 'The court finds the defendant not guilty.' },
+        ],
+      }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('does not flag ordinary "the defendant" phrasing or possessive "defendant\'s"', () => {
+    const result = CasePayloadSchema.safeParse({
+      ...rawValidCase,
+      statementOfFacts: 'The defendant forced the rear door. The defendant\'s prints were on it.',
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
 describe('CaseSchema after pleaPosture removal (1D)', () => {
   it('parses a valid case that has no pleaPosture field', () => {
     expect(CasePayloadSchema.safeParse(rawValidCase).success).toBe(true);

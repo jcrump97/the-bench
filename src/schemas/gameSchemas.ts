@@ -15,6 +15,69 @@ function noJury<T extends z.ZodString>(schema: T) {
   });
 }
 
+// A live pipeline stage once authored verdict lines for "defendant Arthur
+// Pendelton" when the actual defendant was Marcus Vance. The wrong name was
+// a prosecution witness. In a bench trial there is only one defendant, so any
+// field that writes "defendant <Name>" must name the actual defendant.
+function addDefendantNameIssues(
+  caseData: z.infer<typeof CaseSchema>,
+  ctx: z.RefinementCtx,
+): void {
+  const fullName = `${caseData.defendant.firstName} ${caseData.defendant.lastName}`.trim();
+  const lastName = caseData.defendant.lastName.trim();
+  if (fullName.length === 0) return;
+
+  // Match "defendant" followed by one or two capitalized name tokens. The
+  // possessive "defendant's" is excluded by requiring whitespace after the
+  // word. Lowercase verbs like "defendant entered" simply do not match.
+  const pattern = /\b[Dd]efendant\s+([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*)?)\b/g;
+  const fields: Array<{ label: string; text: string }> = [];
+
+  const push = (label: string, text: string | null | undefined) => {
+    if (typeof text === 'string' && text.length > 0) fields.push({ label, text });
+  };
+
+  push('summary', caseData.summary);
+  push('statementOfFacts', caseData.statementOfFacts);
+  push('closingArguments.prosecution', caseData.closingArguments.prosecution);
+  push('closingArguments.defense', caseData.closingArguments.defense);
+
+  for (const charge of caseData.charges) {
+    for (const reaction of charge.verdictReactions.GUILTY) push(`charge.${charge.id}.verdictReactions.GUILTY`, reaction.text);
+    for (const reaction of charge.verdictReactions.NOT_GUILTY) push(`charge.${charge.id}.verdictReactions.NOT_GUILTY`, reaction.text);
+    for (const option of charge.verdictOptions) push(`charge.${charge.id}.verdictOptions`, option.lineText);
+  }
+
+  for (const ev of caseData.evidence) {
+    push(`evidence.${ev.id}.disclosureSummary`, ev.disclosureSummary);
+    push(`evidence.${ev.id}.prosecutionArgument`, ev.prosecutionArgument);
+    push(`evidence.${ev.id}.defenseObjection`, ev.defenseObjection);
+    for (const reaction of ev.rulingReactions.ADMITTED) push(`evidence.${ev.id}.rulingReactions.ADMITTED`, reaction.text);
+    for (const reaction of ev.rulingReactions.EXCLUDED) push(`evidence.${ev.id}.rulingReactions.EXCLUDED`, reaction.text);
+  }
+
+  for (const w of caseData.witnesses) {
+    push(`witness.${w.id}.statement`, w.statement);
+    push(`witness.${w.id}.directExamination`, w.directExamination);
+    push(`witness.${w.id}.crossExamination`, w.crossExamination);
+  }
+
+  for (const { label, text } of fields) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      const found = match[1]!.trim();
+      const foundFull = found === fullName;
+      const foundLast = found === lastName;
+      if (!foundFull && !foundLast) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label} names "defendant ${found}" but the defendant is ${fullName}`,
+        });
+      }
+    }
+  }
+}
+
 // ==========================================
 // 1. SECURITY PERIMETER
 // ==========================================
@@ -437,6 +500,11 @@ export const CaseSchema = z.strictObject({
     }
     witnessIds.add(w.id);
   }
+
+  // Structural backstop: any "defendant <Name>" phrase must name the actual
+  // defendant. This catches the VerdictVoice/wrong-person class of error that
+  // prompt text alone cannot guarantee against.
+  addDefendantNameIssues(v, ctx);
 });
 
 export const CasePayloadSchema = CaseSchema;
