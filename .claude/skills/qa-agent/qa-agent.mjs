@@ -487,7 +487,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
             }
           }
           actionLog.push({ beat, type: 'SENTENCING', amounts: filled, reasoning: result.reasoning });
-          await actionBar.getByRole('button', { name: /Impose Sentence|Adjourn/ }).click();
+          // A live run found this button can render clipped by the viewport
+          // (Gemini's own vision finding independently flagged the same
+          // symptom) — scroll it into view first rather than trusting it's
+          // already actionable, same treatment the sentence inputs get above.
+          const submitButton = actionBar.getByRole('button', { name: /Impose Sentence|Adjourn/ });
+          await submitButton.scrollIntoViewIfNeeded();
+          await submitButton.click();
         } else {
           const texts = [];
           for (let i = 0; i < plainCount; i++) texts.push((await plainButtons.nth(i).innerText()).trim());
