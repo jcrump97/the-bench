@@ -504,7 +504,9 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
     // fetch does — it needs the proxy passed as an explicit launch option,
     // or in-page requests (BYOK's Gemini calls) bypass the proxy entirely
     // and fail outright on a network that requires it.
-    ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+    // bypass keeps the local dev server off the proxy — a plain-HTTP
+    // request to localhost sent through an HTTPS-only relay 502s outright.
+    ...(proxyServer ? { proxy: { server: proxyServer, bypass: 'localhost,127.0.0.1' } } : {}),
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   // WelcomeScreen/SentencingControl swallow generation/aftermath failures
