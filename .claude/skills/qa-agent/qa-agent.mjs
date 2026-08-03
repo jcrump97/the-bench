@@ -497,9 +497,15 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   const model = await selectQaModel(API_KEY);
   console.log(`QA judgment model: ${model}`);
 
-  const browser = await chromium.launch(
-    process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {},
-  );
+  const proxyServer = process.env.HTTPS_PROXY || process.env.https_proxy;
+  const browser = await chromium.launch({
+    ...(process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {}),
+    // Chromium doesn't read HTTPS_PROXY from its environment the way Node's
+    // fetch does — it needs the proxy passed as an explicit launch option,
+    // or in-page requests (BYOK's Gemini calls) bypass the proxy entirely
+    // and fail outright on a network that requires it.
+    ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+  });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   // WelcomeScreen/SentencingControl swallow generation/aftermath failures
   // into a bare setPhase('ERROR_STATE') with no console.error, so this can't
