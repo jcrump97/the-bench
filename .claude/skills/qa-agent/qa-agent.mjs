@@ -497,10 +497,45 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   const model = await selectQaModel(API_KEY);
   console.log(`QA judgment model: ${model}`);
 
-  const browser = await chromium.launch(
-    process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {},
-  );
+  const proxyServer = process.env.HTTPS_PROXY || process.env.https_proxy;
+  const browser = await chromium.launch({
+    ...(process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {}),
+    // Chromium doesn't read HTTPS_PROXY from its environment the way Node's
+    // fetch does — it needs the proxy passed as an explicit launch option,
+    // or in-page requests (BYOK's Gemini calls) bypass the proxy entirely
+    // and fail outright on a network that requires it.
+    // bypass keeps the local dev server off the proxy — a plain-HTTP
+    // request to localhost sent through an HTTPS-only relay 502s outright.
+    ...(proxyServer ? { proxy: { server: proxyServer, bypass: 'localhost,127.0.0.1' } } : {}),
+  });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  // Chromium's TLS 1.3 ClientHello now always includes a hybrid
+  // post-quantum (ML-KEM) key share with no flag left to disable it, and a
+  // TLS-terminating sandbox proxy that can't parse it resets the connection
+  // before responding at all — a bare ERR_CONNECTION_RESET on every BYOK
+  // call, even though Node's own fetch negotiates the same proxy fine.
+  // Intercept just the Gemini calls at the Playwright layer and issue them
+  // with Node's fetch instead of letting Chromium's network stack touch the
+  // wire; the app's own requests are plain POST/GET JSON with no headers
+  // beyond Content-Type, so forwarding is a faithful passthrough.
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const req = route.request();
+    try {
+      const resp = await fetch(req.url(), {
+        method: req.method(),
+        headers: req.method() === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+        body: req.method() === 'POST' ? (req.postData() ?? undefined) : undefined,
+      });
+      const body = Buffer.from(await resp.arrayBuffer());
+      await route.fulfill({
+        status: resp.status,
+        headers: { 'content-type': resp.headers.get('content-type') ?? 'application/json' },
+        body,
+      });
+    } catch {
+      await route.abort('connectionfailed');
+    }
+  });
   // WelcomeScreen/SentencingControl swallow generation/aftermath failures
   // into a bare setPhase('ERROR_STATE') with no console.error, so this can't
   // recover the underlying GeminiError — but it's cheap insurance against
