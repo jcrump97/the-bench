@@ -167,6 +167,31 @@ function describeOffer(
 // said (the store's voice record), else the first authored option matching
 // the recorded choice — deterministic and total, since the schemas' coverage
 // refinement guarantees every choice has at least one option.
+// Assembles one side's closing argument from the base text plus its
+// per-exhibit fragments, picking each fragment's ifAdmitted/ifExcluded
+// variant off the ruling the player actually entered — so the argument can
+// never reference an exhibit's merits under a ruling that didn't happen. An
+// exhibit with no ruling on record (the plea path, where Act 2 never ran)
+// defaults to ADMITTED: nothing was litigated, so nothing was suppressed.
+// Absent `exhibitPoints` (hand-authored demo cases) leaves the base text
+// untouched — those are already internally consistent by construction.
+function assembleClosingArgument(
+  base: string,
+  exhibitPoints: CasePayload['closingArguments']['exhibitPoints'],
+  motionRulings: MotionRuling[],
+  side: 'prosecution' | 'defense',
+): string {
+  if (exhibitPoints === undefined) return base;
+  const fragments = exhibitPoints
+    .map((point) => {
+      const ruling = motionRulings.find((r) => r.evidenceId === point.evidenceId)?.ruling ?? 'ADMITTED';
+      const variant = ruling === 'ADMITTED' ? point.ifAdmitted : point.ifExcluded;
+      return variant[side];
+    })
+    .filter((text): text is string => text !== null && text.length > 0);
+  return [base, ...fragments].join(' ');
+}
+
 function spokenLine(
   recorded: string | undefined,
   options: readonly { choice: string; lineText: string }[] | undefined,
@@ -487,7 +512,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       phase: 'ACT_3_VERDICT',
       speaker: 'PROSECUTION',
       heading: 'Closing Argument — The People',
-      body: caseData.closingArguments.prosecution,
+      body: assembleClosingArgument(caseData.closingArguments.prosecution, caseData.closingArguments.exhibitPoints, motionRulings, 'prosecution'),
     });
     pushStatement({
       id: 'closing-defense',
@@ -495,7 +520,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       phase: 'ACT_3_VERDICT',
       speaker: 'DEFENSE',
       heading: 'Closing Argument — The Defense',
-      body: caseData.closingArguments.defense,
+      body: assembleClosingArgument(caseData.closingArguments.defense, caseData.closingArguments.exhibitPoints, motionRulings, 'defense'),
     });
 
     for (const charge of caseData.charges) {
