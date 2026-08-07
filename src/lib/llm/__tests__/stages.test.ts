@@ -6,6 +6,7 @@ import {
   runInterrogationGen,
   runEvidenceGen,
   finalizeCasePayload,
+  runVerdictVoice,
   runPleaNarrative,
   runAftermath,
   GameServiceError,
@@ -403,6 +404,55 @@ describe('finalizeCasePayload', () => {
     expect(CaseSchema.safeParse(result).success).toBe(true);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
     expect(result.closingArguments.exhibitPoints?.map((p) => p.evidenceId)).toEqual(['e1']);
+  });
+});
+
+describe('runVerdictVoice', () => {
+  const voiceFor = (id: string) => ({
+    id,
+    verdictReactions: charge.verdictReactions,
+    verdictOptions: charge.verdictOptions,
+  });
+
+  it('retries when the model echoes a charge id that was not requested', async () => {
+    // Before the schema checked ids against the request, a wrong echo validated
+    // here and then hit an un-retried throw in gameService, killing the whole
+    // generation two stages from the end. It must be an ordinary repairable
+    // validation failure instead.
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor('charge-hallucinated')] }),
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result[0]!.id).toBe(charge.id);
+    // The retry must name the offending id so the repair is actionable.
+    const retryPrompt = vi.mocked(callGemini).mock.calls[1]![2]!.contents;
+    expect(retryPrompt).toContain('charge-hallucinated');
+  });
+
+  it('retries when an entry for a requested charge is missing entirely', async () => {
+    const second = { ...chargeCore, id: 'charge-second', elements: [{ id: 'charge-second-el', description: 'An element.', isProven: false }] };
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+      JSON.stringify({ charges: [voiceFor(charge.id), voiceFor('charge-second')] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore, second], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result.map((c) => c.id)).toEqual([charge.id, 'charge-second']);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('charge-second');
+  });
+
+  it('puts each charge id on its own labelled field in the prompt', async () => {
+    mockCallsWith(JSON.stringify({ charges: [voiceFor(charge.id)] }));
+
+    await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini).mock.calls[0]![2]!.contents).toContain(`id: ${charge.id}`);
   });
 });
 

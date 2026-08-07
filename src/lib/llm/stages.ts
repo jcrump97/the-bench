@@ -1117,7 +1117,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
 // the defendant exists so the lines can name the defendant and reach for
 // their circumstances).
 // ============================================================================
-const VerdictVoiceSchema = z.object({
+const VerdictVoiceShape = z.object({
   charges: z.array(
     z.strictObject({
       id: z.string().min(1).max(40),
@@ -1136,28 +1136,62 @@ const VerdictVoiceSchema = z.object({
   ).min(1),
 });
 
+// Built per call against the charge ids actually requested. A wrong or missing
+// id used to validate fine here — `id` accepted any 1-40 char string — and then
+// hit an un-retried `throw` in gameService when the voice for a charge could not
+// be found, killing the whole generation two stages from the end. Checking the
+// ids against the request turns that into an ordinary validation failure, which
+// `generateValidated` repairs with the issues fed back.
+function buildVerdictVoiceSchema(requestedChargeIds: readonly string[]) {
+  return VerdictVoiceShape.superRefine((data, ctx) => {
+    const returned = new Set(data.charges.map((c) => c.id));
+    const missing = requestedChargeIds.filter((id) => !returned.has(id));
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges is missing an entry for these charge ids (echo each id exactly as given): ${missing.join(', ')}`,
+      });
+    }
+    const unknown = [...returned].filter((id) => !requestedChargeIds.includes(id));
+    if (unknown.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges names ids that are not in this case (echo each id exactly as given): ${unknown.join(', ')}`,
+      });
+    }
+  });
+}
+
 const VERDICT_VOICE_SYSTEM = `ROLE: You are a courtroom clerk preparing the voiced verdict layer for each charge.
 
 TASK: For every charge in the case, write the courtroom's reaction to each possible verdict and the judge's selectable verdict lines from the bench.
 
 RULES:
-1. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
-2. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
-3. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
-4. Keep each judge line under 300 characters and each reaction line under 600.
-5. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.`;
+1. Return one entry per charge, and copy each charge's "id" into your entry exactly as it is given to you — character for character. The ids are how the case file matches your lines back to the charge they belong to.
+2. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
+3. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
+4. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
+5. Keep each judge line under 300 characters and each reaction line under 600.
+6. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.
+
+EXAMPLE of the id rule: given "Count 1 of 2 — id: charge-grand-theft — Grand Theft", your entry for that count is {"id":"charge-grand-theft", ...}.`;
 
 function buildVerdictVoiceContents(
   charges: ChargeCore[],
   defendant: Defendant,
   feedback: string | undefined,
 ): string {
+  // One charge per line with the id on its own labelled field. Burying it
+  // mid-string ("1 of 2 (id charge-x): Name") made the id read as incidental
+  // prose, and an id echoed wrong is the one error this stage cannot absorb.
   const orderedCharges = charges
-    .map((c, index) => `${index + 1} of ${charges.length} (id ${c.id}): ${c.name}`)
-    .join('; ');
+    .map((c, index) => `- Count ${index + 1} of ${charges.length} — id: ${c.id} — ${c.name}`)
+    .join('\n');
   const base = [
-    `Charges, in the fixed order they are resolved at trial: ${orderedCharges}.`,
+    'Charges, in the fixed order they are resolved at trial:',
+    orderedCharges,
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    'Return exactly one entry per count above, echoing each id character for character.',
   ].join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
@@ -1175,7 +1209,7 @@ export async function runVerdictVoice(
     VERDICT_VOICE_SYSTEM,
     (feedback) => buildVerdictVoiceContents(charges, defendant, feedback),
     VERDICT_VOICE_GEMINI_SCHEMA,
-    VerdictVoiceSchema,
+    buildVerdictVoiceSchema(charges.map((c) => c.id)),
   );
   return data.charges;
 }
