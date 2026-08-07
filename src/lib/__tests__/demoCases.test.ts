@@ -171,18 +171,20 @@ describe('vaughnCase (People v. Teresa Vaughn)', () => {
     const { posture, defenseRisk } = computePleaPostureForCase(vaughnCase.payload, vaughnCase.pleaNarrative);
     expect(posture.status).toBe('PENDING_JUDICIAL_REVIEW');
     expect(defenseRisk?.posture).toBe('ACCEPT');
-    expect(defenseRisk?.priorExposure).toBe(85);
+    expect(defenseRisk?.priorExposure).toBe(70);
     if (posture.status === 'PENDING_JUDICIAL_REVIEW') {
-      // The offer spans both charges: discounted jail + fine (felony, realigned to
-      // county jail) merges with jail (misdemeanor) into one aggregate jail term.
+      // The offer spans both charges, but exposure collapses to one custody
+      // type: the felony's PRISON figure governs (Cal. Penal Code § 669
+      // aggregation), and the misdemeanor's JAIL maximum is absorbed into it
+      // rather than added as a separate term — see deriveSentencingExposure.
       expect(posture.pleadsToChargeIds).toEqual(['charge-hit-run', 'charge-susp-license']);
-      expect(posture.proposedSentence.map((s) => s.type).sort()).toEqual(['FINE', 'JAIL']);
+      expect(posture.proposedSentence.map((s) => s.type).sort()).toEqual(['FINE', 'PRISON']);
     }
   });
 
-  it('derives cross-charge exposure (jail + fine, one custody type across both charges) and authors all four aftermath variants', () => {
+  it('derives cross-charge exposure (prison governs over the misdemeanor\'s jail max) and authors all four aftermath variants', () => {
     const exposure = deriveSentencingExposure(vaughnCase.payload.charges);
-    expect(exposure.maximumPenalties.map((s) => s.type).sort()).toEqual(['FINE', 'JAIL']);
+    expect(exposure.maximumPenalties.map((s) => s.type).sort()).toEqual(['FINE', 'PRISON']);
     expect(vaughnCase.aftermath.PLEA_ACCEPTED).toBeDefined();
     expect(vaughnCase.aftermath.SPLIT).toBeDefined();
   });

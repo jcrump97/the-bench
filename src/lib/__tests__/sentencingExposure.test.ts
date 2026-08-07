@@ -108,4 +108,47 @@ describe('deriveSentencingExposure', () => {
   it('returns empty minimums when no charge carries one', () => {
     expect(deriveSentencingExposure([charge({}), charge({})]).mandatoryMinimums).toEqual([]);
   });
+
+  it('collapses to PRISON when a case mixes a prison-eligible charge with a jail-only charge', () => {
+    const felony = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
+      ],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    expect(deriveSentencingExposure([felony, misdemeanor])).toEqual({
+      mandatoryMinimums: [],
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
+      ],
+    });
+  });
+
+  it('drops a JAIL mandatory minimum too when a PRISON charge is present', () => {
+    const felony = charge({
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    expect(deriveSentencingExposure([felony, misdemeanor]).mandatoryMinimums).toEqual([
+      { type: 'PRISON', unit: 'YEARS', amount: 1 },
+    ]);
+  });
+
+  it('leaves an all-JAIL case untouched (no PRISON to collapse toward)', () => {
+    const a = charge({ classification: 'MISDEMEANOR', maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }] });
+    const b = charge({ classification: 'MISDEMEANOR', maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 3 }] });
+    expect(deriveSentencingExposure([a, b]).maximumPenalties).toEqual([
+      { type: 'JAIL', unit: 'MONTHS', amount: 9 },
+    ]);
+  });
 });

@@ -3,13 +3,11 @@ import { defineDemoCase } from './types';
 // People v. Teresa Vaughn — Felony Hit-and-Run Causing Injury (VC § 20001(a))
 // + Driving on a Suspended License (VC § 14601.1(a)). The docket's
 // multi-charge case: it exercises deriveSentencingExposure's cross-charge
-// aggregation (jail + fine), verdicts entered one charge at a
-// time, and the SPLIT aftermath. The felony count is sentenced to county
-// jail under realignment (Cal. Penal Code § 1170(h)) rather than state
-// prison, so its custody type matches the misdemeanor count's — a case may
-// not narrate both a prison term and a separate jail term for the same
-// defendant (addSentencingTypeExclusivityIssues in gameSchemas.ts). Tuned
-// MODERATE (score ~61) with
+// aggregation (prison + fine from the felony, jail from the misdemeanor —
+// case-level exposure collapses to the felony's PRISON figure alone once
+// both are present; see the comment on deriveSentencingExposure in
+// sentencingExposure.ts), verdicts entered one charge at a time, and the
+// SPLIT aftermath. Tuned MODERATE (score ~61) with
 // a defendant built to accept: heavy priors (including a felony prison
 // term), high neuroticism, low openness — the anxious mirror of Reyes. The
 // texture: one count is a paper certainty, the other turns entirely on eight
@@ -19,15 +17,9 @@ const rawVaughnPayload = {
   // assembly call (with `summary`, below) once the four stages complete.
   caseId: '24-CR-01579',
   // [LLM-FILL: CharacterGen] — the whole defendant block. The priors and
-  // traits are the accept-side counterweight: four convictions with a felony
-  // prison term push priorExposure to 85, and the anxious profile keeps risk
-  // tolerance near the floor. (The felony count's custody type moved from
-  // PRISON to JAIL — see the case-level comment above — which cost this
-  // case some of its offer-generosity margin at the MODERATE discount rate;
-  // the fourth prior below restores it.) The four convictions trace an
-  // escalating-then-resolving alcohol history — two DUIs, then the felony
-  // DUI causing injury that preceded her three years of sobriety — with the
-  // 2023 suspended-license conviction landing after recovery began.
+  // traits are the accept-side counterweight: three convictions with a
+  // felony prison term push priorExposure to 70, and the anxious profile
+  // keeps risk tolerance near the floor.
   defendant: {
     firstName: 'Teresa',
     lastName: 'Vaughn',
@@ -42,13 +34,6 @@ const rawVaughnPayload = {
       ],
     },
     pastConvictions: [
-      {
-        chargeName: 'Driving Under the Influence (Cal. Vehicle Code § 23152)',
-        year: 2015,
-        sentences: [
-          { type: 'PROBATION', unit: 'YEARS', amount: 2, conditions: ['SUBSTANCE_ABUSE_TREATMENT'] },
-        ],
-      },
       {
         chargeName: 'Driving Under the Influence (Cal. Vehicle Code § 23152)',
         year: 2018,
@@ -85,9 +70,8 @@ const rawVaughnPayload = {
   },
   // [LLM-FILL: StatuteSelection] — charges (with elements and per-charge
   // statutory ranges) and statuteContexts. Two charges: case-level exposure
-  // is derived across them (jail + fine from the felony, jail from the
-  // misdemeanor — both counts share one custody type), and the verdict is
-  // entered per charge.
+  // is derived across them (prison + fine from the felony, jail from the
+  // misdemeanor), and the verdict is entered per charge.
   charges: [
     {
       id: 'charge-hit-run',
@@ -99,12 +83,8 @@ const rawVaughnPayload = {
         { id: 'elem-hr-flee', description: 'Defendant willfully failed to stop at the scene, provide identifying information, and render reasonable assistance.' },
       ],
       mandatoryMinimums: [],
-      // A "wobbler" under realignment (Cal. Penal Code § 1170(h)): a felony
-      // this level serves in county jail, not state prison — the same
-      // custody type the suspended-license misdemeanor below carries, so the
-      // case never narrates two separate facility sentences.
       maximumPenalties: [
-        { type: 'JAIL', unit: 'YEARS', amount: 3 },
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
         { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
       ],
       verdictReactions: {
@@ -426,7 +406,7 @@ const rawVaughnPleaNarrative = {
     ],
   },
   pleaRulingOptions: [
-    { choice: 'ACCEPT', lineText: 'Thirty-four months in county jail, full restitution to Mr. Pyle, is a serious term honestly arrived at. The plea is accepted.' },
+    { choice: 'ACCEPT', lineText: 'Two years in prison, full restitution to Mr. Pyle, is a serious term honestly arrived at. The plea is accepted.' },
     { choice: 'ACCEPT', lineText: 'Ms. Vaughn, the court will not pretend this comes free. But the agreement is fair and it is final. The plea is accepted; we proceed to sentencing.' },
     { choice: 'REJECT', lineText: 'A struck cyclist, a suspended license driven a second time, and eight seconds unaccounted for — this disposition does not answer it. The plea is rejected. Set the matter for trial.' },
     { choice: 'REJECT', lineText: 'The court is not satisfied this agreement serves the public interest. The plea is rejected. The People will prove their case, or they will not.' },

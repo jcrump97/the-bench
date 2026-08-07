@@ -73,8 +73,28 @@ function groupByType(sentences: Sentence[]): SentenceGroup[] {
 }
 
 export function deriveSentencingExposure(charges: Charge[]): SentencingExposure {
-  return {
-    mandatoryMinimums: groupByType(charges.flatMap(c => c.mandatoryMinimums)).map(largestMinimum),
-    maximumPenalties: groupByType(charges.flatMap(c => c.maximumPenalties)).map(sumMaxima),
-  };
+  const mandatoryMinimums = groupByType(charges.flatMap(c => c.mandatoryMinimums)).map(largestMinimum);
+  const maximumPenalties = groupByType(charges.flatMap(c => c.maximumPenalties)).map(sumMaxima);
+
+  // A case commonly and correctly combines a state-prison-eligible charge
+  // (a felony) with a county-jail-only charge (a misdemeanor, or a realigned
+  // felony under Cal. Penal Code § 1170(h)) — that is not the problem. What
+  // doesn't happen is a defendant serving two separate, additive custody
+  // terms in two different facilities: when counts of different
+  // classification are sentenced together, the whole commitment aggregates
+  // into one (Cal. Penal Code § 669) — if any count requires state prison,
+  // that governs, and jail time on the other counts runs concurrent and is
+  // absorbed into it. So the case-level exposure collapses to PRISON alone
+  // whenever both types are present, rather than narrating "N years in
+  // prison, and also M months in jail" as if both were separately imposed.
+  const hasPrison = mandatoryMinimums.some(s => s.type === 'PRISON') || maximumPenalties.some(s => s.type === 'PRISON');
+  const hasJail = mandatoryMinimums.some(s => s.type === 'JAIL') || maximumPenalties.some(s => s.type === 'JAIL');
+  if (hasPrison && hasJail) {
+    return {
+      mandatoryMinimums: mandatoryMinimums.filter(s => s.type !== 'JAIL'),
+      maximumPenalties: maximumPenalties.filter(s => s.type !== 'JAIL'),
+    };
+  }
+
+  return { mandatoryMinimums, maximumPenalties };
 }

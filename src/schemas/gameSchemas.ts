@@ -181,31 +181,30 @@ function addMinimumCeilingIssues(
   }
 }
 
-// A case's charges may not mix PRISON-type and JAIL-type sentences: custody
-// time is served in exactly one facility type per case — county jail if
-// every custodial count is jail-eligible (including a realigned felony under
-// Cal. Penal Code § 1170(h)), state prison otherwise — never a docket that
-// narrates both a prison term and a separate jail term as if a defendant
-// serves two custody sentences in two facilities. Two independent live
-// qa-agent runs flagged exactly this combination as unrealistic. Case-level
-// (across all charges), not per-charge: a single charge's own minimums/
-// maximums already can't mix types via addMinimumCeilingIssues's same-type
-// pairing, but nothing previously stopped charge A being PRISON-only and
-// charge B being JAIL-only within the same case.
+// A single derived sentence — a plea offer's proposedSentence, or an
+// actually imposed sentence — may not combine a PRISON-type entry with a
+// JAIL-type entry. This is deliberately NOT a constraint on a case's raw
+// per-charge statutory ranges: a felony charge legitimately carries a
+// PRISON maximum and a misdemeanor charge legitimately carries a JAIL
+// maximum in the very same case — that combination is normal, not a bug.
+// The bug two independent live qa-agent runs flagged was narrating both as
+// if separately, additively imposed ("N years in prison, and also M months
+// in jail"), when in reality a case aggregates into one commitment (Cal.
+// Penal Code § 669) and one custody type governs. deriveSentencingExposure
+// enforces that by construction (it never emits a mixed derived array), so
+// this is a defensive backstop on the derived schemas, not an active gate —
+// consistent with this codebase's other structural backstops (e.g.
+// addDefendantNameIssues) for invariants that hold by construction but are
+// cheap to also verify at the trust boundary.
 export function addSentencingTypeExclusivityIssues(
-  charges: readonly { mandatoryMinimums: z.infer<typeof SentenceSchema>[]; maximumPenalties: z.infer<typeof SentenceSchema>[] }[],
+  sentences: readonly z.infer<typeof SentenceSchema>[],
   ctx: z.RefinementCtx,
 ): void {
-  const types = new Set<z.infer<typeof SentenceSchema>['type']>();
-  for (const charge of charges) {
-    for (const s of [...charge.mandatoryMinimums, ...charge.maximumPenalties]) {
-      if (s.type === 'PRISON' || s.type === 'JAIL') types.add(s.type);
-    }
-  }
+  const types = new Set(sentences.map((s) => s.type));
   if (types.has('PRISON') && types.has('JAIL')) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'A case\'s charges may not mix PRISON-type and JAIL-type sentences — custody time is served in one facility type per case, never both',
+      message: 'A sentence may not combine a PRISON-type entry with a JAIL-type entry — a case aggregates into one custody type, never both',
     });
   }
 }
@@ -462,7 +461,9 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
   }),
   z.strictObject({ status: z.literal('REJECTED_BY_DEFENSE'),    ...offerTerms }),
   z.strictObject({ status: z.literal('PENDING_JUDICIAL_REVIEW'), ...offerTerms }),
-]);
+]).superRefine((v, ctx) => {
+  if (v.status !== 'NO_OFFER') addSentencingTypeExclusivityIssues(v.proposedSentence, ctx);
+});
 
 // The LLM's only plea contribution: narrative color, not structure. All plea
 // structure (status, proposed sentence, charge partition) is computed
@@ -583,8 +584,6 @@ export const CaseSchema = z.strictObject({
   // defendant. This catches the VerdictVoice/wrong-person class of error that
   // prompt text alone cannot guarantee against.
   addDefendantNameIssues(v, ctx);
-
-  addSentencingTypeExclusivityIssues(v.charges, ctx);
 });
 
 export const CasePayloadSchema = CaseSchema;
@@ -661,7 +660,7 @@ export const FinalResultSchema = z.discriminatedUnion('resolutionPath', [
     verdict:        VerdictSchema,
     ...finalResultBase,
   }),
-]);
+]).superRefine((v, ctx) => addSentencingTypeExclusivityIssues(v.imposedSentence, ctx));
 
 // ==========================================
 // 8. STATE MACHINE SCHEMA

@@ -12,7 +12,6 @@ import {
   PleaNarrativeSchema,
   CaseSchema,
   AftermathNarrativeSchema,
-  addSentencingTypeExclusivityIssues,
   type Charge,
   type ChargeCore,
   type Environment,
@@ -478,12 +477,10 @@ const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
 // ============================================================================
 // Stage 1 — StatuteSelection
 // ============================================================================
-const StatuteSelectionSchema = z
-  .object({
-    charges: z.array(ChargeCoreSchema).min(1),
-    statuteContexts: z.array(z.string().max(500)).min(1),
-  })
-  .superRefine((data, ctx) => addSentencingTypeExclusivityIssues(data.charges, ctx));
+const StatuteSelectionSchema = z.object({
+  charges: z.array(ChargeCoreSchema).min(1),
+  statuteContexts: z.array(z.string().max(500)).min(1),
+});
 
 const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
@@ -532,11 +529,10 @@ TASK: Invent one or more realistic charges under California law. Give each charg
 
 RULES:
 1. Give every charge and every element an id that is unique across the whole case.
-2. Match each mandatory minimum with a maximum penalty of the same "type" that is at least as large. A charge whose minimum is 180 DAYS of JAIL needs a JAIL maximum as well.
-3. Custody time in this case is served in exactly one facility type: every charge's PRISON/JAIL minimums and maximums must use the same type as every other charge's. Pick PRISON if any count is a straight state-prison felony; pick JAIL if every count is either a misdemeanor or a felony sentenced to county jail under a realignment statute (Cal. Penal Code § 1170(h)) — never mix the two types across (or within) the charges in one case.
-4. Keep charge names and element descriptions factual; do not name or anticipate the defendant, who does not exist yet.
-5. Use fictional names throughout.
-6. ${BENCH_TRIAL_RULE}
+2. Match each mandatory minimum with a maximum penalty of the same "type" that is at least as large. A charge whose minimum is 180 DAYS of JAIL needs a JAIL maximum as well, even when it also carries a PRISON maximum.
+3. Keep charge names and element descriptions factual; do not name or anticipate the defendant, who does not exist yet.
+4. Use fictional names throughout.
+5. ${BENCH_TRIAL_RULE}
 
 EXAMPLE: ${SENTENCE_SHAPE}`;
 
