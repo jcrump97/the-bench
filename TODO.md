@@ -1,5 +1,108 @@
 # TODO
 
+## Architecture review (external review, 2026-08-07 — OPEN)
+
+An outside reviewer read the repo cold, as a hiring signal rather than a code
+review. The core architecture was not faulted: the deterministic-engine /
+LLM-color split, the pure `courtroomScript` projection with its no-spoilers and
+prefix-stability invariants, the closed decision vocabularies, and the
+compile-time impossibility work (`PleaPostureInput`, `InterrogationProfile`,
+`SENTENCE_DISCOUNT` as a closed `Record`) all held up. The reviewer also rated
+`run-the-bench/driver.mjs` *stronger* evidence of testing maturity than
+component tests would be — full speaker-order arrays, entry-kind adjacency,
+negative assertions, and a computed-style cascade-layer guard.
+
+Two of the reviewer's findings were already open here as **R5** and **R3**; both
+are amended in place rather than duplicated, R5 with a severity correction (its
+plea half is worse than documented — an unretried Mistrial, not a repair round).
+The reviewer's summary of what is left: the empirical discipline in this repo is
+aimed almost entirely at *correctness*, and has not yet been pointed at cost,
+latency, packaging, or what a teammate inherits from a clone. A1 was the sharpest
+instance and is now closed; the rest cluster in that same gap.
+
+- [x] **A1 — nothing enforced the quality gates automatically.** `deploy.yml` ran
+      `npm run build` alone: 310 unit tests, a strict ESLint config, the
+      `tsc -b` type-negative gates, and a zero-quota six-run E2E suite all
+      existed and none of them ran in CI. `CLAUDE.md`'s "run lint, test, build
+      before marking any task complete" was an instruction to an agent, and the
+      pre-commit hook advertised at `run-the-bench/SKILL.md:83` is uncommitted
+      and absent from a fresh clone (`core.hooksPath` unset, nothing tracked
+      under `.githooks`/`husky`). Nothing about the process survived
+      `git clone`. *(Fixed: `verify.yml` runs lint + unit tests + build + E2E on
+      every PR, `deploy.yml` calls it and ships only the artifact the E2E passed
+      against, Node pinned via `.nvmrc` + `engines`.)*
+- [ ] **A2 — generate the Gemini `responseSchema` from Zod instead of
+      transcribing it by hand.** ~500 lines of `GeminiSchema` in `stages.ts`
+      mirror the Zod schemas, and `CLAUDE.md` concedes each stage "transcribes
+      its Zod caps onto the matching field". R3 and R5 are both instances, so
+      patching fields individually leaves the generator of those bugs intact.
+      Fix: a `toGeminiSchema` compiler over `z.toJSONSchema()` (Zod 4 — already a
+      dependency), encoding the hard-won API carve-outs as documented
+      transforms: strip `minItems` from any array whose item schema nests a
+      nullable object, and flatten discriminated unions to the union of their
+      properties (what `SENTENCE_GEMINI_SCHEMA` already does by hand). Closes
+      R3 and R5, and answers R11's drift-guard concern structurally.
+      **Requires a `npm run test:live` sweep either side** — this is a
+      `responseSchema` change and C5a is the precedent for measuring one.
+- [ ] **A3 — stale in-code comments.** `caseSource.ts:33-36` still reads "Until
+      then, `demoCaseSource` is the only implementation" and carries `[LLM-FILL]`
+      tags after GameService shipped; `gameService.ts:18` says "five-stage" above
+      a six-stage list.
+- [ ] **A4 — duplication.** (a) `PleaRulingControl` / `MotionRulingControl` /
+      `ChargeVerdictControl` are one component three times — render
+      `{choice, lineText}[]` → `recordSpokenJudgeLine` → commit the structural
+      decision → `advanceBeat`. Extract a `<JudgeLineChoice>` presentational
+      component plus three thin adapters, preserving the `data-choice`
+      attributes the E2E driver selects on. (b) `requireChoiceCoverage`
+      (`stages.ts:160`) reimplements `addChoiceCoverageIssues`
+      (`gameSchemas.ts:246`) — export the latter, delete the former.
+      (c) Button class constants copy-pasted across four files in
+      `src/components/actionbar/`. (d) The `minItems`/nullable-nested comment is
+      verbatim at `stages.ts:774` and `:936`, and the second copy says
+      "witnesses below" when `witnesses` is above it. (e) Orphaned comment at
+      `stages.ts:494-500`, attached to no code. Distinct from the
+      `LedgerEntryRow` `<li>`-wrapper duplication already tracked below.
+- [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes eight
+      strictly sequential LLM round trips where the dependency graph allows six:
+      `EnvironmentGen` ∥ `CharacterGen` (both depend only on `charges`), and
+      `VerdictVoice` ∥ `InterrogationGen`+`EvidenceGen` (depends only on charges
+      + defendant). Two `Promise.all`s in `gameService.ts`, no architectural
+      change. **Not in tension with C11**, which declined to *split* a stage into
+      more calls — this parallelizes calls that already exist. Separately:
+      `fetchWithRetry` (`geminiClient.ts:598`) sets no `AbortSignal.timeout()`,
+      so a hung connection parks the player on "Generating your case…"
+      indefinitely with no way to cancel; and nothing surfaces a per-run call
+      count or cost to a player spending their own quota on eight calls.
+- [ ] **A6 — the E2E suite is invisible to a reader.** Partly addressed by A1
+      (`npm run test:e2e` + a README testing section). Remaining: consider moving
+      `driver.mjs` out of `.claude/skills/`, which reads as agent tooling — the
+      reviewer concluded "no UI tests" on first pass and only corrected after
+      being challenged. `CLAUDE.md` compounds it by describing the free
+      deterministic driver and the paid non-deterministic `qa-agent` in one
+      breath, which reads as "both are manual and expensive."
+- [ ] **A7 — the E2E suite walks happy paths only.** No run provokes a failure,
+      so two areas have no automated coverage at all. (a) Illegal phase
+      transitions and off-phase store writes: `ERROR_RESET` (`useGameStore.ts:80`)
+      wipes an entire playthrough on any validation failure, which is right for
+      the case-hydration trust boundary but arguably too blunt for
+      `addMotionRuling`/`addChargeVerdict`, where a programming error destroys a
+      20-minute game rather than rejecting one write — worth splitting "reject
+      this write" from "vacate the proceedings". (b) The BYOK failure UI: the
+      generating spinner, `startCase`'s double-click guard
+      (`WelcomeScreen.tsx:36`), and the Mistrial screen's technical-details
+      rendering. Both are cheapest as vitest store tests plus a rejecting
+      `CaseSource` stub — not E2E.
+- [ ] **A8 — the API key travels in the URL query string.**
+      `geminiClient.ts:641` and `:718` interpolate `?key=…`, while
+      `.cursor/rules/security.mdc:12` states the key must never touch the URL —
+      the code contradicts the project's own stated invariant. Gemini accepts an
+      `x-goog-api-key` header; two-line change, and it keeps the key out of any
+      URL-logging surface.
+- [ ] **A9 — demo-case data ships in the eager chunk.** ~1,660 lines across five
+      hand-authored bundles land in the main bundle for every visitor; the build
+      is 503 kB / 148 kB gzip and Vite already warns past its 500 kB threshold.
+      `import()` per bundle behind the docket click.
+
 ## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
 
 Player-reported: the live Gemini pipeline lands on `ErrorScreen` ("Mistrial")
@@ -272,6 +375,14 @@ the session transcript; this is the consolidated action list.
       already correct. Model could emit `""`, pass Gemini, fail Zod, burn a
       retry — exactly the "constraint the model is never told" class this
       branch set out to eliminate. Fix: add `minLength: 1` to the three.
+
+      **External review (2026-08-07) adds a fourth instance and a cause.**
+      `EVIDENCE_GEMINI_SCHEMA.targetElementId` has the same omission
+      (`maxLength: 40, nullable: true` against Zod's `.min(1).max(40)`).
+      More usefully: R3 and R5 are both *symptoms* of one systemic cause —
+      two schema languages transcribed by hand — so patching individual
+      fields keeps the generator of these bugs intact. See A2 for the
+      structural fix, which closes this item as a side effect.
 - [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
       /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
       name passes both gates and renders as an empty speaker line in
@@ -284,6 +395,22 @@ the session transcript; this is the consolidated action list.
       gate, burning a repair round. Defeats the "fail fast at the stage that
       produced the error" design. Fix: wrap the stage-schema `lineText`
       fields in `noJury(z.string()...)` for symmetry.
+
+      **Severity correction (external review, 2026-08-07): "burning a repair
+      round" holds for `VerdictVoiceSchema` but understates the plea half.**
+      `runPleaNarrative` calls `PleaNarrativeSchema.parse(...)` at
+      `stages.ts:1290` and `:1302` — both *outside* `generateValidated`, with
+      no `try`/`catch`. So a jury reference in a plea rationale is not a
+      retried repair: the `ZodError` propagates unguarded through
+      `createGameService.generateCase()` to `WelcomeScreen`'s `.catch()` and
+      lands on the Mistrial screen with **no retry and no `[StageName]`
+      prefix** — the one failure path in the pipeline that gets neither. That
+      makes this a correctness fix, not the symmetry nit "Minor" implies;
+      consider re-ranking. Note the minimal fix also removes the cause:
+      derive these schemas (`PleaNarrativeSchema.pick({...}).required()`,
+      `ChargeSchema.pick({ id: true, verdictReactions: true,
+      verdictOptions: true })`) instead of re-declaring their fields, which
+      is how the refinement was dropped in the first place. See A2.
 - [ ] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
       VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
       failure carries a `[StageName]` prefix; this one reports as
@@ -763,6 +890,16 @@ so they aren't lost.
       a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived
       entirely from existing state (`pleaDecision === 'ACCEPT'` → `PLEA`;
       otherwise `TRIAL` with `pleaOutcome` read off `pleaPosture.status`).
+      **Until it is built, the docs must stop claiming it exists** (external
+      review, 2026-08-07): `README.md`'s architecture diagram wires
+      `RG[ResultGenerator]` → `LS[LocalStorage FinalResult]` and `CLAUDE.md`'s
+      layer table lists ResultGenerator as a layer, both reading as shipped —
+      `CLAUDE.md`'s "(not yet implemented)" parenthetical is the only hedge
+      anywhere and the README has none. For a project whose thesis is that the
+      documentation is the deliverable, a reviewer opening the README and
+      finding a module that does not exist is the worst available first
+      impression. Either build it (~50 lines) or mark it unbuilt on both
+      surfaces.
 - [x] Aftermath narrative source — done: the demo docket uses authored
       `aftermathVariants` keyed by outcome, surfaced through the `CaseSource`
       seam (`demoCaseSource`). The BYOK path will call `generateAftermath()`
