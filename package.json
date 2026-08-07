@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "node .claude/skills/run-the-bench/driver.mjs",
     "test:live": "vitest run --config vitest.live.config.ts"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

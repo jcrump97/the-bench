@@ -1,0 +1,89 @@
+name: Verify
+
+# Every gate the project has, on every pull request — and callable by
+# deploy.yml so `main` ships only what passed. The E2E suite runs against the
+# built artifact (not the dev server) and this workflow uploads that same
+# artifact, so the thing tested is the thing deployed.
+#
+# Deliberately absent: `npm run test:live` and the qa-agent skill. Both spend
+# real Gemini quota and are non-deterministic. They stay manual-only, and
+# GEMINI_API_KEY must never become a CI secret.
+
+on:
+  pull_request:
+  workflow_call:
+
+env:
+  # Pinned deliberately. Playwright is not a project dependency (the stack is
+  # locked — see CLAUDE.md), so nothing in package-lock.json constrains it and
+  # an unpinned install could drift out of sync with the cached browser build.
+  # See the version↔browser-build gotcha in run-the-bench/SKILL.md.
+  PLAYWRIGHT_VERSION: 1.61.1
+  PLAYWRIGHT_PREFIX: /tmp/bench-playwright
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Hermetic: src/lib/llm/__tests__/live/ is excluded by vite.config.ts
+      # regardless of whether a key is present, so this never calls the API.
+      - name: Unit tests
+        run: npm test
+
+      # Also enforces the @ts-expect-error type-negative gates via `tsc -b`.
+      - name: Build
+        run: npm run build
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install Playwright in a throwaway prefix
+        run: |
+          npm i --prefix "$PLAYWRIGHT_PREFIX" playwright@"$PLAYWRIGHT_VERSION"
+          npx --prefix "$PLAYWRIGHT_PREFIX" playwright install --with-deps chromium-headless-shell
+
+      # Serves dist/ at the /the-bench/ base path. Output is redirected so the
+      # backgrounded process doesn't hold this step's stdout pipe open. The
+      # driver's gotoWithRetry polls for ~10s, which covers preview's startup.
+      - name: Serve the built artifact
+        run: npm run preview -- --port 4173 > /tmp/preview.log 2>&1 &
+
+      - name: E2E — full demo docket, both branches
+        env:
+          BASE_URL: http://localhost:4173/the-bench/
+          SHOTS_DIR: ${{ runner.temp }}/bench-shots
+        run: npm run test:e2e
+
+      # Most useful precisely when the E2E failed — a blank frame says the app
+      # didn't render at all.
+      - name: Upload E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/bench-shots
+          retention-days: 7
+
+      # Built and E2E-verified in this job; deploy.yml ships exactly this.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist

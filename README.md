@@ -1,5 +1,7 @@
 # The Bench
 
+[![Verify](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml/badge.svg)](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml)
+
 A client-side judge simulation game. You are the judge in a California criminal court. A case lands on your desk. You make decisions regarding pleas, rule on evidentiary motions, and hand down sentences according to the statutes as charged. Powered by your own Gemini API key or a hardcoded demo case.
 
 This is a single-page React application deployed to GitHub Pages. Zero backend. Zero server-side secrets. The architecture forces a non-deterministic LLM into a deterministic state machine using strict JSON schemas and Zod validation.
@@ -15,6 +17,42 @@ This is my first portfolio project as I transition from the Service Desk to AI S
 - Zod (validation gatekeeper)
 - Tailwind CSS (presentation layer only)
 - GitHub Pages (static hosting)
+
+## Testing
+
+Four gates run in CI on every pull request and every push to `main`
+(`.github/workflows/verify.yml`). The deploy job publishes the exact artifact
+the E2E suite passed against.
+
+```bash
+npm run lint       # ESLint — no-explicit-any, ban-ts-comment, no-console
+npm test           # Vitest — hermetic, never calls the Gemini API
+npm run build      # tsc -b (enforces the @ts-expect-error gates) + vite build
+npm run test:e2e   # Playwright — full demo docket, headless, no API key needed
+```
+
+`npm run test:e2e` drives the committed driver at
+`.claude/skills/run-the-bench/driver.mjs`: six runs across all five demo cases,
+both the plea and trial branches, desktop and mobile viewports, asserting
+speaker order, beat ordering, progressive-reveal gating, and outcome-conditioned
+endings. It needs a server to point at — `npm run dev` locally, or
+`npm run preview` with `BASE_URL=http://localhost:4173/the-bench/` to test the
+production build the way CI does. Playwright is deliberately **not** a project
+dependency; see the skill's `SKILL.md` for the throwaway-prefix install.
+
+Two further checks are **manual only** — both call the real Gemini API and spend
+real quota, and neither is wired into CI:
+
+```bash
+npm run test:live                             # live pipeline suite + 5-run diagnostic sweep
+node .claude/skills/qa-agent/qa-agent.mjs     # LLM-as-judge playthrough of a generated case
+```
+
+`test:live` validates the generation pipeline against the actual API (it found a
+retired model build, a structured-output null mismatch, and the root cause of a
+reported "Mistrial most of the time"). `qa-agent` is the only check that reads
+what the pipeline *writes* — it drives a live BYOK case and has an independent
+Gemini call judge every beat for realism the way a human tester would.
 
 ## Architecture
 
