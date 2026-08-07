@@ -1,5 +1,31 @@
-import { sentenceDayEquivalent, type Charge, type Sentence } from '../schemas/gameSchemas';
+import { sentenceDayEquivalent, type Charge, type ChargeVerdict, type Sentence } from '../schemas/gameSchemas';
 import { UNIT_DAYS } from './sentenceBounds';
+
+// The counts a sentence may actually reach. Exposure must be derived from
+// these and never from the raw charge list: a sentence cannot touch a count
+// the defendant was acquitted of, and feeding an acquitted count's statutory
+// range into the aggregation below silently reshapes the sentence for the
+// counts that *were* proven.
+//
+// On the plea path the defendant pleads to every count (derivePleaOfferTerms
+// partitions nothing away), so the whole list governs. On the trial path only
+// GUILTY counts do. On a full acquittal this is empty, and the caller renders
+// an adjournment rather than a sentencing form.
+//
+// The failure this exists to prevent was visible on the shipped Vaughn docket:
+// acquit the felony (PRISON 3 years) and convict the misdemeanor (JAIL 6
+// months), and the picker offered prison up to three years with no jail option
+// at all, because the PRISON/JAIL collapse below ran over the acquitted count.
+export function selectSentenceableCharges(
+  charges: Charge[],
+  isPleaPath: boolean,
+  chargeVerdicts: readonly ChargeVerdict[],
+): Charge[] {
+  if (isPleaPath) return charges;
+  return charges.filter((charge) =>
+    chargeVerdicts.some((v) => v.chargeId === charge.id && v.verdict === 'GUILTY'),
+  );
+}
 
 // Case-level sentencing exposure, derived deterministically from per-charge
 // statutory ranges. Charges are the source of truth — the LLM generates only

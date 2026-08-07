@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { deriveSentencingExposure } from '../sentencingExposure';
-import { ChargeSchema } from '../../schemas/gameSchemas';
+import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
+import { ChargeSchema, type ChargeVerdict } from '../../schemas/gameSchemas';
 
 type RawCharge = z.input<typeof ChargeSchema>;
 
@@ -168,5 +168,55 @@ describe('deriveSentencingExposure', () => {
     expect(deriveSentencingExposure([a, b]).maximumPenalties).toEqual([
       { type: 'JAIL', unit: 'MONTHS', amount: 9 },
     ]);
+  });
+
+});
+
+describe('selectSentenceableCharges', () => {
+  const felony = charge({ maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }] });
+  const misdemeanor = charge({
+    classification: 'MISDEMEANOR',
+    maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+  });
+  const verdict = (id: string, value: 'GUILTY' | 'NOT_GUILTY'): ChargeVerdict => ({
+    chargeId: id,
+    chargeName: 'Test charge',
+    classification: 'FELONY',
+    verdict: value,
+  });
+
+  it('takes every count on the plea path (the defendant pleads to all of them)', () => {
+    expect(selectSentenceableCharges([felony, misdemeanor], true, [])).toEqual([felony, misdemeanor]);
+  });
+
+  it('takes only GUILTY counts on the trial path', () => {
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'GUILTY'),
+    ]);
+    expect(selected).toEqual([misdemeanor]);
+  });
+
+  it('leaves the convicted count its own custody type when the prison-eligible count is acquitted', () => {
+    // The regression: exposure was derived from all charges, so the acquitted
+    // felony's PRISON range collapsed away the convicted misdemeanor's JAIL
+    // range — the bench was offered prison on a count the defendant beat, and
+    // no jail on the count they lost.
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'GUILTY'),
+    ]);
+    expect(deriveSentencingExposure(selected).maximumPenalties).toEqual([
+      { type: 'JAIL', unit: 'MONTHS', amount: 6 },
+    ]);
+  });
+
+  it('returns nothing on a full acquittal, so the caller adjourns', () => {
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'NOT_GUILTY'),
+    ]);
+    expect(selected).toEqual([]);
+    expect(deriveSentencingExposure(selected)).toEqual({ mandatoryMinimums: [], maximumPenalties: [] });
   });
 });
