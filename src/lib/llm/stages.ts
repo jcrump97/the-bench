@@ -978,8 +978,9 @@ RULES:
 2. Write "summary" as a dry, allegations-only docket synopsis: what is charged and nothing more, in under 1500 characters. Save every party's framing for the fields below.
 3. Write "statementOfFacts" in the prosecutor's own voice, spoken to the court, in under 1500 characters.
 4. Write "closingArguments.prosecution" and "closingArguments.defense" as each side's general framing and theory of the case, addressed to the court, in under 1200 characters — do not argue any single exhibit's merits here. Do not invent facts (DNA, surveillance footage, tools, witnesses) that the evidence list does not include.
-5. Write one "exhibitPoints" entry for every exhibit in the case, keyed by its evidenceId. Each entry gives what a side would say about that specific exhibit, split by the ruling it might receive: "ifAdmitted" (the exhibit came into evidence) and "ifExcluded" (the court suppressed it). A side that has nothing to say about an exhibit under a given ruling — most often the People have nothing to say about an exhibit that was excluded — writes null for that field instead of inventing a point. Neither side may argue the merits of an excluded exhibit as if it were still in evidence.
-6. ${BENCH_TRIAL_RULE}`;
+5. When established facts about the scene are given, the statement of facts and both closings must rest on exactly those facts — refer to the same events, not a different version of them, and do not add scene details beyond them.
+6. Write one "exhibitPoints" entry for every exhibit in the case, keyed by its evidenceId. Each entry gives what a side would say about that specific exhibit, split by the ruling it might receive: "ifAdmitted" (the exhibit came into evidence) and "ifExcluded" (the court suppressed it). A side that has nothing to say about an exhibit under a given ruling — most often the People have nothing to say about an exhibit that was excluded — writes null for that field instead of inventing a point. Neither side may argue the merits of an excluded exhibit as if it were still in evidence.
+7. ${BENCH_TRIAL_RULE}`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
   const evidenceList = parts.evidence
@@ -993,11 +994,18 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
     `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
     `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
     `Environment: ${parts.environment.description}`,
+    // The canonical scene facts exist precisely so downstream stages stop
+    // paraphrasing `description` and drifting. This stage writes
+    // statementOfFacts and both closings — the most-read narrative surfaces in
+    // the game — and was the one stage still authoring them blind to these.
+    parts.environment.establishedFacts !== undefined
+      ? `Established facts about the scene (state these as the facts of the case; do not contradict or embellish them):\n${parts.environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
+      : '',
     'Evidence exhibits (write exactly one exhibitPoints entry per id below):',
     evidenceList,
     'Witnesses:',
     witnessList,
-  ].join('\n');
+  ].filter((line) => line.length > 0).join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 

@@ -337,6 +337,47 @@ describe('finalizeCasePayload', () => {
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the scene\'s established facts into the prompt', async () => {
+    // This stage writes statementOfFacts and both closings — the most-read
+    // narrative in the game — and was the only stage still authoring them from
+    // `description` alone while InterrogationGen and EvidenceGen got the
+    // canonical facts. That is the drift establishedFacts exists to stop.
+    const facts = ['the rear service door was found unlocked', 'the alarm had been disarmed before entry'];
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: rawValidCase.closingArguments,
+      }),
+    );
+
+    await finalizeCasePayload(API_KEY, MODEL, {
+      ...parts,
+      environment: { ...environment, establishedFacts: facts },
+    });
+
+    const contents = vi.mocked(callGemini).mock.calls[0]![2]!.contents;
+    for (const fact of facts) expect(contents).toContain(fact);
+  });
+
+  it('omits the established-facts block entirely when the environment has none', async () => {
+    // Hand-authored demo cases omit the field; the prompt must not grow an
+    // empty heading for them.
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: rawValidCase.closingArguments,
+      }),
+    );
+
+    await finalizeCasePayload(API_KEY, MODEL, parts);
+
+    expect(vi.mocked(callGemini).mock.calls[0]![2]!.contents).not.toContain('Established facts');
+  });
+
   it('fixes duplicate ids deterministically instead of spending a repair round', async () => {
     // Two charges sharing the same element id — a cross-stage uniqueness
     // violation finalizeCasePayload's own finalize-fields call can't fix,
