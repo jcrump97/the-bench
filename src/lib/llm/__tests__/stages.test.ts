@@ -367,6 +367,43 @@ describe('finalizeCasePayload', () => {
     expect(new Set(elementIds).size).toBe(elementIds.length);
     expect(elementIds[0]).toBe(charge.elements[0]!.id);
   });
+
+  it('drops a stale closingArguments.exhibitPoints reference instead of spending a repair round', async () => {
+    // exhibitPoints is generated against the pre-reconciliation evidence ids
+    // (buildFinalizeContents lists them from `parts`), so a reference the
+    // model got wrong — a hallucinated id, or (on an actual evidence-id
+    // collision) a later duplicate that reconcileCrossStageIds renamed — must
+    // not survive into the assembled case. Failing CaseSchema's referential
+    // check here would turn a mechanical fix into an expensive LLM repair
+    // round, or worse, silently validate a broken reference.
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: {
+          ...rawValidCase.closingArguments,
+          exhibitPoints: [
+            {
+              evidenceId: 'e1',
+              ifAdmitted: { prosecution: 'The People rely on the fingerprint.', defense: null },
+              ifExcluded: { prosecution: null, defense: 'The defense notes its exclusion.' },
+            },
+            {
+              evidenceId: 'nonexistent-exhibit',
+              ifAdmitted: { prosecution: 'A stale reference the model invented.', defense: null },
+              ifExcluded: { prosecution: null, defense: null },
+            },
+          ],
+        },
+      }),
+    );
+
+    const result = await finalizeCasePayload(API_KEY, MODEL, parts);
+    expect(CaseSchema.safeParse(result).success).toBe(true);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    expect(result.closingArguments.exhibitPoints?.map((p) => p.evidenceId)).toEqual(['e1']);
+  });
 });
 
 describe('runPleaNarrative', () => {

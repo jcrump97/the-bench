@@ -952,7 +952,7 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
         defense: { type: 'string', minLength: 1, maxLength: 1200 },
         exhibitPoints: closingExhibitPointGeminiSchema(),
       },
-      required: ['prosecution', 'defense'],
+      required: ['prosecution', 'defense', 'exhibitPoints'],
     },
   },
   required: [
@@ -1058,6 +1058,20 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   // wildly disproportionate answer to a solved problem.
   const reconciled = reconcileCrossStageIds(parts);
 
+  // finalFields.closingArguments.exhibitPoints was generated against
+  // parts.evidence's *pre-reconciliation* ids (buildFinalizeContents lists
+  // them from `parts`, not `reconciled`). On the ordinary path those ids are
+  // unchanged by reconciliation and this is a no-op; on an actual evidence-id
+  // collision, one exhibit's id gets renamed, and any exhibitPoints entry
+  // still naming the old id no longer resolves. Which of the colliding
+  // exhibits a point meant is ambiguous by construction, so — matching
+  // reconcileCrossStageIds's own targetElementId philosophy — a stale
+  // reference is dropped rather than guessed at.
+  const reconciledEvidenceIds = new Set(reconciled.evidence.map((e) => e.id));
+  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) =>
+    reconciledEvidenceIds.has(p.evidenceId),
+  );
+
   const assembled = {
     caseId: finalFields.caseId,
     defendant: parts.defendant,
@@ -1068,7 +1082,11 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     evidence: reconciled.evidence,
     summary: finalFields.summary,
     statementOfFacts: finalFields.statementOfFacts,
-    closingArguments: finalFields.closingArguments,
+    closingArguments: {
+      prosecution: finalFields.closingArguments.prosecution,
+      defense: finalFields.closingArguments.defense,
+      ...(exhibitPoints !== undefined ? { exhibitPoints } : {}),
+    },
   };
 
   const initial = CaseSchema.safeParse(assembled);

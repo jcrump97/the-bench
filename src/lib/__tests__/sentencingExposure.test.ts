@@ -129,7 +129,7 @@ describe('deriveSentencingExposure', () => {
     });
   });
 
-  it('drops a JAIL mandatory minimum too when a PRISON charge is present', () => {
+  it('keeps the stricter minimum (as PRISON) when both a PRISON and a JAIL minimum are present', () => {
     const felony = charge({
       mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
       maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
@@ -139,8 +139,26 @@ describe('deriveSentencingExposure', () => {
       mandatoryMinimums: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
       maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
     });
+    // The felony's own 1-year PRISON floor outranks the misdemeanor's
+    // 30-day JAIL floor, so it survives unchanged.
     expect(deriveSentencingExposure([felony, misdemeanor]).mandatoryMinimums).toEqual([
       { type: 'PRISON', unit: 'YEARS', amount: 1 },
+    ]);
+  });
+
+  it('converts a JAIL minimum to PRISON rather than dropping it when the PRISON charge carries no minimum of its own', () => {
+    const felony = charge({
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    // A real statutory floor must not silently vanish just because the
+    // charge that carried it wasn't the one that decided the custody type.
+    expect(deriveSentencingExposure([felony, misdemeanor]).mandatoryMinimums).toEqual([
+      { type: 'PRISON', unit: 'DAYS', amount: 30 },
     ]);
   });
 
