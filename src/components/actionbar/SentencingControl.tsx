@@ -7,7 +7,7 @@ import { sentencingModifierFromRulings } from '../../lib/pleaAssessment';
 import { describeDemeanor } from '../../lib/demeanorNotes';
 import { SentencePicker } from './SentencePicker';
 import { buildSentences, floorAmountFor } from '../../lib/sentenceBounds';
-import { deriveSentencingExposure } from '../../lib/sentencingExposure';
+import { deriveSentencingExposure, selectSentenceableCharges } from '../../lib/sentencingExposure';
 import type { Sentence } from '../../schemas/gameSchemas';
 
 const PRIMARY_BUTTON =
@@ -40,7 +40,13 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
   // call setAftermathNarrative after the END_STATE transition and trip its
   // phase gate, wiping a finished game to ERROR_STATE.
   const [submitting, setSubmitting] = useState(false);
-  const exposure = activeCase ? deriveSentencingExposure(activeCase.charges) : null;
+  // Exposure is derived from the counts of conviction only — never the whole
+  // charge list. Stays non-null whenever a case is loaded: on a full acquittal
+  // selectSentenceableCharges returns nothing and this is an empty exposure,
+  // which the !anyGuilty adjournment branch below never reads.
+  const exposure = activeCase
+    ? deriveSentencingExposure(selectSentenceableCharges(activeCase.charges, isPleaPath, chargeVerdicts))
+    : null;
   const [amounts, setAmounts] = useState<number[]>(() => {
     if (!exposure) return [];
     // The negotiated sentence seeds the plea path; the trial path opens at

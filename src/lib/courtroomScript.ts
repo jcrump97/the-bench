@@ -163,18 +163,19 @@ function describeOffer(
   return `Pleads to: ${pleadsTo}. Proposed sentence: ${sentence}.${dismissed} ${posture.prosecutionRationale}`;
 }
 
-// The court's voiced line for a resolved decision: what the judge actually
-// said (the store's voice record), else the first authored option matching
-// the recorded choice — deterministic and total, since the schemas' coverage
-// refinement guarantees every choice has at least one option.
 // Assembles one side's closing argument from the base text plus its
 // per-exhibit fragments, picking each fragment's ifAdmitted/ifExcluded
 // variant off the ruling the player actually entered — so the argument can
-// never reference an exhibit's merits under a ruling that didn't happen. An
-// exhibit with no ruling on record (the plea path, where Act 2 never ran)
-// defaults to ADMITTED: nothing was litigated, so nothing was suppressed.
+// never reference an exhibit's merits under a ruling that didn't happen.
 // Absent `exhibitPoints` (hand-authored demo cases) leaves the base text
 // untouched — those are already internally consistent by construction.
+//
+// The `?? 'ADMITTED'` default is unreachable in the emitted script and exists
+// only to keep this function total. Closings are emitted on the trial path
+// alone, after the loop above has ruled on every exhibit (an unresolved motion
+// returns early), so every exhibit already has a ruling by the time this runs.
+// The plea path never reaches a closing at all — an accepted plea jumps
+// straight to allocution and sentencing.
 function assembleClosingArgument(
   base: string,
   exhibitPoints: CasePayload['closingArguments']['exhibitPoints'],
@@ -192,6 +193,10 @@ function assembleClosingArgument(
   return [base, ...fragments].join(' ');
 }
 
+// The court's voiced line for a resolved decision: what the judge actually
+// said (the store's voice record), else the first authored option matching
+// the recorded choice — deterministic and total, since the schemas' coverage
+// refinement guarantees every choice has at least one option.
 function spokenLine(
   recorded: string | undefined,
   options: readonly { choice: string; lineText: string }[] | undefined,

@@ -4,6 +4,7 @@ import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource'
 import type { Charge } from '../../schemas/gameSchemas';
 import { getOrSelectModel } from './modelSelection';
 import {
+  GameServiceError,
   runStatuteSelection,
   runEnvironmentGen,
   runCharacterGen,
@@ -47,7 +48,12 @@ export function createGameService(apiKey: string): CaseSource {
       const chargeVoices = await runVerdictVoice(apiKey, model, charges, defendant);
       const chargesWithVoice: Charge[] = charges.map((charge) => {
         const voice = chargeVoices.find((c) => c.id === charge.id);
-        if (!voice) throw new Error(`VerdictVoice missing for charge ${charge.id}`);
+        // runVerdictVoice's schema now requires an entry for every requested
+        // charge id, so a miss here is unreachable in practice — kept as a
+        // typed, stage-prefixed guard rather than a bare Error so that if it
+        // ever does fire, the Mistrial screen names the stage like every other
+        // pipeline failure instead of reporting a generic `generateCase`.
+        if (!voice) throw new GameServiceError(`[VerdictVoice] no voiced verdict layer returned for charge ${charge.id}`);
         return { ...charge, ...voice };
       });
 

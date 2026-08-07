@@ -392,6 +392,43 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
     expect(CasePayloadSchema.safeParse(dupCharge).success).toBe(false);
   });
 
+  it('rejects two exhibitPoints entries for the same exhibit', () => {
+    // Every other id namespace in this refinement is checked for uniqueness;
+    // exhibitPoints was only checked referentially. A duplicate is not
+    // harmless — courtroomScript appends one fragment per entry, so the
+    // closing would argue the same exhibit twice.
+    const point = {
+      evidenceId: rawValidCase.evidence[0]!.id,
+      ifAdmitted: { prosecution: 'The tape speaks for itself.', defense: null },
+      ifExcluded: { prosecution: null, defense: 'The court has excluded it.' },
+    };
+    const duplicated = {
+      ...rawValidCase,
+      closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [point, point] },
+    };
+
+    const result = CasePayloadSchema.safeParse(duplicated);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.message.includes('Duplicate closingArguments.exhibitPoints'))).toBe(true);
+    }
+  });
+
+  it('accepts one exhibitPoints entry per exhibit', () => {
+    const withPoints = {
+      ...rawValidCase,
+      closingArguments: {
+        ...rawValidCase.closingArguments,
+        exhibitPoints: rawValidCase.evidence.map((e) => ({
+          evidenceId: e!.id,
+          ifAdmitted: { prosecution: 'It came in.', defense: null },
+          ifExcluded: { prosecution: null, defense: 'It stayed out.' },
+        })),
+      },
+    };
+    expect(CasePayloadSchema.safeParse(withPoints).success).toBe(true);
+  });
+
   it('still rejects evidence referencing an unknown targetElementId', () => {
     const danglingRef = {
       ...rawValidCase,
