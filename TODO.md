@@ -24,6 +24,27 @@ the PRISON/JAIL collapse. One modelling gap is deliberately left open.
       both options stay reachable. Until then PRISON governs — the safe
       direction — and `sentencingExposure.test.ts` guards the invariant so the
       shortcut cannot be reintroduced by accident.
+- [ ] **S2 — a converted minimum keeps its own unit, so a negotiated plea
+      sentence can be unimposable.** Pre-existing on `main` (predates the
+      verdict-scoping and clamp fixes; neither causes it). The JAIL→PRISON
+      minimum conversion retypes but does not re-unit
+      (`{...jailMinimum, type: 'PRISON'}`), so the derived floor and ceiling can
+      disagree on unit. Reproduced: felony `[PRISON 3 YEARS]` + misdemeanor
+      `[JAIL 35 MONTHS]` collapses to max `{PRISON, YEARS, 3}` / min
+      `{PRISON, MONTHS, 35}`. A MODERATE offer discounts 3 YEARS to 2, falls
+      below the floor, and `discountSentences` returns the floor verbatim —
+      `[{PRISON, MONTHS, 35}]`. `SentencingControl`'s seed then matches on both
+      `type` **and** `unit`, so the `find` misses and the picker seeds at the
+      ceiling; `floorAmountFor` converts the floor into the ceiling's unit
+      (`ceil(1064.58 / 365)` = 3), leaving floor == ceiling == 3 YEARS. The
+      record narrates a 35-month negotiated term the court then cannot impose.
+      The fix needs a rounding-direction decision that is not obvious: rounding
+      a converted floor *up* to the ceiling's unit raises a statutory minimum
+      (30 DAYS would become 1 YEAR, which an existing test rightly pins against),
+      and rounding *down* discards it. Likely answer is to keep the exposure in
+      day-equivalents and let the picker present the finest unit, rather than
+      converting per-entry — which touches `sentenceBounds`, `discountSentences`,
+      and the picker together, so it wants its own change.
 
 ## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
 

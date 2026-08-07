@@ -528,6 +528,20 @@ describe('runVerdictVoice', () => {
     expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('more than one entry');
   });
 
+  it('accepts one entry when two charges collide on the same id', async () => {
+    // StatuteSelection can emit colliding charge ids; reconcileCrossStageIds
+    // repairs them, but only in finalizeCasePayload, three stages later. The
+    // duplicate-entry refinement must not reject a response that correctly
+    // returns one entry per *distinct* id in the meantime.
+    const collided = { ...chargeCore, elements: [{ id: 'c-other-el', description: 'An element.', isProven: false }] };
+    mockCallsWith(JSON.stringify({ charges: [voiceFor(charge.id)] }));
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore, collided], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+  });
+
   it('puts each charge id on its own labelled field in the prompt', async () => {
     mockCallsWith(JSON.stringify({ charges: [voiceFor(charge.id)] }));
 

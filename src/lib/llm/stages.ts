@@ -1242,7 +1242,14 @@ export async function runVerdictVoice(
     VERDICT_VOICE_SYSTEM,
     (feedback) => buildVerdictVoiceContents(charges, defendant, feedback),
     VERDICT_VOICE_GEMINI_SCHEMA,
-    buildVerdictVoiceSchema(charges.map((c) => c.id)),
+    // Deduplicated: StatuteSelection can emit two charges sharing an id (the
+    // collision class reconcileCrossStageIds repairs, but not until
+    // finalizeCasePayload, three stages later). Passing the raw list would make
+    // the duplicate-entry refinement reject the response that correctly follows
+    // "one entry per count", burning a retry on a defect the model did not
+    // cause. One voiced layer per distinct id is all this stage can meaningfully
+    // ask for.
+    buildVerdictVoiceSchema([...new Set(charges.map((c) => c.id))]),
   );
   return data.charges;
 }
