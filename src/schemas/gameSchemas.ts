@@ -181,6 +181,35 @@ function addMinimumCeilingIssues(
   }
 }
 
+// A case's charges may not mix PRISON-type and JAIL-type sentences: custody
+// time is served in exactly one facility type per case — county jail if
+// every custodial count is jail-eligible (including a realigned felony under
+// Cal. Penal Code § 1170(h)), state prison otherwise — never a docket that
+// narrates both a prison term and a separate jail term as if a defendant
+// serves two custody sentences in two facilities. Two independent live
+// qa-agent runs flagged exactly this combination as unrealistic. Case-level
+// (across all charges), not per-charge: a single charge's own minimums/
+// maximums already can't mix types via addMinimumCeilingIssues's same-type
+// pairing, but nothing previously stopped charge A being PRISON-only and
+// charge B being JAIL-only within the same case.
+export function addSentencingTypeExclusivityIssues(
+  charges: readonly { mandatoryMinimums: z.infer<typeof SentenceSchema>[]; maximumPenalties: z.infer<typeof SentenceSchema>[] }[],
+  ctx: z.RefinementCtx,
+): void {
+  const types = new Set<z.infer<typeof SentenceSchema>['type']>();
+  for (const charge of charges) {
+    for (const s of [...charge.mandatoryMinimums, ...charge.maximumPenalties]) {
+      if (s.type === 'PRISON' || s.type === 'JAIL') types.add(s.type);
+    }
+  }
+  if (types.has('PRISON') && types.has('JAIL')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'A case\'s charges may not mix PRISON-type and JAIL-type sentences — custody time is served in one facility type per case, never both',
+    });
+  }
+}
+
 // The closed decision vocabularies. Every judge decision resolves to one of
 // these values; the voiced dialogue below (reactions, judge-line options)
 // keys off them, so authored or LLM text can never invent an outcome the
@@ -554,6 +583,8 @@ export const CaseSchema = z.strictObject({
   // defendant. This catches the VerdictVoice/wrong-person class of error that
   // prompt text alone cannot guarantee against.
   addDefendantNameIssues(v, ctx);
+
+  addSentencingTypeExclusivityIssues(v.charges, ctx);
 });
 
 export const CasePayloadSchema = CaseSchema;
