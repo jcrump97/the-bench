@@ -304,8 +304,15 @@ const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
     timeOfDay: { type: 'string', enum: ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'] },
     weather: { type: 'string', enum: ['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A'] },
     description: { type: 'string', maxLength: 500 },
+    establishedFacts: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 6,
+      items: { type: 'string', minLength: 1, maxLength: 200 },
+    },
+    interrogationLocation: { type: 'string', minLength: 1, maxLength: 200 },
   },
-  required: ['locationType', 'timeOfDay', 'weather', 'description'],
+  required: ['locationType', 'timeOfDay', 'weather', 'description', 'establishedFacts', 'interrogationLocation'],
 };
 
 const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
@@ -562,11 +569,13 @@ const ENVIRONMENT_GEN_GEMINI_SCHEMA: GeminiSchema = {
 
 const ENVIRONMENT_GEN_SYSTEM = `ROLE: You are an investigator recording the scene of an alleged offense for a California criminal case.
 
-TASK: Give the location type, the time of day, the weather, and a description of where and when the offense is alleged to have happened.
+TASK: Give the location type, the time of day, the weather, a description of where and when the offense is alleged to have happened, a short list of established facts about the scene, and where a custodial interrogation of the defendant would take place.
 
 RULES:
 1. Keep the description under 500 characters and concrete — the physical detail an investigator would put in a report.
-2. Choose "N/A" for weather when the scene is indoors or digital.`;
+2. Choose "N/A" for weather when the scene is indoors or digital.
+3. Write "establishedFacts" as 3-6 short, standalone statements of fact about the scene (e.g. "the rear service door was found unlocked", "the store's alarm system had been disarmed before entry was made"). Other writers on this case will quote these facts directly in witness statements, testimony, and argument — state each one once, precisely, so nothing downstream has to guess or re-derive it.
+4. Write "interrogationLocation" as a real-sounding police facility — a station, precinct house, or sheriff's substation and its interview room — and never the offense address itself. A custodial interrogation happens at a police facility, not at the scene of the alleged offense.`;
 
 function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the environment for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
@@ -653,9 +662,10 @@ TASK: Write the interview transcript — 4 to 24 lines, alternating naturally be
 RULES:
 1. Dramatize exactly the outcome you are given, and echo that "outcome" and "challengeGround" back unchanged. What the interview produced, and the ground the defense will attack it on, are already decided; your job is how the room actually sounded.
 2. Write spoken dialogue — the detective's questions and the defendant's answers, as a tape would capture them.
-3. Ground the interview in the scene you are given (the location, time, and weather). The questions and answers must refer to that setting, not a generic one.
-4. Keep each line under 400 characters.
-5. ${BENCH_TRIAL_RULE}`;
+3. The interview happens at the interrogation location you are given, not at the offense scene — the room, not the alleged crime, is where this dialogue is physically set. The offense scene is background the detective and defendant may discuss, never the setting of the interview itself.
+4. When established facts about the offense are given, the detective's questions and the defendant's answers must not contradict them — refer to the same facts, not a different version of events.
+5. Keep each line under 400 characters.
+6. ${BENCH_TRIAL_RULE}`;
 
 function buildInterrogationGenContents(
   defendant: Defendant,
@@ -663,12 +673,17 @@ function buildInterrogationGenContents(
   profile: Extract<InterrogationProfile, { outcome: 'FULL_CONFESSION' | 'PARTIAL_ADMISSION' | 'DENIAL' }>,
   feedback: string | undefined,
 ): string {
+  const interrogationLocation = environment.interrogationLocation ?? 'a police interview room (no address given — invent a plausible station)';
   const base = [
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
-    `Scene: ${environment.description}`,
+    `Interrogation location (set the dialogue here): ${interrogationLocation}`,
+    `Offense scene (background only — do not use this as the interrogation's setting): ${environment.description}`,
+    environment.establishedFacts !== undefined
+      ? `Established facts about the offense (do not contradict these):\n${environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
+      : '',
     `Required outcome: ${profile.outcome}.`,
     `Required challengeGround: ${profile.challengeGround}.`,
-  ].join('\n');
+  ].filter((line) => line.length > 0).join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
@@ -782,8 +797,10 @@ RULES:
 4. Point each exhibit's "targetElementId" at one of the element ids you are given, or set it to null.
 5. Give every exhibit and every witness an id unique across the whole case.
 6. Write each witness's "directExamination" and "crossExamination" as first-person testimony the witness delivers from the stand, in a continuous narrative. Do not write counsel's questions mixed into the answer — the transcript voices the witness alone.
-7. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
-8. ${BENCH_TRIAL_RULE}`;
+7. Cross-examination may attack a witness's memory, bias, or interpretation, but must not assert a fact that flatly contradicts what the same witness already stated on direct examination (a different timeline, a different sequence of actions) — unless the direct examination itself sets up that contradiction as a prior inconsistent statement being impeached. A witness's account of what happened stays the same account under cross; only how much the court should trust it is in play.
+8. When established facts about the scene are given, every witness statement, disclosure, and testimony must not contradict them — refer to the same facts, not a different version of events.
+9. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
+10. ${BENCH_TRIAL_RULE}`;
 
 function buildEvidenceGenContents(
   charges: ChargeCore[],
@@ -797,12 +814,15 @@ function buildEvidenceGenContents(
     `Charges: ${charges.map((c) => c.name).join(', ')}.`,
     `Valid element ids: ${elementIds.join(', ')}.`,
     `Environment: ${environment.description}`,
+    environment.establishedFacts !== undefined
+      ? `Established facts about the scene (quote or directly reference these; do not restate them in a way that could conflict):\n${environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
+      : '',
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
     'Produce at least 3 evidence items and at least 2 witnesses — the response is rejected if either count falls short.',
     interrogation !== null
       ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
       : 'Do not include any evidence item with type "INTERROGATION" — no usable tape exists for this defendant.',
-  ].join('\n');
+  ].filter((line) => line.length > 0).join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
@@ -839,6 +859,12 @@ export async function runEvidenceGen(
 // ============================================================================
 // Stage 6 — finalizeCasePayload (final assembly + cross-stage refinements)
 // ============================================================================
+const ClosingExhibitPointFieldSchema = z.object({
+  evidenceId: z.string().min(1).max(40),
+  ifAdmitted: z.object({ prosecution: z.string().max(400).nullable(), defense: z.string().max(400).nullable() }),
+  ifExcluded: z.object({ prosecution: z.string().max(400).nullable(), defense: z.string().max(400).nullable() }),
+});
+
 const CaseFinalizationFieldsSchema = z.object({
   caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/),
   summary: z.string().min(1).max(1500),
@@ -846,8 +872,38 @@ const CaseFinalizationFieldsSchema = z.object({
   closingArguments: z.object({
     prosecution: z.string().min(1).max(1200),
     defense: z.string().min(1).max(1200),
+    exhibitPoints: z.array(ClosingExhibitPointFieldSchema).optional(),
   }),
 });
+
+function closingExhibitPointGeminiSchema(): GeminiSchema {
+  return {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        evidenceId: { type: 'string', minLength: 1, maxLength: 40 },
+        ifAdmitted: {
+          type: 'object',
+          properties: {
+            prosecution: { type: 'string', maxLength: 400, nullable: true },
+            defense: { type: 'string', maxLength: 400, nullable: true },
+          },
+          required: ['prosecution', 'defense'],
+        },
+        ifExcluded: {
+          type: 'object',
+          properties: {
+            prosecution: { type: 'string', maxLength: 400, nullable: true },
+            defense: { type: 'string', maxLength: 400, nullable: true },
+          },
+          required: ['prosecution', 'defense'],
+        },
+      },
+      required: ['evidenceId', 'ifAdmitted', 'ifExcluded'],
+    },
+  };
+}
 
 const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
@@ -857,8 +913,12 @@ const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
     statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
     closingArguments: {
       type: 'object',
-      properties: { prosecution: { type: 'string', minLength: 1, maxLength: 1200 }, defense: { type: 'string', minLength: 1, maxLength: 1200 } },
-      required: ['prosecution', 'defense'],
+      properties: {
+        prosecution: { type: 'string', minLength: 1, maxLength: 1200 },
+        defense: { type: 'string', minLength: 1, maxLength: 1200 },
+        exhibitPoints: closingExhibitPointGeminiSchema(),
+      },
+      required: ['prosecution', 'defense', 'exhibitPoints'],
     },
   },
   required: ['caseId', 'summary', 'statementOfFacts', 'closingArguments'],
@@ -887,8 +947,12 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
     statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
     closingArguments: {
       type: 'object',
-      properties: { prosecution: { type: 'string', minLength: 1, maxLength: 1200 }, defense: { type: 'string', minLength: 1, maxLength: 1200 } },
-      required: ['prosecution', 'defense'],
+      properties: {
+        prosecution: { type: 'string', minLength: 1, maxLength: 1200 },
+        defense: { type: 'string', minLength: 1, maxLength: 1200 },
+        exhibitPoints: closingExhibitPointGeminiSchema(),
+      },
+      required: ['prosecution', 'defense', 'exhibitPoints'],
     },
   },
   required: [
@@ -907,14 +971,15 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
 
 const FINALIZE_SYSTEM = `ROLE: You are assembling the narrative face of a California criminal case file.
 
-TASK: Write the case number, the docket synopsis, the People's statement of facts, and both sides' closing arguments.
+TASK: Write the case number, the docket synopsis, the People's statement of facts, both sides' closing arguments, and — for each exhibit — the closing point each side would add about it under each possible motion ruling.
 
 RULES:
 1. Format the case number as two digits, "-CR-", then five digits — for example 24-CR-00042.
 2. Write "summary" as a dry, allegations-only docket synopsis: what is charged and nothing more, in under 1500 characters. Save every party's framing for the fields below.
 3. Write "statementOfFacts" in the prosecutor's own voice, spoken to the court, in under 1500 characters.
-4. Write each closing argument in that advocate's voice, addressed to the court, in under 1200 characters. The closings must argue the actual exhibits and witnesses in the case — do not invent facts (DNA, surveillance footage, tools, witnesses) that the evidence list does not include.
-5. ${BENCH_TRIAL_RULE}`;
+4. Write "closingArguments.prosecution" and "closingArguments.defense" as each side's general framing and theory of the case, addressed to the court, in under 1200 characters — do not argue any single exhibit's merits here. Do not invent facts (DNA, surveillance footage, tools, witnesses) that the evidence list does not include.
+5. Write one "exhibitPoints" entry for every exhibit in the case, keyed by its evidenceId. Each entry gives what a side would say about that specific exhibit, split by the ruling it might receive: "ifAdmitted" (the exhibit came into evidence) and "ifExcluded" (the court suppressed it). A side that has nothing to say about an exhibit under a given ruling — most often the People have nothing to say about an exhibit that was excluded — writes null for that field instead of inventing a point. Neither side may argue the merits of an excluded exhibit as if it were still in evidence.
+6. ${BENCH_TRIAL_RULE}`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
   const evidenceList = parts.evidence
@@ -928,7 +993,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
     `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
     `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
     `Environment: ${parts.environment.description}`,
-    'Evidence exhibits:',
+    'Evidence exhibits (write exactly one exhibitPoints entry per id below):',
     evidenceList,
     'Witnesses:',
     witnessList,
@@ -993,6 +1058,20 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   // wildly disproportionate answer to a solved problem.
   const reconciled = reconcileCrossStageIds(parts);
 
+  // finalFields.closingArguments.exhibitPoints was generated against
+  // parts.evidence's *pre-reconciliation* ids (buildFinalizeContents lists
+  // them from `parts`, not `reconciled`). On the ordinary path those ids are
+  // unchanged by reconciliation and this is a no-op; on an actual evidence-id
+  // collision, one exhibit's id gets renamed, and any exhibitPoints entry
+  // still naming the old id no longer resolves. Which of the colliding
+  // exhibits a point meant is ambiguous by construction, so — matching
+  // reconcileCrossStageIds's own targetElementId philosophy — a stale
+  // reference is dropped rather than guessed at.
+  const reconciledEvidenceIds = new Set(reconciled.evidence.map((e) => e.id));
+  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) =>
+    reconciledEvidenceIds.has(p.evidenceId),
+  );
+
   const assembled = {
     caseId: finalFields.caseId,
     defendant: parts.defendant,
@@ -1003,7 +1082,11 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     evidence: reconciled.evidence,
     summary: finalFields.summary,
     statementOfFacts: finalFields.statementOfFacts,
-    closingArguments: finalFields.closingArguments,
+    closingArguments: {
+      prosecution: finalFields.closingArguments.prosecution,
+      defense: finalFields.closingArguments.defense,
+      ...(exhibitPoints !== undefined ? { exhibitPoints } : {}),
+    },
   };
 
   const initial = CaseSchema.safeParse(assembled);
@@ -1060,16 +1143,20 @@ TASK: For every charge in the case, write the courtroom's reaction to each possi
 RULES:
 1. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
 2. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
-3. Keep each judge line under 300 characters and each reaction line under 600.
-4. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.`;
+3. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
+4. Keep each judge line under 300 characters and each reaction line under 600.
+5. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.`;
 
 function buildVerdictVoiceContents(
   charges: ChargeCore[],
   defendant: Defendant,
   feedback: string | undefined,
 ): string {
+  const orderedCharges = charges
+    .map((c, index) => `${index + 1} of ${charges.length} (id ${c.id}): ${c.name}`)
+    .join('; ');
   const base = [
-    `Charges: ${charges.map((c) => `${c.id} = ${c.name}`).join(', ')}.`,
+    `Charges, in the fixed order they are resolved at trial: ${orderedCharges}.`,
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
   ].join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
@@ -1147,8 +1234,9 @@ TASK: Write each party's plea rationale as spoken in open court — and, where t
 RULES:
 1. Write only what a party would say aloud, on the record, with the other side listening. Keep strategy, internal deliberation, and privileged advice out of it.
 2. Cover both outcomes in "pleaRulingOptions": at least one option with choice "ACCEPT" and at least one with choice "REJECT".
-3. Keep each rationale under 1000 characters, the allocution under 800, judge lines under 300, and reaction lines under 600.
-4. ${BENCH_TRIAL_RULE} Both sides are weighing this offer against a trial before this judge.`;
+3. The People's statement of facts is already on the record before this offer is discussed — do not re-argue or restate it as if for the first time. Reference it as already known ("as the People have stated") when the rationale needs it.
+4. Keep each rationale under 1000 characters, the allocution under 800, judge lines under 300, and reaction lines under 600.
+5. ${BENCH_TRIAL_RULE} Both sides are weighing this offer against a trial before this judge.`;
 
 function buildPleaNarrativeContents(
   payload: CasePayload,
@@ -1159,10 +1247,11 @@ function buildPleaNarrativeContents(
 ): string {
   const chargeNames = payload.charges.map((c) => c.name).join(', ');
   const defendantName = `${payload.defendant.firstName} ${payload.defendant.lastName}`;
+  const factsLine = `Already on the record — the People's statement of facts: ${payload.statementOfFacts}`;
 
   let base: string;
   if (band === 'WEAK' || offerTerms === null) {
-    base = `Case: ${chargeNames}. Defendant: ${defendantName}. The prosecution is not extending an offer; write the People's rationale for proceeding without one.`;
+    base = `Case: ${chargeNames}. Defendant: ${defendantName}. ${factsLine} The prosecution is not extending an offer; write the People's rationale for proceeding without one.`;
   } else {
     const sentenceText = offerTerms.proposedSentence
       .map((s) => `${s.amount} ${s.unit} ${s.type}${s.type === 'PROBATION' ? ` (${s.conditions.join(', ')})` : ''}`)
@@ -1170,6 +1259,7 @@ function buildPleaNarrativeContents(
     base = [
       `Case: ${chargeNames}.`,
       `Defendant: ${defendantName}.`,
+      factsLine,
       `Offer terms: defendant pleads to ${offerTerms.pleadsToChargeIds.length === payload.charges.length ? 'all charges' : `charges ${offerTerms.pleadsToChargeIds.join(', ')}`}.`,
       `Proposed sentence: ${sentenceText}.`,
       `Defense posture: ${defensePosture} the offer.`,

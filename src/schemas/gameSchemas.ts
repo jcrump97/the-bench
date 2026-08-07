@@ -42,6 +42,12 @@ function addDefendantNameIssues(
   push('statementOfFacts', caseData.statementOfFacts);
   push('closingArguments.prosecution', caseData.closingArguments.prosecution);
   push('closingArguments.defense', caseData.closingArguments.defense);
+  for (const point of caseData.closingArguments.exhibitPoints ?? []) {
+    push(`closingArguments.exhibitPoints.${point.evidenceId}.ifAdmitted.prosecution`, point.ifAdmitted.prosecution);
+    push(`closingArguments.exhibitPoints.${point.evidenceId}.ifAdmitted.defense`, point.ifAdmitted.defense);
+    push(`closingArguments.exhibitPoints.${point.evidenceId}.ifExcluded.prosecution`, point.ifExcluded.prosecution);
+    push(`closingArguments.exhibitPoints.${point.evidenceId}.ifExcluded.defense`, point.ifExcluded.defense);
+  }
 
   for (const charge of caseData.charges) {
     for (const reaction of charge.verdictReactions.GUILTY) push(`charge.${charge.id}.verdictReactions.GUILTY`, reaction.text);
@@ -172,6 +178,34 @@ function addMinimumCeilingIssues(
     if (maxDays !== null && maxDays < minDays) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `mandatoryMinimums ${min.type} entry exceeds its matching maximumPenalties entry` });
     }
+  }
+}
+
+// A single derived sentence — a plea offer's proposedSentence, or an
+// actually imposed sentence — may not combine a PRISON-type entry with a
+// JAIL-type entry. This is deliberately NOT a constraint on a case's raw
+// per-charge statutory ranges: a felony charge legitimately carries a
+// PRISON maximum and a misdemeanor charge legitimately carries a JAIL
+// maximum in the very same case — that combination is normal, not a bug.
+// The bug two independent live qa-agent runs flagged was narrating both as
+// if separately, additively imposed ("N years in prison, and also M months
+// in jail"), when in reality a case aggregates into one commitment (Cal.
+// Penal Code § 669) and one custody type governs. deriveSentencingExposure
+// enforces that by construction (it never emits a mixed derived array), so
+// this is a defensive backstop on the derived schemas, not an active gate —
+// consistent with this codebase's other structural backstops (e.g.
+// addDefendantNameIssues) for invariants that hold by construction but are
+// cheap to also verify at the trust boundary.
+export function addSentencingTypeExclusivityIssues(
+  sentences: readonly z.infer<typeof SentenceSchema>[],
+  ctx: z.RefinementCtx,
+): void {
+  const types = new Set(sentences.map((s) => s.type));
+  if (types.has('PRISON') && types.has('JAIL')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'A sentence may not combine a PRISON-type entry with a JAIL-type entry — a case aggregates into one custody type, never both',
+    });
   }
 }
 
@@ -395,6 +429,20 @@ export const EnvironmentSchema = z.strictObject({
   timeOfDay: z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']),
   weather: z.enum(['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A']),
   description: z.string().max(500),
+  // Canonical, quotable facts about the scene — meant to be threaded
+  // verbatim into every downstream LLM stage that needs to stay consistent
+  // with them (interrogation dialogue, witness statements, closing
+  // arguments), rather than each stage re-deriving or paraphrasing them from
+  // `description` and risking drift (a live run once had a witness describe
+  // an alarm dispatch when the established fact was that the alarm had been
+  // disabled). Optional: hand-authored demo cases have no downstream LLM
+  // stage to keep consistent, so they can omit it.
+  establishedFacts: z.array(z.string().min(1).max(200)).min(1).max(6).optional(),
+  // Where a custodial interrogation of the defendant takes place, kept
+  // distinct from the offense scene in `description` — a live run once had
+  // InterrogationGen default to the crime-scene address for lack of a
+  // location of its own. Optional for the same reason as establishedFacts.
+  interrogationLocation: z.string().min(1).max(200).optional(),
 });
 
 const offerTerms = {
@@ -413,7 +461,9 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
   }),
   z.strictObject({ status: z.literal('REJECTED_BY_DEFENSE'),    ...offerTerms }),
   z.strictObject({ status: z.literal('PENDING_JUDICIAL_REVIEW'), ...offerTerms }),
-]);
+]).superRefine((v, ctx) => {
+  if (v.status !== 'NO_OFFER') addSentencingTypeExclusivityIssues(v.proposedSentence, ctx);
+});
 
 // The LLM's only plea contribution: narrative color, not structure. All plea
 // structure (status, proposed sentence, charge partition) is computed
@@ -467,6 +517,28 @@ export const CaseSchema = z.strictObject({
   closingArguments: z.strictObject({
     prosecution: noJury(z.string().min(1).max(1200)).describe("The People's closing argument, in character."),
     defense: noJury(z.string().min(1).max(1200)).describe("The defense's closing argument, in character."),
+    // Per-exhibit closing fragments, keyed by the same ADMITTED/EXCLUDED
+    // vocabulary as rulingReactions, assembled onto the base prosecution/
+    // defense text deterministically at render time (courtroomScript.ts)
+    // according to the ruling the player actually entered — so a closing can
+    // never argue the merits of an exhibit the court suppressed. A live run
+    // once had both closings argue a custodial confession the court had
+    // already excluded, because the flat prosecution/defense strings were
+    // authored before any motion was ruled on and nothing re-checked them
+    // against the outcome. Optional: hand-authored demo cases are already
+    // internally consistent and may omit it, keeping the flat text as the
+    // whole argument.
+    exhibitPoints: z.array(z.strictObject({
+      evidenceId: z.string().min(1).max(40),
+      ifAdmitted: z.strictObject({
+        prosecution: noJury(z.string().max(400)).nullable().describe("What the People add about this exhibit when it was admitted; null to add nothing."),
+        defense: noJury(z.string().max(400)).nullable().describe("What the defense adds about this exhibit when it was admitted; null to add nothing."),
+      }),
+      ifExcluded: z.strictObject({
+        prosecution: noJury(z.string().max(400)).nullable().describe("What the People add about this exhibit when it was excluded; null to add nothing."),
+        defense: noJury(z.string().max(400)).nullable().describe("What the defense adds about this exhibit when it was excluded; null to add nothing."),
+      }),
+    })).optional(),
   }),
 }).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
@@ -494,6 +566,11 @@ export const CaseSchema = z.strictObject({
     evidenceIds.add(ev.id);
     if (ev.targetElementId !== null && !elementIds.has(ev.targetElementId)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Evidence ${ev.id} references unknown element: ${ev.targetElementId}` });
+    }
+  }
+  for (const point of v.closingArguments.exhibitPoints ?? []) {
+    if (!evidenceIds.has(point.evidenceId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `closingArguments.exhibitPoints references unknown evidence: ${point.evidenceId}` });
     }
   }
   for (const w of v.witnesses) {
@@ -583,7 +660,7 @@ export const FinalResultSchema = z.discriminatedUnion('resolutionPath', [
     verdict:        VerdictSchema,
     ...finalResultBase,
   }),
-]);
+]).superRefine((v, ctx) => addSentencingTypeExclusivityIssues(v.imposedSentence, ctx));
 
 // ==========================================
 // 8. STATE MACHINE SCHEMA
@@ -622,3 +699,4 @@ export type ReactionLine        = z.infer<typeof ReactionLineSchema>;
 export type ReactionBeat        = z.infer<typeof ReactionBeatSchema>;
 export type InterrogationLine   = z.infer<typeof InterrogationLineSchema>;
 export type Interrogation       = z.infer<typeof InterrogationSchema>;
+export type ClosingArgumentExhibitPoint = NonNullable<CasePayload['closingArguments']['exhibitPoints']>[number];

@@ -108,4 +108,65 @@ describe('deriveSentencingExposure', () => {
   it('returns empty minimums when no charge carries one', () => {
     expect(deriveSentencingExposure([charge({}), charge({})]).mandatoryMinimums).toEqual([]);
   });
+
+  it('collapses to PRISON when a case mixes a prison-eligible charge with a jail-only charge', () => {
+    const felony = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
+      ],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    expect(deriveSentencingExposure([felony, misdemeanor])).toEqual({
+      mandatoryMinimums: [],
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'FINE', unit: 'DOLLARS', amount: 10000 },
+      ],
+    });
+  });
+
+  it('keeps the stricter minimum (as PRISON) when both a PRISON and a JAIL minimum are present', () => {
+    const felony = charge({
+      mandatoryMinimums: [{ type: 'PRISON', unit: 'YEARS', amount: 1 }],
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    // The felony's own 1-year PRISON floor outranks the misdemeanor's
+    // 30-day JAIL floor, so it survives unchanged.
+    expect(deriveSentencingExposure([felony, misdemeanor]).mandatoryMinimums).toEqual([
+      { type: 'PRISON', unit: 'YEARS', amount: 1 },
+    ]);
+  });
+
+  it('converts a JAIL minimum to PRISON rather than dropping it when the PRISON charge carries no minimum of its own', () => {
+    const felony = charge({
+      maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'DAYS', amount: 30 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+    // A real statutory floor must not silently vanish just because the
+    // charge that carried it wasn't the one that decided the custody type.
+    expect(deriveSentencingExposure([felony, misdemeanor]).mandatoryMinimums).toEqual([
+      { type: 'PRISON', unit: 'DAYS', amount: 30 },
+    ]);
+  });
+
+  it('leaves an all-JAIL case untouched (no PRISON to collapse toward)', () => {
+    const a = charge({ classification: 'MISDEMEANOR', maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }] });
+    const b = charge({ classification: 'MISDEMEANOR', maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 3 }] });
+    expect(deriveSentencingExposure([a, b]).maximumPenalties).toEqual([
+      { type: 'JAIL', unit: 'MONTHS', amount: 9 },
+    ]);
+  });
 });

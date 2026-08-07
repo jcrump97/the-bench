@@ -1,4 +1,4 @@
-import type { Charge, Sentence } from '../schemas/gameSchemas';
+import { sentenceDayEquivalent, type Charge, type Sentence } from '../schemas/gameSchemas';
 import { UNIT_DAYS } from './sentenceBounds';
 
 // Case-level sentencing exposure, derived deterministically from per-charge
@@ -73,8 +73,48 @@ function groupByType(sentences: Sentence[]): SentenceGroup[] {
 }
 
 export function deriveSentencingExposure(charges: Charge[]): SentencingExposure {
-  return {
-    mandatoryMinimums: groupByType(charges.flatMap(c => c.mandatoryMinimums)).map(largestMinimum),
-    maximumPenalties: groupByType(charges.flatMap(c => c.maximumPenalties)).map(sumMaxima),
-  };
+  const mandatoryMinimums = groupByType(charges.flatMap(c => c.mandatoryMinimums)).map(largestMinimum);
+  const maximumPenalties = groupByType(charges.flatMap(c => c.maximumPenalties)).map(sumMaxima);
+
+  // A case commonly and correctly combines a state-prison-eligible charge
+  // (a felony) with a county-jail-only charge (a misdemeanor, or a realigned
+  // felony under Cal. Penal Code § 1170(h)) — that is not the problem. What
+  // doesn't happen is a defendant serving two separate, additive custody
+  // terms in two different facilities: when counts of different
+  // classification are sentenced together, the whole commitment aggregates
+  // into one (Cal. Penal Code § 669) — if any count requires state prison,
+  // that governs, and jail time on the other counts runs concurrent and is
+  // absorbed into it. So the case-level exposure collapses to PRISON alone
+  // whenever both types are present, rather than narrating "N years in
+  // prison, and also M months in jail" as if both were separately imposed.
+  const hasPrison = mandatoryMinimums.some(s => s.type === 'PRISON') || maximumPenalties.some(s => s.type === 'PRISON');
+  const hasJail = mandatoryMinimums.some(s => s.type === 'JAIL') || maximumPenalties.some(s => s.type === 'JAIL');
+  if (hasPrison && hasJail) {
+    // The JAIL maximum is absorbed into the governing PRISON figure, not
+    // summed in as a separate one — but a JAIL mandatory minimum isn't
+    // simply dropped along with it: the statutory floor it represents still
+    // binds the aggregate sentence, just measured in the governing custody
+    // type. Convert it to PRISON and keep whichever of the (at most one)
+    // PRISON minimum and the converted JAIL minimum is stricter, so a real
+    // floor never silently disappears just because the charge that carried
+    // it wasn't the one that decided the case's custody type.
+    const prisonMinimum = mandatoryMinimums.find(s => s.type === 'PRISON') ?? null;
+    const jailMinimum = mandatoryMinimums.find(s => s.type === 'JAIL') ?? null;
+    const convertedJailMinimum: Sentence | null = jailMinimum ? { ...jailMinimum, type: 'PRISON' } : null;
+    const strictestMinimum = [prisonMinimum, convertedJailMinimum].reduce<Sentence | null>((strictest, candidate) => {
+      if (candidate === null) return strictest;
+      if (strictest === null) return candidate;
+      return sentenceDayEquivalent(candidate)! > sentenceDayEquivalent(strictest)! ? candidate : strictest;
+    }, null);
+
+    return {
+      mandatoryMinimums: [
+        ...mandatoryMinimums.filter(s => s.type !== 'PRISON' && s.type !== 'JAIL'),
+        ...(strictestMinimum ? [strictestMinimum] : []),
+      ],
+      maximumPenalties: maximumPenalties.filter(s => s.type !== 'JAIL'),
+    };
+  }
+
+  return { mandatoryMinimums, maximumPenalties };
 }

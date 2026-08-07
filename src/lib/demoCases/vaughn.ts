@@ -3,8 +3,11 @@ import { defineDemoCase } from './types';
 // People v. Teresa Vaughn — Felony Hit-and-Run Causing Injury (VC § 20001(a))
 // + Driving on a Suspended License (VC § 14601.1(a)). The docket's
 // multi-charge case: it exercises deriveSentencingExposure's cross-charge
-// aggregation (prison + jail + fine), verdicts entered one charge at a
-// time, and the SPLIT aftermath. Tuned MODERATE (score ~61) with
+// aggregation (prison + fine from the felony, jail from the misdemeanor —
+// case-level exposure collapses to the felony's PRISON figure alone once
+// both are present; see the comment on deriveSentencingExposure in
+// sentencingExposure.ts), verdicts entered one charge at a time, and the
+// SPLIT aftermath. Tuned MODERATE (score ~61) with
 // a defendant built to accept: heavy priors (including a felony prison
 // term), high neuroticism, low openness — the anxious mirror of Reyes. The
 // texture: one count is a paper certainty, the other turns entirely on eight
@@ -403,7 +406,7 @@ const rawVaughnPleaNarrative = {
     ],
   },
   pleaRulingOptions: [
-    { choice: 'ACCEPT', lineText: 'Two years, five months, and restitution to Mr. Pyle is a serious term honestly arrived at. The plea is accepted.' },
+    { choice: 'ACCEPT', lineText: 'Two years in prison, full restitution to Mr. Pyle, is a serious term honestly arrived at. The plea is accepted.' },
     { choice: 'ACCEPT', lineText: 'Ms. Vaughn, the court will not pretend this comes free. But the agreement is fair and it is final. The plea is accepted; we proceed to sentencing.' },
     { choice: 'REJECT', lineText: 'A struck cyclist, a suspended license driven a second time, and eight seconds unaccounted for — this disposition does not answer it. The plea is rejected. Set the matter for trial.' },
     { choice: 'REJECT', lineText: 'The court is not satisfied this agreement serves the public interest. The plea is rejected. The People will prove their case, or they will not.' },
