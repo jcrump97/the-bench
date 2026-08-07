@@ -115,7 +115,25 @@ export function deriveSentencingExposure(charges: Charge[]): SentencingExposure 
   // prison, and also M months in jail" as if both were separately imposed.
   const hasPrison = mandatoryMinimums.some(s => s.type === 'PRISON') || maximumPenalties.some(s => s.type === 'PRISON');
   const hasJail = mandatoryMinimums.some(s => s.type === 'JAIL') || maximumPenalties.some(s => s.type === 'JAIL');
-  if (hasPrison && hasJail) {
+  // §669 aggregation is about *different counts* carrying different custody
+  // types. A single count that itself lists both a PRISON and a JAIL maximum is
+  // not aggregation at all — it is alternative sentencing on one count (a
+  // wobbler under §17(b), or a realigned felony under §1170(h)), where both
+  // are genuinely available to the court and collapsing deletes a lawful
+  // option. So the collapse requires some count to contribute JAIL *without*
+  // offering PRISON itself; a lone wobbler keeps both.
+  //
+  // Residual case left deliberately uncollapsed: a wobbler charged alongside a
+  // prison-only count, where every jail-offering count also offers prison. That
+  // needs per-count election modelling (which count's custody type the court
+  // selects) rather than a case-level heuristic, and the schema has no field
+  // for an election.
+  const someCountIsJailOnly = charges.some(
+    (c) =>
+      c.maximumPenalties.some(s => s.type === 'JAIL') &&
+      !c.maximumPenalties.some(s => s.type === 'PRISON'),
+  );
+  if (hasPrison && hasJail && someCountIsJailOnly) {
     // The JAIL maximum is absorbed into the governing PRISON figure, not
     // summed in as a separate one — but a JAIL mandatory minimum isn't
     // simply dropped along with it: the statutory floor it represents still
@@ -133,12 +151,31 @@ export function deriveSentencingExposure(charges: Charge[]): SentencingExposure 
       return sentenceDayEquivalent(candidate)! > sentenceDayEquivalent(strictest)! ? candidate : strictest;
     }, null);
 
+    const survivingMaxima = maximumPenalties.filter(s => s.type !== 'JAIL');
+
+    // A converted JAIL floor can legitimately exceed the PRISON ceiling that
+    // survives the collapse — a felony carrying a PRISON maximum of 6 MONTHS
+    // charged with a misdemeanor carrying a JAIL minimum of 1 YEAR produces
+    // exactly that. Emitting min > max would break the invariant stated at the
+    // top of this file and relied on by every consumer: discountSentences would
+    // quote a plea offer above the case's own maximum while floorAmountFor
+    // clamps the sentencing picker below it, so the offer and the form would
+    // disagree about what is even available. The ceiling wins — a floor cannot
+    // exceed the longest term the case actually authorizes.
+    const prisonCeiling = survivingMaxima.find(s => s.type === 'PRISON') ?? null;
+    const clampedMinimum =
+      strictestMinimum !== null &&
+      prisonCeiling !== null &&
+      sentenceDayEquivalent(strictestMinimum)! > sentenceDayEquivalent(prisonCeiling)!
+        ? prisonCeiling
+        : strictestMinimum;
+
     return {
       mandatoryMinimums: [
         ...mandatoryMinimums.filter(s => s.type !== 'PRISON' && s.type !== 'JAIL'),
-        ...(strictestMinimum ? [strictestMinimum] : []),
+        ...(clampedMinimum ? [clampedMinimum] : []),
       ],
-      maximumPenalties: maximumPenalties.filter(s => s.type !== 'JAIL'),
+      maximumPenalties: survivingMaxima,
     };
   }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
-import { ChargeSchema, type ChargeVerdict } from '../../schemas/gameSchemas';
+import { ChargeSchema, sentenceDayEquivalent, type ChargeVerdict } from '../../schemas/gameSchemas';
 
 type RawCharge = z.input<typeof ChargeSchema>;
 
@@ -170,6 +170,59 @@ describe('deriveSentencingExposure', () => {
     ]);
   });
 
+  it('never derives a floor above its own ceiling when a JAIL minimum converts', () => {
+    // The felony's PRISON ceiling (6 months) is *shorter* than the
+    // misdemeanor's JAIL floor (1 year), so converting the floor to PRISON
+    // unclamped produced min 1 YEAR against max 6 MONTHS — a range the plea
+    // offer and the sentencing picker read in opposite directions.
+    const felony = charge({
+      maximumPenalties: [{ type: 'PRISON', unit: 'MONTHS', amount: 6 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'YEARS', amount: 1 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'YEARS', amount: 1 }],
+    });
+
+    const exposure = deriveSentencingExposure([felony, misdemeanor]);
+    const floor = exposure.mandatoryMinimums.find((s) => s.type === 'PRISON');
+    const ceiling = exposure.maximumPenalties.find((s) => s.type === 'PRISON');
+
+    expect(floor).toBeDefined();
+    expect(ceiling).toBeDefined();
+    expect(sentenceDayEquivalent(floor!)!).toBeLessThanOrEqual(sentenceDayEquivalent(ceiling!)!);
+    // The ceiling wins: a floor cannot exceed the longest authorized term.
+    expect(floor).toEqual({ type: 'PRISON', unit: 'MONTHS', amount: 6 });
+  });
+
+  it('keeps both custody options on a single wobbler count that lists PRISON and JAIL', () => {
+    // §1170(h)/§17(b) alternative sentencing on one count is not §669
+    // aggregation across counts — both terms are genuinely available to the
+    // court, so collapsing to PRISON would delete a lawful option.
+    const wobbler = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'JAIL', unit: 'YEARS', amount: 1 },
+      ],
+    });
+
+    expect(deriveSentencingExposure([wobbler]).maximumPenalties).toEqual([
+      { type: 'PRISON', unit: 'YEARS', amount: 3 },
+      { type: 'JAIL', unit: 'YEARS', amount: 1 },
+    ]);
+  });
+
+  it('still collapses when a separate count is jail-only (the §669 case)', () => {
+    const felony = charge({ maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }] });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+
+    expect(deriveSentencingExposure([felony, misdemeanor]).maximumPenalties).toEqual([
+      { type: 'PRISON', unit: 'YEARS', amount: 3 },
+    ]);
+  });
 });
 
 describe('selectSentenceableCharges', () => {
