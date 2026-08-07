@@ -1,5 +1,30 @@
 # TODO
 
+## Sentencing exposure follow-ups (code review, 2026-08-07 — OPEN)
+
+Opened alongside the `fix/sentencing-exposure-and-stage-context` branch, which
+fixed the verdict-scoping bug (exposure was derived from every charge, so an
+acquitted count's range shaped the sentence) and the floor-above-ceiling bug in
+the PRISON/JAIL collapse. One modelling gap is deliberately left open.
+
+- [ ] **S1 — no per-count custody election, so a wobbler loses its jail
+      option.** `deriveSentencingExposure` collapses PRISON+JAIL to PRISON
+      unconditionally. That is correct for §669 aggregation across counts, but a
+      single count that itself lists both maxima is alternative sentencing (a
+      wobbler under §17(b), a realigned felony under §1170(h)) where a real court
+      elects between them — and the collapse silently deletes the jail election.
+      **The obvious fix is not available:** emitting both types makes
+      `derivePleaOfferTerms` build an offer `PleaPostureSchema` rejects (via
+      `addSentencingTypeExclusivityIssues`), and `buildPleaPosture` then throws
+      inside `usePleaPosture`'s `useMemo` — an uncaught throw during Act 1
+      render, not even a Mistrial screen. Verified by trying it: a lone wobbler
+      with `[PRISON 3 YEARS, JAIL 1 YEAR]` reproduces exactly that. A real fix
+      needs a custody-election field on the charge (or on the derived exposure)
+      plus a UI affordance for the court to choose, so exclusivity holds while
+      both options stay reachable. Until then PRISON governs — the safe
+      direction — and `sentencingExposure.test.ts` guards the invariant so the
+      shortcut cannot be reintroduced by accident.
+
 ## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
 
 Player-reported: the live Gemini pipeline lands on `ErrorScreen` ("Mistrial")

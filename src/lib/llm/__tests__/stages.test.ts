@@ -361,6 +361,30 @@ describe('finalizeCasePayload', () => {
     for (const fact of facts) expect(contents).toContain(fact);
   });
 
+  it('drops a duplicated exhibitPoints entry deterministically instead of spending a repair round', async () => {
+    const point = {
+      evidenceId: evidence[0]!.id,
+      ifAdmitted: { prosecution: 'It came in.', defense: null },
+      ifExcluded: { prosecution: null, defense: 'It stayed out.' },
+    };
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [point, point] },
+      }),
+    );
+
+    const result = await finalizeCasePayload(API_KEY, MODEL, parts);
+
+    // One call only: the duplicate must not reach CaseSchema and trigger the
+    // full-case repair round.
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    expect(result.closingArguments.exhibitPoints).toHaveLength(1);
+    expect(CaseSchema.safeParse(result).success).toBe(true);
+  });
+
   it('omits the established-facts block entirely when the environment has none', async () => {
     // Hand-authored demo cases omit the field; the prompt must not grow an
     // empty heading for them.
@@ -486,6 +510,22 @@ describe('runVerdictVoice', () => {
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
     expect(result.map((c) => c.id)).toEqual([charge.id, 'charge-second']);
     expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('charge-second');
+  });
+
+  it('retries when the model returns two entries for the same charge', async () => {
+    // Two entries for one id look like one to a Set, so this slipped past both
+    // the missing- and unknown-id checks; gameService's `find` would then keep
+    // the first silently, discarding a charge's voiced layer with no retry.
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor(charge.id), voiceFor(charge.id)] }),
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('more than one entry');
   });
 
   it('puts each charge id on its own labelled field in the prompt', async () => {

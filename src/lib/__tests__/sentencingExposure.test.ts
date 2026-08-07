@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
-import { ChargeSchema, sentenceDayEquivalent, type ChargeVerdict } from '../../schemas/gameSchemas';
+import {
+  ChargeSchema,
+  SentenceSchema,
+  addSentencingTypeExclusivityIssues,
+  sentenceDayEquivalent,
+  type ChargeVerdict,
+} from '../../schemas/gameSchemas';
 
 type RawCharge = z.input<typeof ChargeSchema>;
 
@@ -195,10 +201,15 @@ describe('deriveSentencingExposure', () => {
     expect(floor).toEqual({ type: 'PRISON', unit: 'MONTHS', amount: 6 });
   });
 
-  it('keeps both custody options on a single wobbler count that lists PRISON and JAIL', () => {
-    // §1170(h)/§17(b) alternative sentencing on one count is not §669
-    // aggregation across counts — both terms are genuinely available to the
-    // court, so collapsing to PRISON would delete a lawful option.
+  it('never emits both PRISON and JAIL, even for a lone wobbler listing both', () => {
+    // Exclusivity is load-bearing, not cosmetic: it is enforced downstream by
+    // addSentencingTypeExclusivityIssues on PleaPostureSchema's offer branches
+    // and on FinalResultSchema.imposedSentence. A mixed exposure makes
+    // derivePleaOfferTerms build an offer PleaPostureSchema rejects, and
+    // buildPleaPosture then throws inside usePleaPosture's useMemo — an
+    // uncaught throw during Act 1 render. So a wobbler collapses too, and
+    // PRISON governs; modelling the §17(b)/§1170(h) election properly needs a
+    // custody-election field the schema does not have.
     const wobbler = charge({
       maximumPenalties: [
         { type: 'PRISON', unit: 'YEARS', amount: 3 },
@@ -206,10 +217,26 @@ describe('deriveSentencingExposure', () => {
       ],
     });
 
-    expect(deriveSentencingExposure([wobbler]).maximumPenalties).toEqual([
-      { type: 'PRISON', unit: 'YEARS', amount: 3 },
-      { type: 'JAIL', unit: 'YEARS', amount: 1 },
-    ]);
+    const exposure = deriveSentencingExposure([wobbler]);
+    const types = new Set(exposure.maximumPenalties.map((s) => s.type));
+    expect(types.has('PRISON') && types.has('JAIL')).toBe(false);
+    expect(exposure.maximumPenalties).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 3 }]);
+  });
+
+  it('keeps the plea-offer path valid for a wobbler (the regression guard)', () => {
+    const wobbler = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'JAIL', unit: 'YEARS', amount: 1 },
+      ],
+    });
+    const exposure = deriveSentencingExposure([wobbler]);
+    // The exact check PleaPostureSchema/FinalResultSchema apply to a derived
+    // sentence array — asserted here so a future change to the collapse cannot
+    // reintroduce the uncaught Act 1 throw without failing this test first.
+    const result = z.object({ s: z.array(SentenceSchema).superRefine((v, ctx) => addSentencingTypeExclusivityIssues(v, ctx)) })
+      .safeParse({ s: exposure.maximumPenalties });
+    expect(result.success).toBe(true);
   });
 
   it('still collapses when a separate count is jail-only (the §669 case)', () => {

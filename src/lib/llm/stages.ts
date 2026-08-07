@@ -1075,10 +1075,22 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   // exhibits a point meant is ambiguous by construction, so — matching
   // reconcileCrossStageIds's own targetElementId philosophy — a stale
   // reference is dropped rather than guessed at.
+  //
+  // Duplicates are dropped in the same pass, keeping the first entry. CaseSchema
+  // rejects a duplicated evidenceId (courtroomScript appends one fragment per
+  // entry, so two entries argue the same exhibit twice), and without this the
+  // rejection would fall through to the full-case repair round — the largest and
+  // most truncation-prone response in the pipeline — for a defect a seen-id
+  // filter fixes for free. Same reasoning as reconcileCrossStageIds above:
+  // mechanical failures get mechanical repair.
   const reconciledEvidenceIds = new Set(reconciled.evidence.map((e) => e.id));
-  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) =>
-    reconciledEvidenceIds.has(p.evidenceId),
-  );
+  const seenExhibitPointIds = new Set<string>();
+  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) => {
+    if (!reconciledEvidenceIds.has(p.evidenceId)) return false;
+    if (seenExhibitPointIds.has(p.evidenceId)) return false;
+    seenExhibitPointIds.add(p.evidenceId);
+    return true;
+  });
 
   const assembled = {
     caseId: finalFields.caseId,
@@ -1165,6 +1177,19 @@ function buildVerdictVoiceSchema(requestedChargeIds: readonly string[]) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: `charges names ids that are not in this case (echo each id exactly as given): ${unknown.join(', ')}`,
+      });
+    }
+    // Duplicates would otherwise slip through both checks above (the set makes
+    // two entries for one id look like one), and gameService's `find` would
+    // silently keep the first — one charge's voiced layer discarded with no
+    // retry, which is the failure this schema exists to prevent.
+    const duplicated = [...new Set(
+      data.charges.map((c) => c.id).filter((id, i, all) => all.indexOf(id) !== i),
+    )];
+    if (duplicated.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges has more than one entry for these ids (return exactly one per charge): ${duplicated.join(', ')}`,
       });
     }
   });

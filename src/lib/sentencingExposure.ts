@@ -115,25 +115,21 @@ export function deriveSentencingExposure(charges: Charge[]): SentencingExposure 
   // prison, and also M months in jail" as if both were separately imposed.
   const hasPrison = mandatoryMinimums.some(s => s.type === 'PRISON') || maximumPenalties.some(s => s.type === 'PRISON');
   const hasJail = mandatoryMinimums.some(s => s.type === 'JAIL') || maximumPenalties.some(s => s.type === 'JAIL');
-  // §669 aggregation is about *different counts* carrying different custody
-  // types. A single count that itself lists both a PRISON and a JAIL maximum is
-  // not aggregation at all — it is alternative sentencing on one count (a
-  // wobbler under §17(b), or a realigned felony under §1170(h)), where both
-  // are genuinely available to the court and collapsing deletes a lawful
-  // option. So the collapse requires some count to contribute JAIL *without*
-  // offering PRISON itself; a lone wobbler keeps both.
+  // The collapse is unconditional on both types being present, and must stay
+  // that way: PRISON/JAIL exclusivity is enforced downstream by
+  // addSentencingTypeExclusivityIssues on both PleaPostureSchema's offer
+  // branches and FinalResultSchema.imposedSentence. Emitting both types here
+  // makes derivePleaOfferTerms produce an offer PleaPostureSchema rejects, and
+  // buildPleaPosture throws inside usePleaPosture's useMemo — an uncaught throw
+  // during Act 1 render, not even a Mistrial screen.
   //
-  // Residual case left deliberately uncollapsed: a wobbler charged alongside a
-  // prison-only count, where every jail-offering count also offers prison. That
-  // needs per-count election modelling (which count's custody type the court
-  // selects) rather than a case-level heuristic, and the schema has no field
-  // for an election.
-  const someCountIsJailOnly = charges.some(
-    (c) =>
-      c.maximumPenalties.some(s => s.type === 'JAIL') &&
-      !c.maximumPenalties.some(s => s.type === 'PRISON'),
-  );
-  if (hasPrison && hasJail && someCountIsJailOnly) {
+  // That is why the alternative-sentencing case (a lone wobbler under §17(b) or
+  // a realigned felony under §1170(h) whose own maximumPenalties list both
+  // PRISON and JAIL) is collapsed here too, even though both terms are
+  // genuinely available to a real court. Modelling the election properly needs
+  // a per-count custody-election field the schema does not have; until then
+  // PRISON governs, which is the safe direction. Tracked in TODO.md.
+  if (hasPrison && hasJail) {
     // The JAIL maximum is absorbed into the governing PRISON figure, not
     // summed in as a separate one — but a JAIL mandatory minimum isn't
     // simply dropped along with it: the statutory floor it represents still
