@@ -978,8 +978,9 @@ RULES:
 2. Write "summary" as a dry, allegations-only docket synopsis: what is charged and nothing more, in under 1500 characters. Save every party's framing for the fields below.
 3. Write "statementOfFacts" in the prosecutor's own voice, spoken to the court, in under 1500 characters.
 4. Write "closingArguments.prosecution" and "closingArguments.defense" as each side's general framing and theory of the case, addressed to the court, in under 1200 characters — do not argue any single exhibit's merits here. Do not invent facts (DNA, surveillance footage, tools, witnesses) that the evidence list does not include.
-5. Write one "exhibitPoints" entry for every exhibit in the case, keyed by its evidenceId. Each entry gives what a side would say about that specific exhibit, split by the ruling it might receive: "ifAdmitted" (the exhibit came into evidence) and "ifExcluded" (the court suppressed it). A side that has nothing to say about an exhibit under a given ruling — most often the People have nothing to say about an exhibit that was excluded — writes null for that field instead of inventing a point. Neither side may argue the merits of an excluded exhibit as if it were still in evidence.
-6. ${BENCH_TRIAL_RULE}`;
+5. When established facts about the scene are given, the statement of facts and both closings must rest on exactly those facts — refer to the same events, not a different version of them, and do not add scene details beyond them.
+6. Write one "exhibitPoints" entry for every exhibit in the case, keyed by its evidenceId. Each entry gives what a side would say about that specific exhibit, split by the ruling it might receive: "ifAdmitted" (the exhibit came into evidence) and "ifExcluded" (the court suppressed it). A side that has nothing to say about an exhibit under a given ruling — most often the People have nothing to say about an exhibit that was excluded — writes null for that field instead of inventing a point. Neither side may argue the merits of an excluded exhibit as if it were still in evidence.
+7. ${BENCH_TRIAL_RULE}`;
 
 function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefined): string {
   const evidenceList = parts.evidence
@@ -993,11 +994,18 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
     `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
     `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
     `Environment: ${parts.environment.description}`,
+    // The canonical scene facts exist precisely so downstream stages stop
+    // paraphrasing `description` and drifting. This stage writes
+    // statementOfFacts and both closings — the most-read narrative surfaces in
+    // the game — and was the one stage still authoring them blind to these.
+    parts.environment.establishedFacts !== undefined
+      ? `Established facts about the scene (state these as the facts of the case; do not contradict or embellish them):\n${parts.environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
+      : '',
     'Evidence exhibits (write exactly one exhibitPoints entry per id below):',
     evidenceList,
     'Witnesses:',
     witnessList,
-  ].join('\n');
+  ].filter((line) => line.length > 0).join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
@@ -1067,10 +1075,22 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
   // exhibits a point meant is ambiguous by construction, so — matching
   // reconcileCrossStageIds's own targetElementId philosophy — a stale
   // reference is dropped rather than guessed at.
+  //
+  // Duplicates are dropped in the same pass, keeping the first entry. CaseSchema
+  // rejects a duplicated evidenceId (courtroomScript appends one fragment per
+  // entry, so two entries argue the same exhibit twice), and without this the
+  // rejection would fall through to the full-case repair round — the largest and
+  // most truncation-prone response in the pipeline — for a defect a seen-id
+  // filter fixes for free. Same reasoning as reconcileCrossStageIds above:
+  // mechanical failures get mechanical repair.
   const reconciledEvidenceIds = new Set(reconciled.evidence.map((e) => e.id));
-  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) =>
-    reconciledEvidenceIds.has(p.evidenceId),
-  );
+  const seenExhibitPointIds = new Set<string>();
+  const exhibitPoints = finalFields.closingArguments.exhibitPoints?.filter((p) => {
+    if (!reconciledEvidenceIds.has(p.evidenceId)) return false;
+    if (seenExhibitPointIds.has(p.evidenceId)) return false;
+    seenExhibitPointIds.add(p.evidenceId);
+    return true;
+  });
 
   const assembled = {
     caseId: finalFields.caseId,
@@ -1117,7 +1137,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
 // the defendant exists so the lines can name the defendant and reach for
 // their circumstances).
 // ============================================================================
-const VerdictVoiceSchema = z.object({
+const VerdictVoiceShape = z.object({
   charges: z.array(
     z.strictObject({
       id: z.string().min(1).max(40),
@@ -1136,28 +1156,75 @@ const VerdictVoiceSchema = z.object({
   ).min(1),
 });
 
+// Built per call against the charge ids actually requested. A wrong or missing
+// id used to validate fine here — `id` accepted any 1-40 char string — and then
+// hit an un-retried `throw` in gameService when the voice for a charge could not
+// be found, killing the whole generation two stages from the end. Checking the
+// ids against the request turns that into an ordinary validation failure, which
+// `generateValidated` repairs with the issues fed back.
+function buildVerdictVoiceSchema(requestedChargeIds: readonly string[]) {
+  return VerdictVoiceShape.superRefine((data, ctx) => {
+    const returned = new Set(data.charges.map((c) => c.id));
+    const missing = requestedChargeIds.filter((id) => !returned.has(id));
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges is missing an entry for these charge ids (echo each id exactly as given): ${missing.join(', ')}`,
+      });
+    }
+    const unknown = [...returned].filter((id) => !requestedChargeIds.includes(id));
+    if (unknown.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges names ids that are not in this case (echo each id exactly as given): ${unknown.join(', ')}`,
+      });
+    }
+    // Duplicates would otherwise slip through both checks above (the set makes
+    // two entries for one id look like one), and gameService's `find` would
+    // silently keep the first — one charge's voiced layer discarded with no
+    // retry, which is the failure this schema exists to prevent.
+    const duplicated = [...new Set(
+      data.charges.map((c) => c.id).filter((id, i, all) => all.indexOf(id) !== i),
+    )];
+    if (duplicated.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `charges has more than one entry for these ids (return exactly one per charge): ${duplicated.join(', ')}`,
+      });
+    }
+  });
+}
+
 const VERDICT_VOICE_SYSTEM = `ROLE: You are a courtroom clerk preparing the voiced verdict layer for each charge.
 
 TASK: For every charge in the case, write the courtroom's reaction to each possible verdict and the judge's selectable verdict lines from the bench.
 
 RULES:
-1. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
-2. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
-3. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
-4. Keep each judge line under 300 characters and each reaction line under 600.
-5. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.`;
+1. Return one entry per charge, and copy each charge's "id" into your entry exactly as it is given to you — character for character. The ids are how the case file matches your lines back to the charge they belong to.
+2. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
+3. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
+4. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
+5. Keep each judge line under 300 characters and each reaction line under 600.
+6. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.
+
+EXAMPLE of the id rule: given "Count 1 of 2 — id: charge-grand-theft — Grand Theft", your entry for that count is {"id":"charge-grand-theft", ...}.`;
 
 function buildVerdictVoiceContents(
   charges: ChargeCore[],
   defendant: Defendant,
   feedback: string | undefined,
 ): string {
+  // One charge per line with the id on its own labelled field. Burying it
+  // mid-string ("1 of 2 (id charge-x): Name") made the id read as incidental
+  // prose, and an id echoed wrong is the one error this stage cannot absorb.
   const orderedCharges = charges
-    .map((c, index) => `${index + 1} of ${charges.length} (id ${c.id}): ${c.name}`)
-    .join('; ');
+    .map((c, index) => `- Count ${index + 1} of ${charges.length} — id: ${c.id} — ${c.name}`)
+    .join('\n');
   const base = [
-    `Charges, in the fixed order they are resolved at trial: ${orderedCharges}.`,
+    'Charges, in the fixed order they are resolved at trial:',
+    orderedCharges,
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    'Return exactly one entry per count above, echoing each id character for character.',
   ].join('\n');
   return feedback ? `${base}\n\n${feedback}` : base;
 }
@@ -1175,7 +1242,14 @@ export async function runVerdictVoice(
     VERDICT_VOICE_SYSTEM,
     (feedback) => buildVerdictVoiceContents(charges, defendant, feedback),
     VERDICT_VOICE_GEMINI_SCHEMA,
-    VerdictVoiceSchema,
+    // Deduplicated: StatuteSelection can emit two charges sharing an id (the
+    // collision class reconcileCrossStageIds repairs, but not until
+    // finalizeCasePayload, three stages later). Passing the raw list would make
+    // the duplicate-entry refinement reject the response that correctly follows
+    // "one entry per count", burning a retry on a defect the model did not
+    // cause. One voiced layer per distinct id is all this stage can meaningfully
+    // ask for.
+    buildVerdictVoiceSchema([...new Set(charges.map((c) => c.id))]),
   );
   return data.charges;
 }

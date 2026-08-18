@@ -1,5 +1,31 @@
-import { sentenceDayEquivalent, type Charge, type Sentence } from '../schemas/gameSchemas';
+import { sentenceDayEquivalent, type Charge, type ChargeVerdict, type Sentence } from '../schemas/gameSchemas';
 import { UNIT_DAYS } from './sentenceBounds';
+
+// The counts a sentence may actually reach. Exposure must be derived from
+// these and never from the raw charge list: a sentence cannot touch a count
+// the defendant was acquitted of, and feeding an acquitted count's statutory
+// range into the aggregation below silently reshapes the sentence for the
+// counts that *were* proven.
+//
+// On the plea path the defendant pleads to every count (derivePleaOfferTerms
+// partitions nothing away), so the whole list governs. On the trial path only
+// GUILTY counts do. On a full acquittal this is empty, and the caller renders
+// an adjournment rather than a sentencing form.
+//
+// The failure this exists to prevent was visible on the shipped Vaughn docket:
+// acquit the felony (PRISON 3 years) and convict the misdemeanor (JAIL 6
+// months), and the picker offered prison up to three years with no jail option
+// at all, because the PRISON/JAIL collapse below ran over the acquitted count.
+export function selectSentenceableCharges(
+  charges: Charge[],
+  isPleaPath: boolean,
+  chargeVerdicts: readonly ChargeVerdict[],
+): Charge[] {
+  if (isPleaPath) return charges;
+  return charges.filter((charge) =>
+    chargeVerdicts.some((v) => v.chargeId === charge.id && v.verdict === 'GUILTY'),
+  );
+}
 
 // Case-level sentencing exposure, derived deterministically from per-charge
 // statutory ranges. Charges are the source of truth — the LLM generates only
@@ -89,6 +115,20 @@ export function deriveSentencingExposure(charges: Charge[]): SentencingExposure 
   // prison, and also M months in jail" as if both were separately imposed.
   const hasPrison = mandatoryMinimums.some(s => s.type === 'PRISON') || maximumPenalties.some(s => s.type === 'PRISON');
   const hasJail = mandatoryMinimums.some(s => s.type === 'JAIL') || maximumPenalties.some(s => s.type === 'JAIL');
+  // The collapse is unconditional on both types being present, and must stay
+  // that way: PRISON/JAIL exclusivity is enforced downstream by
+  // addSentencingTypeExclusivityIssues on both PleaPostureSchema's offer
+  // branches and FinalResultSchema.imposedSentence. Emitting both types here
+  // makes derivePleaOfferTerms produce an offer PleaPostureSchema rejects, and
+  // buildPleaPosture throws inside usePleaPosture's useMemo — an uncaught throw
+  // during Act 1 render, not even a Mistrial screen.
+  //
+  // That is why the alternative-sentencing case (a lone wobbler under §17(b) or
+  // a realigned felony under §1170(h) whose own maximumPenalties list both
+  // PRISON and JAIL) is collapsed here too, even though both terms are
+  // genuinely available to a real court. Modelling the election properly needs
+  // a per-count custody-election field the schema does not have; until then
+  // PRISON governs, which is the safe direction. Tracked in TODO.md.
   if (hasPrison && hasJail) {
     // The JAIL maximum is absorbed into the governing PRISON figure, not
     // summed in as a separate one — but a JAIL mandatory minimum isn't
@@ -107,12 +147,31 @@ export function deriveSentencingExposure(charges: Charge[]): SentencingExposure 
       return sentenceDayEquivalent(candidate)! > sentenceDayEquivalent(strictest)! ? candidate : strictest;
     }, null);
 
+    const survivingMaxima = maximumPenalties.filter(s => s.type !== 'JAIL');
+
+    // A converted JAIL floor can legitimately exceed the PRISON ceiling that
+    // survives the collapse — a felony carrying a PRISON maximum of 6 MONTHS
+    // charged with a misdemeanor carrying a JAIL minimum of 1 YEAR produces
+    // exactly that. Emitting min > max would break the invariant stated at the
+    // top of this file and relied on by every consumer: discountSentences would
+    // quote a plea offer above the case's own maximum while floorAmountFor
+    // clamps the sentencing picker below it, so the offer and the form would
+    // disagree about what is even available. The ceiling wins — a floor cannot
+    // exceed the longest term the case actually authorizes.
+    const prisonCeiling = survivingMaxima.find(s => s.type === 'PRISON') ?? null;
+    const clampedMinimum =
+      strictestMinimum !== null &&
+      prisonCeiling !== null &&
+      sentenceDayEquivalent(strictestMinimum)! > sentenceDayEquivalent(prisonCeiling)!
+        ? prisonCeiling
+        : strictestMinimum;
+
     return {
       mandatoryMinimums: [
         ...mandatoryMinimums.filter(s => s.type !== 'PRISON' && s.type !== 'JAIL'),
-        ...(strictestMinimum ? [strictestMinimum] : []),
+        ...(clampedMinimum ? [clampedMinimum] : []),
       ],
-      maximumPenalties: maximumPenalties.filter(s => s.type !== 'JAIL'),
+      maximumPenalties: survivingMaxima,
     };
   }
 
