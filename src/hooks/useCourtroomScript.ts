@@ -4,22 +4,13 @@ import { useUIStore } from '../store/useUIStore';
 import { usePleaPosture } from './usePleaPosture';
 import {
   buildCourtroomScript,
-  type ScriptBeat,
-  type StatementBeat,
+  projectScriptView,
+  type CourtroomScriptView,
 } from '../lib/courtroomScript';
 
-export interface CourtroomScriptView {
-  // The full known script (up to and including the first unresolved decision).
-  script: ScriptBeat[];
-  // The reveal cursor, clamped to the script (defensive — prefix stability
-  // means the script never shrinks under the cursor in practice).
-  cursor: number;
-  // The transcript as revealed so far: statements among the first `cursor` beats.
-  visibleEntries: StatementBeat[];
-  // The beat waiting at the cursor: a statement (Continue reveals it), a
-  // decision (its control renders), or undefined when the script is exhausted.
-  pendingBeat: ScriptBeat | undefined;
-}
+// Re-exported so consumers keep importing the view type from the hook they
+// already use; the definition lives with the projection that produces it.
+export type { CourtroomScriptView };
 
 // Single derivation joining the courtroom script (pure projection of game
 // state) with the UI store's reveal cursor. Successor to useLedgerEntries.
@@ -52,25 +43,5 @@ export function useCourtroomScript(): CourtroomScriptView {
     });
   }, [activeCase, activePleaNarrative, postureResult, currentPhase, pleaDecision, motionRulings, chargeVerdicts, imposedSentence, aftermathNarrative, spokenJudgeLines]);
 
-  return useMemo(() => {
-    const cursor = Math.min(beatCursor, script.length);
-    const last = script.at(-1);
-    // Self-heal an overshoot: a raced double-advance can push the raw cursor
-    // past the script's trailing unresolved decision (emission truncates at
-    // it, so cursor lands at length). Re-present that decision instead of
-    // rendering no control at all — the alternative is a soft-lock.
-    const pendingBeat = cursor < script.length
-      ? script[cursor]
-      : last?.kind === 'DECISION'
-        ? last
-        : undefined;
-    return {
-      script,
-      cursor,
-      visibleEntries: script
-        .slice(0, cursor)
-        .filter((beat): beat is StatementBeat => beat.kind === 'STATEMENT'),
-      pendingBeat,
-    };
-  }, [script, beatCursor]);
+  return useMemo(() => projectScriptView(script, beatCursor), [script, beatCursor]);
 }

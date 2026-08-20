@@ -1,9 +1,9 @@
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
+import { JudgeLineOptions } from './JudgeLineOptions';
 
 const PRIMARY_BUTTON =
   'min-h-11 rounded-md bg-(--accent) px-5 py-2 font-medium text-(--bg) hover:opacity-90';
-const OPTION_BUTTON = 'min-h-11 w-full rounded-md border px-4 py-2 text-left text-sm';
 const ACCEPT_STYLE = 'border-transparent bg-(--status-admitted-bg) text-(--status-not-guilty) hover:opacity-90';
 const REJECT_STYLE = 'border-(--border-strong) text-(--text) hover:bg-(--bg-elevated)';
 
@@ -53,19 +53,11 @@ export function PleaRulingControl({ hasOffer }: { hasOffer: boolean }) {
   return (
     <div className="flex flex-col gap-2">
       <h2 className="font-medium text-(--text-h)">The plea agreement awaits your ruling.</h2>
-      <div className="flex flex-col gap-2">
-        {options.map((option) => (
-          <button
-            key={option.lineText}
-            type="button"
-            data-choice={option.choice}
-            onClick={() => rule(option.choice, option.lineText)}
-            className={`${OPTION_BUTTON} ${option.choice === 'ACCEPT' ? ACCEPT_STYLE : REJECT_STYLE}`}
-          >
-            <span aria-hidden="true">&ldquo;</span>{option.lineText}<span aria-hidden="true">&rdquo;</span>
-          </button>
-        ))}
-      </div>
+      <JudgeLineOptions
+        options={options}
+        styleFor={(choice) => (choice === 'ACCEPT' ? ACCEPT_STYLE : REJECT_STYLE)}
+        onChoose={rule}
+      />
     </div>
   );
 }

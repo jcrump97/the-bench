@@ -3,15 +3,10 @@ import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
 import { SentenceList } from '../common/SentenceList';
+import { CLASSIFICATION_TONE } from '../common/tones';
 import { useRevealState } from '../../hooks/useRevealState';
 import { enumLabel } from '../../lib/format';
 import type { CasePayload, MotionRuling } from '../../schemas/gameSchemas';
-
-const CLASSIFICATION_TONE = {
-  FELONY: 'bad',
-  MISDEMEANOR: 'warn',
-  INFRACTION: 'neutral',
-} as const;
 
 function isElementSupported(activeCase: CasePayload, motionRulings: MotionRuling[], elementId: string): boolean {
   return activeCase.evidence.some((evidence) => {

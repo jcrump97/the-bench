@@ -5,6 +5,7 @@ import { deriveSentencingExposure } from '../sentencingExposure';
 import { deriveInterrogationProfile } from '../interrogation';
 import { DEMO_CASES } from '../demoCases';
 import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
+import { defineDemoCase } from '../demoCases/types';
 import { navarroCase } from '../demoCases/navarro';
 import { webbCase } from '../demoCases/webb';
 import { booneCase } from '../demoCases/boone';
@@ -263,5 +264,66 @@ describe('webbCase (People v. Marcus Webb)', () => {
     const allExcluded: MotionRuling[] = webbCase.payload.evidence.map(e => ({ evidenceId: e.id, ruling: 'EXCLUDED' }));
     expect(sentencingModifierFromRulings(webbCase.payload, allAdmitted)).toBe(1);
     expect(sentencingModifierFromRulings(webbCase.payload, allExcluded)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// defineDemoCase's guards, exercised.
+//
+// Every committed bundle satisfies these invariants, which is the point — but
+// it also meant the throw paths were never executed by anything. A guard no
+// test has ever seen fire is a guard you are trusting on faith.
+//
+// Webb is the fixture here because its computed posture is
+// PENDING_JUDICIAL_REVIEW: the plea path is reachable, so every plea-path
+// field must be present and dropping any one of them must be rejected.
+// ---------------------------------------------------------------------------
+describe('defineDemoCase — authored/reachable pairings', () => {
+  function webbBundle() {
+    return {
+      title: webbCase.title,
+      teaser: webbCase.teaser,
+      payload: structuredClone(webbCase.payload) as Record<string, unknown>,
+      pleaNarrative: structuredClone(webbCase.pleaNarrative) as Record<string, unknown>,
+      aftermath: { ...webbCase.aftermath },
+    };
+  }
+
+  it('accepts the bundle unmodified', () => {
+    expect(() => defineDemoCase(webbBundle())).not.toThrow();
+  });
+
+  const PLEA_PATH_FIELDS = ['allocution', 'pleaReactions', 'pleaRulingOptions'] as const;
+
+  for (const field of PLEA_PATH_FIELDS) {
+    it(`rejects a reachable plea path with no ${field}`, () => {
+      const raw = webbBundle();
+      delete raw.pleaNarrative[field];
+      expect(() => defineDemoCase(raw)).toThrow(
+        new RegExp(`pleaNarrative\\.${field} must be authored exactly when`),
+      );
+    });
+  }
+
+  it('rejects a reachable plea path with no PLEA_ACCEPTED aftermath', () => {
+    const raw = webbBundle();
+    delete (raw.aftermath as { PLEA_ACCEPTED?: string }).PLEA_ACCEPTED;
+    expect(() => defineDemoCase(raw)).toThrow(/aftermath\.PLEA_ACCEPTED must be authored exactly when/);
+  });
+
+  it('names the case and the computed posture in the failure', () => {
+    const raw = webbBundle();
+    delete raw.pleaNarrative.allocution;
+    // Both halves matter to whoever hits this at module load: which bundle
+    // broke, and what the posture actually computed to.
+    expect(() => defineDemoCase(raw)).toThrow(
+      new RegExp(`Demo case ${webbCase.payload.caseId}.*PENDING_JUDICIAL_REVIEW`),
+    );
+  });
+
+  it('rejects a single-charge case that authors a SPLIT aftermath', () => {
+    const raw = webbBundle();
+    (raw.aftermath as { SPLIT?: string }).SPLIT = 'A split that cannot happen on one count.';
+    expect(() => defineDemoCase(raw)).toThrow(/aftermath\.SPLIT must be authored exactly when/);
   });
 });

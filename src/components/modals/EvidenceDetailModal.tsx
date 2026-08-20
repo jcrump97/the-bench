@@ -2,12 +2,10 @@ import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { Badge } from '../common/Badge';
+import { OBJECTION_RISK_TONE, RULING_TONE } from '../common/tones';
 import { enumLabel } from '../../lib/format';
 import { useRevealState } from '../../hooks/useRevealState';
-import type { CasePayload } from '../../schemas/gameSchemas';
-
-const OBJECTION_RISK_TONE = { LOW: 'good', MEDIUM: 'warn', HIGH: 'bad' } as const;
-const RULING_TONE = { ADMITTED: 'good', EXCLUDED: 'bad' } as const;
+import { defendantFullName, type CasePayload } from '../../schemas/gameSchemas';
 
 interface EvidenceDetailModalProps {
   evidenceId: string;
@@ -58,7 +56,7 @@ export function EvidenceDetailModal({ evidenceId }: EvidenceDetailModalProps) {
       {evidence.interrogation !== undefined && (
         <InterrogationTranscript
           interrogation={evidence.interrogation}
-          defendantName={`${activeCase.defendant.firstName} ${activeCase.defendant.lastName}`}
+          defendantName={defendantFullName(activeCase.defendant)}
         />
       )}
     </Modal>

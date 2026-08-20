@@ -9,8 +9,32 @@ import {
   ReactionBeatSchema,
   PleaDecisionSchema,
   VerdictValueSchema,
+  // Vocabularies shared with the Gemini responseSchemas below. Every `enum:`
+  // in this file spreads one of these rather than restating its members, so
+  // the model is told exactly what the Zod trust boundary will enforce.
+  // schemaParity.test.ts fails if the two ever drift apart.
+  SentenceTypeEnum,
+  SentenceUnitEnum,
+  ProbationConditionEnum,
+  ChargeClassificationEnum,
+  ObjectionRiskEnum,
+  EvidenceTypeEnum,
+  WitnessRoleEnum,
+  BiasIndicatorEnum,
+  ReactionSpeakerEnum,
+  InterrogationSpeakerEnum,
+  InterrogationOutcomeEnum,
+  ChallengeGroundEnum,
+  SubstanceStatusEnum,
+  RelationshipStatusEnum,
+  EmploymentStatusEnum,
+  EducationLevelEnum,
+  LocationTypeEnum,
+  TimeOfDayEnum,
+  WeatherEnum,
   PleaNarrativeSchema,
   CaseSchema,
+  defendantFullName,
   AftermathNarrativeSchema,
   type Charge,
   type ChargeCore,
@@ -59,6 +83,15 @@ function buildRetryFeedback(issues: string[], previousResponse: string): string 
     'Everything else in the object was accepted — keep it as it is. Your previous response was:',
     echoed,
   ].join('\n');
+}
+
+// Every stage's contents builder ends the same way: the stage's own prompt on
+// a first attempt, that prompt plus the repair feedback on a retry. The
+// feedback is appended rather than substituted so the retry still carries the
+// original task — a repair prompt with no statement of the job is a request to
+// fix an object with no idea what it was for.
+function withFeedback(base: string, feedback: string | undefined): string {
+  return feedback ? `${base}\n\n${feedback}` : base;
 }
 
 // ============================================================================
@@ -178,29 +211,34 @@ function schemaShape(schema: GeminiSchema): string[] | null {
 // actual validation gate, so these only need to be close enough to get
 // mostly-valid JSON on the first try.
 // ============================================================================
-const SENTENCE_GEMINI_SCHEMA: GeminiSchema = {
+export const SENTENCE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['PRISON', 'JAIL', 'FINE', 'COMMUNITY_SERVICE', 'PROBATION'] },
-    unit: { type: 'string', enum: ['YEARS', 'MONTHS', 'DAYS', 'DOLLARS', 'HOURS'] },
+    type: { type: 'string', enum: [...SentenceTypeEnum.options] },
+    // Flattened on purpose — Gemini's dialect has no discriminated union, so
+    // the model sees every unit and Zod correlates it to the type on the way in.
+    unit: { type: 'string', enum: [...SentenceUnitEnum.options] },
     amount: { type: 'integer', minimum: 1 },
     conditions: {
       type: 'array',
       items: {
         type: 'string',
-        enum: [
-          'SUBSTANCE_ABUSE_TREATMENT',
-          'ANGER_MANAGEMENT',
-          'RANDOM_DRUG_TESTING',
-          'NO_CONTACT_ORDER',
-          'ELECTRONIC_MONITORING',
-          'COMMUNITY_SERVICE',
-        ],
+        enum: [...ProbationConditionEnum.options],
       },
     },
   },
   required: ['type', 'unit', 'amount'],
 };
+
+// A stage whose response is one named field wraps its payload schema here.
+// The wrapping is not cosmetic: a stage that passes the *inner* shape by
+// mistake gets a response Zod rejects with a message that names the field as
+// missing rather than the mistake as unwrapping — which is exactly how the
+// InterrogationGen bug below survived, since the unit-test mock returned the
+// wrapped shape and only the live API disagreed.
+function geminiObjectOf(field: string, schema: GeminiSchema): GeminiSchema {
+  return { type: 'object', properties: { [field]: schema }, required: [field] };
+}
 
 function reactionBeatGeminiSchema(): GeminiSchema {
   return {
@@ -210,7 +248,7 @@ function reactionBeatGeminiSchema(): GeminiSchema {
     items: {
       type: 'object',
       properties: {
-        speaker: { type: 'string', enum: ['PROSECUTION', 'DEFENSE', 'CLERK'] },
+        speaker: { type: 'string', enum: [...ReactionSpeakerEnum.options] },
         text: { type: 'string', minLength: 1, maxLength: 600 },
       },
       required: ['speaker', 'text'],
@@ -234,12 +272,12 @@ function judgeLineOptionsGeminiSchema(choices: string[]): GeminiSchema {
   };
 }
 
-const CHARGE_CORE_GEMINI_SCHEMA: GeminiSchema = {
+export const CHARGE_CORE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', minLength: 1, maxLength: 40 },
     name: { type: 'string', minLength: 1, maxLength: 200 },
-    classification: { type: 'string', enum: ['FELONY', 'MISDEMEANOR', 'INFRACTION'] },
+    classification: { type: 'string', enum: [...ChargeClassificationEnum.options] },
     elements: {
       type: 'array',
       minItems: 1,
@@ -255,7 +293,7 @@ const CHARGE_CORE_GEMINI_SCHEMA: GeminiSchema = {
   required: ['id', 'name', 'classification', 'elements', 'mandatoryMinimums', 'maximumPenalties'],
 };
 
-const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
+export const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     ...CHARGE_CORE_GEMINI_SCHEMA.properties,
@@ -297,12 +335,12 @@ const VERDICT_VOICE_GEMINI_SCHEMA: GeminiSchema = {
   required: ['charges'],
 };
 
-const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
+export const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    locationType: { type: 'string', enum: ['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL'] },
-    timeOfDay: { type: 'string', enum: ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'] },
-    weather: { type: 'string', enum: ['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A'] },
+    locationType: { type: 'string', enum: [...LocationTypeEnum.options] },
+    timeOfDay: { type: 'string', enum: [...TimeOfDayEnum.options] },
+    weather: { type: 'string', enum: [...WeatherEnum.options] },
     description: { type: 'string', maxLength: 500 },
     establishedFacts: {
       type: 'array',
@@ -315,7 +353,7 @@ const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
   required: ['locationType', 'timeOfDay', 'weather', 'description', 'establishedFacts', 'interrogationLocation'],
 };
 
-const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
+export const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     firstName: { type: 'string', maxLength: 50 },
@@ -324,12 +362,12 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
     demographics: {
       type: 'object',
       properties: {
-        relationshipStatus: { type: 'string', enum: ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED'] },
+        relationshipStatus: { type: 'string', enum: [...RelationshipStatusEnum.options] },
         children: { type: 'integer', minimum: 0, maximum: 30 },
-        employmentStatus: { type: 'string', enum: ['EMPLOYED', 'UNEMPLOYED', 'STUDENT', 'RETIRED'] },
+        employmentStatus: { type: 'string', enum: [...EmploymentStatusEnum.options] },
         educationLevel: {
           type: 'string',
-          enum: ['SOME_HIGH_SCHOOL', 'HIGH_SCHOOL', 'COLLEGE', 'ADVANCED_DEGREE'],
+          enum: [...EducationLevelEnum.options],
         },
         substanceAbuseHistory: {
           type: 'array',
@@ -337,7 +375,7 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
             type: 'object',
             properties: {
               substance: { type: 'string', maxLength: 100 },
-              status: { type: 'string', enum: ['ACTIVE', 'IN_RECOVERY', 'NONE_REPORTED'] },
+              status: { type: 'string', enum: [...SubstanceStatusEnum.options] },
             },
             required: ['substance', 'status'],
           },
@@ -372,12 +410,12 @@ const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
   required: ['firstName', 'lastName', 'age', 'demographics', 'pastConvictions', 'oceanTraits'],
 };
 
-const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
+export const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     detectiveName: { type: 'string', minLength: 1, maxLength: 101 },
-    outcome: { type: 'string', enum: ['FULL_CONFESSION', 'PARTIAL_ADMISSION', 'DENIAL'] },
-    challengeGround: { type: 'string', enum: ['MIRANDA', 'VOLUNTARINESS'] },
+    outcome: { type: 'string', enum: [...InterrogationOutcomeEnum.options] },
+    challengeGround: { type: 'string', enum: [...ChallengeGroundEnum.options] },
     lines: {
       type: 'array',
       minItems: 4,
@@ -385,7 +423,7 @@ const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
       items: {
         type: 'object',
         properties: {
-          speaker: { type: 'string', enum: ['DETECTIVE', 'DEFENDANT'] },
+          speaker: { type: 'string', enum: [...InterrogationSpeakerEnum.options] },
           text: { type: 'string', minLength: 1, maxLength: 400 },
         },
         required: ['speaker', 'text'],
@@ -395,13 +433,13 @@ const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
   required: ['detectiveName', 'outcome', 'challengeGround', 'lines'],
 };
 
-const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
+export const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', minLength: 1, maxLength: 40 },
     name: { type: 'string', maxLength: 101 },
-    role: { type: 'string', enum: ['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR'] },
-    bias: { type: 'string', enum: ['PROSECUTION', 'DEFENSE', 'NEUTRAL'] },
+    role: { type: 'string', enum: [...WitnessRoleEnum.options] },
+    bias: { type: 'string', enum: [...BiasIndicatorEnum.options] },
     statement: { type: 'string', maxLength: 1000 },
     credibilityScore: {
       type: 'integer',
@@ -429,14 +467,14 @@ const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
   ],
 };
 
-const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
+export const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', minLength: 1, maxLength: 40 },
     name: { type: 'string', minLength: 3, maxLength: 100 },
     type: {
       type: 'string',
-      enum: ['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL', 'INTERROGATION'],
+      enum: [...EvidenceTypeEnum.options],
     },
     description: { type: 'string', maxLength: 600 },
     disclosureSummary: { type: 'string', minLength: 1, maxLength: 400 },
@@ -446,7 +484,7 @@ const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
       maximum: 10,
       description: 'How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
     },
-    objectionRisk: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    objectionRisk: { type: 'string', enum: [...ObjectionRiskEnum.options] },
     targetElementId: { type: 'string', maxLength: 40, nullable: true },
     prosecutionArgument: { type: 'string', minLength: 1, maxLength: 600 },
     defenseObjection: { type: 'string', maxLength: 600, nullable: true },
@@ -538,7 +576,7 @@ EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildStatuteSelectionContents(feedback: string | undefined): string {
   const base = 'Generate the charges and statuteContexts for a new case.';
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runStatuteSelection(
@@ -561,11 +599,7 @@ export async function runStatuteSelection(
 // ============================================================================
 const EnvironmentGenSchema = z.object({ environment: EnvironmentSchema });
 
-const ENVIRONMENT_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { environment: ENVIRONMENT_GEMINI_SCHEMA },
-  required: ['environment'],
-};
+const ENVIRONMENT_GEN_GEMINI_SCHEMA = geminiObjectOf('environment', ENVIRONMENT_GEMINI_SCHEMA);
 
 const ENVIRONMENT_GEN_SYSTEM = `ROLE: You are an investigator recording the scene of an alleged offense for a California criminal case.
 
@@ -579,7 +613,7 @@ RULES:
 
 function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the environment for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runEnvironmentGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Environment> {
@@ -600,11 +634,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
 // ============================================================================
 const CharacterGenSchema = z.object({ defendant: CharacterSchema });
 
-const CHARACTER_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { defendant: CHARACTER_GEMINI_SCHEMA },
-  required: ['defendant'],
-};
+const CHARACTER_GEN_GEMINI_SCHEMA = geminiObjectOf('defendant', CHARACTER_GEMINI_SCHEMA);
 
 const CHARACTER_GEN_SYSTEM = `ROLE: You are a probation officer compiling the defendant's background for a California criminal case.
 
@@ -620,7 +650,7 @@ EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildCharacterGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the defendant for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runCharacterGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Defendant> {
@@ -649,11 +679,7 @@ const InterrogationGenSchema = z.object({ interrogation: InterrogationSchema });
 // it with `interrogation: Invalid input` — every other stage wraps correctly,
 // the unit-test mock returned the wrapped shape so the divergence was invisible
 // until a live run.
-const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { interrogation: INTERROGATION_GEMINI_SCHEMA },
-  required: ['interrogation'],
-};
+const INTERROGATION_GEN_GEMINI_SCHEMA = geminiObjectOf('interrogation', INTERROGATION_GEMINI_SCHEMA);
 
 const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
 
@@ -675,7 +701,7 @@ function buildInterrogationGenContents(
 ): string {
   const interrogationLocation = environment.interrogationLocation ?? 'a police interview room (no address given — invent a plausible station)';
   const base = [
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     `Interrogation location (set the dialogue here): ${interrogationLocation}`,
     `Offense scene (background only — do not use this as the interrogation's setting): ${environment.description}`,
     environment.establishedFacts !== undefined
@@ -684,7 +710,7 @@ function buildInterrogationGenContents(
     `Required outcome: ${profile.outcome}.`,
     `Required challengeGround: ${profile.challengeGround}.`,
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runInterrogationGen(
@@ -817,13 +843,13 @@ function buildEvidenceGenContents(
     environment.establishedFacts !== undefined
       ? `Established facts about the scene (quote or directly reference these; do not restate them in a way that could conflict):\n${environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
       : '',
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     'Produce at least 3 evidence items and at least 2 witnesses — the response is rejected if either count falls short.',
     interrogation !== null
       ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
       : 'Do not include any evidence item with type "INTERROGATION" — no usable tape exists for this defendant.',
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runEvidenceGen(
@@ -992,7 +1018,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
 
   const base = [
     `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
-    `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
+    `Defendant: ${defendantFullName(parts.defendant)}.`,
     `Environment: ${parts.environment.description}`,
     // The canonical scene facts exist precisely so downstream stages stop
     // paraphrasing `description` and drifting. This stage writes
@@ -1006,7 +1032,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
     'Witnesses:',
     witnessList,
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 const REPAIR_SYSTEM = `ROLE: You are correcting a California criminal case file that failed schema validation.
@@ -1035,7 +1061,7 @@ function buildRepairContents(assembled: unknown, issues: z.ZodError, feedback: s
   const previousResponse = extractPreviousResponse(feedback);
   const object = previousResponse ?? JSON.stringify(assembled);
   const base = `Object:\n${object}\n\nValidation issues:\n${issueList}`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 interface FinalizeParts {
@@ -1223,10 +1249,10 @@ function buildVerdictVoiceContents(
   const base = [
     'Charges, in the fixed order they are resolved at trial:',
     orderedCharges,
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     'Return exactly one entry per count above, echoing each id character for character.',
   ].join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runVerdictVoice(
@@ -1279,11 +1305,7 @@ const OfferPleaNarrativeSchema = z
     if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
   });
 
-const WEAK_PLEA_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { prosecutionRationale: { type: 'string', minLength: 1, maxLength: 1000 } },
-  required: ['prosecutionRationale'],
-};
+const WEAK_PLEA_GEMINI_SCHEMA = geminiObjectOf('prosecutionRationale', { type: 'string', minLength: 1, maxLength: 1000 });
 
 const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
@@ -1320,7 +1342,7 @@ function buildPleaNarrativeContents(
   feedback: string | undefined,
 ): string {
   const chargeNames = payload.charges.map((c) => c.name).join(', ');
-  const defendantName = `${payload.defendant.firstName} ${payload.defendant.lastName}`;
+  const defendantName = defendantFullName(payload.defendant);
   const factsLine = `Already on the record — the People's statement of facts: ${payload.statementOfFacts}`;
 
   let base: string;
@@ -1340,7 +1362,7 @@ function buildPleaNarrativeContents(
       'Write the parties\' rationales, allocution, reactions, and ruling lines to match these exact terms.'
     ].join('\n');
   }
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runPleaNarrative(
@@ -1387,11 +1409,7 @@ export async function runPleaNarrative(
 // ============================================================================
 const AftermathFieldSchema = z.object({ narrative: AftermathNarrativeSchema });
 
-const AFTERMATH_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { narrative: { type: 'string', minLength: 1, maxLength: 4000 } },
-  required: ['narrative'],
-};
+const AFTERMATH_GEMINI_SCHEMA = geminiObjectOf('narrative', { type: 'string', minLength: 1, maxLength: 4000 });
 
 const AFTERMATH_SYSTEM = `ROLE: You are a court reporter writing the follow-up story once a California criminal case has closed.
 
@@ -1405,12 +1423,12 @@ RULES:
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
   const base = [
     `Case: ${ctx.caseData.charges.map((c) => c.name).join(', ')}.`,
-    `Defendant: ${ctx.caseData.defendant.firstName} ${ctx.caseData.defendant.lastName}.`,
+    `Defendant: ${defendantFullName(ctx.caseData.defendant)}.`,
     ctx.pleaDecision !== null ? `Plea decision: ${ctx.pleaDecision}.` : 'Resolved by trial.',
     ctx.verdict !== null ? `Verdict: ${ctx.verdict.map((v) => `${v.chargeName}: ${v.verdict}`).join('; ')}.` : '',
     `Imposed sentence: ${JSON.stringify(ctx.imposedSentence)}.`,
   ].join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runAftermath(apiKey: string, model: string, ctx: AftermathContext): Promise<string> {

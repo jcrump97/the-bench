@@ -92,32 +92,27 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     throw new Error(`Demo case ${payload.caseId}: a NO_OFFER (WEAK) case must not carry a defenseRationale`);
   }
   const pleaReachable = posture.status === 'PENDING_JUDICIAL_REVIEW';
-  // The allocution beat plays only on the accepted-plea path, so it must be
-  // authored exactly when that path is reachable — same pairing rule as the
-  // PLEA_ACCEPTED aftermath below.
-  if (pleaReachable !== (pleaNarrative.allocution !== undefined)) {
-    throw new Error(
-      `Demo case ${payload.caseId}: pleaNarrative.allocution must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
-    );
+
+  // Four fields exist only on the accepted-plea path, and each must be
+  // authored exactly when that path is reachable — present when it is, absent
+  // when it is not. Reachability is derived from the payload's own numbers, so
+  // the type system cannot see it; this is the check that keeps a bundle from
+  // authoring an allocution for a defendant who will never allocute, or
+  // omitting one for a defendant who will.
+  const pleaPathFields: [label: string, value: unknown][] = [
+    ['pleaNarrative.allocution', pleaNarrative.allocution],
+    ['pleaNarrative.pleaReactions', pleaNarrative.pleaReactions],
+    ['pleaNarrative.pleaRulingOptions', pleaNarrative.pleaRulingOptions],
+    ['aftermath.PLEA_ACCEPTED', raw.aftermath.PLEA_ACCEPTED],
+  ];
+  for (const [label, value] of pleaPathFields) {
+    if (pleaReachable !== (value !== undefined)) {
+      throw new Error(
+        `Demo case ${payload.caseId}: ${label} must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
+      );
+    }
   }
-  // The plea-reaction beats and the judge's voiced plea options play only
-  // when a negotiated plea is actually ruled on from the bench — same
-  // reachability, same pairing rule.
-  if (pleaReachable !== (pleaNarrative.pleaReactions !== undefined)) {
-    throw new Error(
-      `Demo case ${payload.caseId}: pleaNarrative.pleaReactions must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
-    );
-  }
-  if (pleaReachable !== (pleaNarrative.pleaRulingOptions !== undefined)) {
-    throw new Error(
-      `Demo case ${payload.caseId}: pleaNarrative.pleaRulingOptions must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
-    );
-  }
-  if (pleaReachable !== (raw.aftermath.PLEA_ACCEPTED !== undefined)) {
-    throw new Error(
-      `Demo case ${payload.caseId}: aftermath.PLEA_ACCEPTED must be authored exactly when the computed posture is PENDING_JUDICIAL_REVIEW (got ${posture.status})`
-    );
-  }
+
   // Interrogation exhibits are echo-validated against the deterministic
   // profile derived from this defendant's traits and priors: the authored
   // transcript may only dramatize what deriveInterrogationProfile says

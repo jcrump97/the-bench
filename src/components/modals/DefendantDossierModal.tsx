@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { Modal } from './Modal';
 import { SentenceList } from '../common/SentenceList';
 import { enumLabel } from '../../lib/format';
+import { defendantFullName } from '../../schemas/gameSchemas';
 
 export function DefendantDossierModal() {
   const activeCase = useGameStore((state) => state.activeCase);
@@ -12,7 +13,7 @@ export function DefendantDossierModal() {
   const { defendant } = activeCase;
 
   return (
-    <Modal title={`${defendant.firstName} ${defendant.lastName}`} onClose={closeModal}>
+    <Modal title={defendantFullName(defendant)} onClose={closeModal}>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <dt className="text-(--text-muted)">Age</dt>
         <dd className="text-(--text)">{defendant.age}</dd>

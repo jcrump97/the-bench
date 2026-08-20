@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCourtroomScript,
+  projectScriptView,
   type BuildCourtroomScriptInput,
   type ScriptBeat,
   type StatementBeat,
@@ -684,4 +685,81 @@ describe('buildCourtroomScript — demo docket playthroughs are prefix-stable', 
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// projectScriptView — the reveal cursor applied to a script.
+//
+// This is what the action bar reads to decide which control to render, and it
+// was previously inline in useCourtroomScript where no test could reach it.
+// Two behaviours matter: the cursor is clamped, and an overshoot past a
+// trailing decision re-presents that decision rather than rendering nothing —
+// without which a raced double-advance soft-locks the game.
+// ---------------------------------------------------------------------------
+describe('projectScriptView', () => {
+  // Two shapes matter, and baseInput alone only produces the first: with no
+  // plea posture the builder stops after discovery and emits no decision at
+  // all, so a trailing-decision script needs a posture to reach the plea beat.
+  const discoveryOnly = buildCourtroomScript(baseInput);
+  const withDecision = buildCourtroomScript({ ...baseInput, pleaPosture: noOfferPosture });
+  const decisionIndex = withDecision.findIndex((beat) => beat.kind === 'DECISION');
+
+  it('reveals nothing at cursor 0', () => {
+    const view = projectScriptView(discoveryOnly, 0);
+    expect(view.visibleEntries).toEqual([]);
+    expect(view.cursor).toBe(0);
+    expect(view.pendingBeat).toBe(discoveryOnly[0]);
+  });
+
+  it('reveals a prefix and pends the next beat', () => {
+    const view = projectScriptView(discoveryOnly, 3);
+    expect(view.cursor).toBe(3);
+    expect(view.visibleEntries).toHaveLength(3);
+    expect(view.pendingBeat).toBe(discoveryOnly[3]);
+  });
+
+  it('filters decisions out of the visible transcript', () => {
+    // The transcript shows what was said; a decision is a pause, not a line.
+    const view = projectScriptView(withDecision, withDecision.length);
+    expect(view.visibleEntries.every((beat) => beat.kind === 'STATEMENT')).toBe(true);
+    expect(view.visibleEntries).toHaveLength(withDecision.length - 1);
+  });
+
+  it('pends the decision itself once the cursor reaches it', () => {
+    expect(decisionIndex).toBeGreaterThan(-1);
+    const view = projectScriptView(withDecision, decisionIndex);
+    expect(view.pendingBeat).toBe(withDecision[decisionIndex]);
+    expect(view.pendingBeat?.kind).toBe('DECISION');
+  });
+
+  it('clamps a cursor past the end of the script', () => {
+    const view = projectScriptView(discoveryOnly, discoveryOnly.length + 50);
+    expect(view.cursor).toBe(discoveryOnly.length);
+    expect(view.visibleEntries).toHaveLength(discoveryOnly.length);
+  });
+
+  it('re-presents a trailing unresolved decision on overshoot', () => {
+    // The soft-lock guard. Emission stops at the first unresolved decision, so
+    // that decision IS the last beat; a cursor at or past length must still
+    // hand the action bar something to render.
+    const last = withDecision.at(-1);
+    expect(last?.kind).toBe('DECISION');
+    for (const overshoot of [withDecision.length, withDecision.length + 1, withDecision.length + 99]) {
+      expect(projectScriptView(withDecision, overshoot).pendingBeat).toBe(last);
+    }
+  });
+
+  it('pends nothing when the script ends on a statement', () => {
+    // Act 1 with no posture loaded ends on the last discovery beat: nothing
+    // is awaiting a ruling, so no control should render.
+    const view = projectScriptView(discoveryOnly, discoveryOnly.length);
+    expect(discoveryOnly.at(-1)?.kind).toBe('STATEMENT');
+    expect(view.pendingBeat).toBeUndefined();
+  });
+
+  it('handles an empty script without throwing', () => {
+    // Reachable before a case is loaded, when the hook short-circuits to [].
+    const view = projectScriptView([], 7);
+    expect(view).toEqual({ script: [], cursor: 0, visibleEntries: [], pendingBeat: undefined });
+  });
 });

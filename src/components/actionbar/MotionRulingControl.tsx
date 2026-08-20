@@ -1,7 +1,7 @@
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
+import { JudgeLineOptions } from './JudgeLineOptions';
 
-const OPTION_BUTTON = 'min-h-11 w-full rounded-md border px-4 py-2 text-left text-sm';
 const ADMIT_STYLE = 'border-transparent bg-(--status-admitted-bg) text-(--status-not-guilty) hover:opacity-90';
 const EXCLUDE_STYLE = 'border-(--border-strong) text-(--text) hover:bg-(--status-excluded-bg) hover:text-(--status-guilty)';
 
@@ -34,19 +34,11 @@ export function MotionRulingControl({ evidenceId }: { evidenceId: string }) {
         </p>
         <h2 className="truncate font-medium text-(--text-h)">{evidence.name}</h2>
       </div>
-      <div className="flex flex-col gap-2">
-        {evidence.rulingOptions.map((option) => (
-          <button
-            key={option.lineText}
-            type="button"
-            data-choice={option.choice}
-            onClick={() => rule(option.choice, option.lineText)}
-            className={`${OPTION_BUTTON} ${option.choice === 'ADMITTED' ? ADMIT_STYLE : EXCLUDE_STYLE}`}
-          >
-            <span aria-hidden="true">&ldquo;</span>{option.lineText}<span aria-hidden="true">&rdquo;</span>
-          </button>
-        ))}
-      </div>
+      <JudgeLineOptions
+        options={evidence.rulingOptions}
+        styleFor={(choice) => (choice === 'ADMITTED' ? ADMIT_STYLE : EXCLUDE_STYLE)}
+        onChoose={rule}
+      />
     </div>
   );
 }
