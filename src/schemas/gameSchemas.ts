@@ -112,7 +112,25 @@ export const ProbationConditionEnum = z.enum([
   'COMMUNITY_SERVICE'
 ]);
 
-const SENTENCE_UNIT_MAX: Record<'YEARS' | 'MONTHS' | 'DAYS' | 'DOLLARS' | 'HOURS', number> = {
+// The sentence vocabularies, named so the Gemini responseSchema in
+// src/lib/llm/stages.ts can be built from these members instead of a second
+// hand-typed copy of them. schemaParity.test.ts enforces the correspondence.
+//
+// Note the units are split by sentence type on purpose: custody is served in
+// years/months/days, probation in years/months, a fine in dollars and
+// community service in hours. Gemini's schema dialect cannot express a
+// discriminated union, so SENTENCE_GEMINI_SCHEMA flattens all five into one
+// `unit` enum — the one divergence schemaParity.test.ts pins with a dedicated
+// assertion instead of the general "never looser than Zod" rule.
+export const SentenceTypeEnum = z.enum(['PRISON', 'JAIL', 'FINE', 'COMMUNITY_SERVICE', 'PROBATION']);
+export const CustodyUnitEnum = z.enum(['YEARS', 'MONTHS', 'DAYS']);
+export const ProbationUnitEnum = z.enum(['YEARS', 'MONTHS']);
+// Every unit any sentence type can carry. This is the flattening itself,
+// declared once: SENTENCE_GEMINI_SCHEMA spreads it, and SENTENCE_UNIT_MAX is
+// keyed by it, so a new unit cannot be added to one and forgotten in the other.
+export const SentenceUnitEnum = z.enum([...CustodyUnitEnum.options, 'DOLLARS', 'HOURS']);
+
+const SENTENCE_UNIT_MAX: Record<z.infer<typeof SentenceUnitEnum>, number> = {
   YEARS: 100,
   MONTHS: 1200,
   DAYS: 36500,
@@ -121,11 +139,11 @@ const SENTENCE_UNIT_MAX: Record<'YEARS' | 'MONTHS' | 'DAYS' | 'DOLLARS' | 'HOURS
 };
 
 export const SentenceSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal('PRISON'),            unit: z.enum(['YEARS', 'MONTHS', 'DAYS']), amount: z.number().int().positive() }),
-  z.strictObject({ type: z.literal('JAIL'),              unit: z.enum(['YEARS', 'MONTHS', 'DAYS']), amount: z.number().int().positive() }),
-  z.strictObject({ type: z.literal('FINE'),              unit: z.literal('DOLLARS'),               amount: z.number().int().positive() }),
-  z.strictObject({ type: z.literal('COMMUNITY_SERVICE'), unit: z.literal('HOURS'),                 amount: z.number().int().positive() }),
-  z.strictObject({ type: z.literal('PROBATION'),         unit: z.enum(['YEARS', 'MONTHS']),        amount: z.number().int().positive(), conditions: z.array(ProbationConditionEnum).min(1) }),
+  z.strictObject({ type: z.literal('PRISON'),            unit: CustodyUnitEnum,                     amount: z.number().int().positive() }),
+  z.strictObject({ type: z.literal('JAIL'),              unit: CustodyUnitEnum,                     amount: z.number().int().positive() }),
+  z.strictObject({ type: z.literal('FINE'),              unit: z.literal('DOLLARS'),                amount: z.number().int().positive() }),
+  z.strictObject({ type: z.literal('COMMUNITY_SERVICE'), unit: z.literal('HOURS'),                  amount: z.number().int().positive() }),
+  z.strictObject({ type: z.literal('PROBATION'),         unit: ProbationUnitEnum,                   amount: z.number().int().positive(), conditions: z.array(ProbationConditionEnum).min(1) }),
 ]).superRefine((v, ctx) => {
   const max = SENTENCE_UNIT_MAX[v.unit];
   if (v.amount > max) {
@@ -149,6 +167,8 @@ export function sentenceDayEquivalent(s: z.infer<typeof SentenceSchema>): number
   return null;
 }
 
+export const ChargeClassificationEnum = z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']);
+export const ObjectionRiskEnum = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 export const EvidenceTypeEnum = z.enum(['DOCUMENTARY', 'PHYSICAL', 'DIGITAL', 'FORENSIC', 'CIRCUMSTANTIAL', 'INTERROGATION']);
 export const WitnessRoleEnum = z.enum(['EYEWITNESS', 'EXPERT', 'CHARACTER', 'VICTIM', 'INVESTIGATOR']);
 export const BiasIndicatorEnum = z.enum(['PROSECUTION', 'DEFENSE', 'NEUTRAL']);
@@ -222,8 +242,10 @@ export const VerdictValueSchema   = z.enum(['GUILTY', 'NOT_GUILTY']);
 // below); reaction *content* is narrative — the same color/structure split as
 // every other authored field. The court itself never reacts to its own
 // rulings, so COURT is not a reaction speaker.
+export const ReactionSpeakerEnum = z.enum(['PROSECUTION', 'DEFENSE', 'CLERK']);
+
 export const ReactionLineSchema = z.strictObject({
-  speaker: z.enum(['PROSECUTION', 'DEFENSE', 'CLERK']),
+  speaker: ReactionSpeakerEnum,
   text: noJury(z.string().min(1).max(600)),
 });
 
@@ -260,7 +282,7 @@ function addChoiceCoverageIssues(
 const ChargeCoreShape = {
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(200),
-  classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
+  classification: ChargeClassificationEnum,
   elements: z.array(StatuteElementSchema).min(1),
   mandatoryMinimums: z.array(SentenceSchema),
   maximumPenalties: z.array(SentenceSchema).min(1),
@@ -291,8 +313,12 @@ export const ChargeSchema = z.strictObject({
 // One line of a recorded custodial interview — the tape is played into the
 // record line by line when the exhibit is offered, so each line is a spoken
 // beat, not document prose.
+export const InterrogationSpeakerEnum = z.enum(['DETECTIVE', 'DEFENDANT']);
+export const InterrogationOutcomeEnum = z.enum(['FULL_CONFESSION', 'PARTIAL_ADMISSION', 'DENIAL']);
+export const ChallengeGroundEnum = z.enum(['MIRANDA', 'VOLUNTARINESS']);
+
 export const InterrogationLineSchema = z.strictObject({
-  speaker: z.enum(['DETECTIVE', 'DEFENDANT']),
+  speaker: InterrogationSpeakerEnum,
   text: noJury(z.string().min(1).max(400)),
 });
 
@@ -307,8 +333,8 @@ export const InterrogationLineSchema = z.strictObject({
 // INTERROGATION exhibit can exist for one.
 export const InterrogationSchema = z.strictObject({
   detectiveName: z.string().min(1).max(101).describe("The interviewing detective — must match the case's INVESTIGATOR witness when one exists."),
-  outcome: z.enum(['FULL_CONFESSION', 'PARTIAL_ADMISSION', 'DENIAL']).describe("Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome."),
-  challengeGround: z.enum(['MIRANDA', 'VOLUNTARINESS']).describe("Echo of the derived profile: the ground on which the defense moves to suppress the tape."),
+  outcome: InterrogationOutcomeEnum.describe("Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome."),
+  challengeGround: ChallengeGroundEnum.describe("Echo of the derived profile: the ground on which the defense moves to suppress the tape."),
   lines: z.array(InterrogationLineSchema).min(4).max(24),
 });
 
@@ -337,7 +363,7 @@ export const EvidenceSchema = z.strictObject({
   // actually offered.
   disclosureSummary: noJury(z.string().min(1).max(400)).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
   relevanceScore: z.number().int().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
-  objectionRisk: z.enum(['LOW', 'MEDIUM', 'HIGH']).describe("Likelihood of opposing counsel objecting."),
+  objectionRisk: ObjectionRiskEnum.describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
   isAdmitted: z.boolean().optional().transform((): boolean => false).describe("Always initialized to false. Mutated by player action during the trial phase."),
   // Voiced motion-hearing beats: the prosecutor offers the exhibit, defense
@@ -392,9 +418,14 @@ export const PastConvictionSchema = z.strictObject({
   sentences: z.array(SentenceSchema),
 });
 
+export const SubstanceStatusEnum = z.enum(['ACTIVE', 'IN_RECOVERY', 'NONE_REPORTED']);
+export const RelationshipStatusEnum = z.enum(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED']);
+export const EmploymentStatusEnum = z.enum(['EMPLOYED', 'UNEMPLOYED', 'STUDENT', 'RETIRED']);
+export const EducationLevelEnum = z.enum(['SOME_HIGH_SCHOOL', 'HIGH_SCHOOL', 'COLLEGE', 'ADVANCED_DEGREE']);
+
 export const SubstanceAbuseSchema = z.strictObject({
   substance: z.string().max(100),
-  status: z.enum(['ACTIVE', 'IN_RECOVERY', 'NONE_REPORTED']),
+  status: SubstanceStatusEnum,
 });
 
 export const CharacterSchema = z.strictObject({
@@ -403,10 +434,10 @@ export const CharacterSchema = z.strictObject({
   age: z.number().int().min(18).max(120),
 
   demographics: z.strictObject({
-    relationshipStatus: z.enum(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED']),
+    relationshipStatus: RelationshipStatusEnum,
     children: z.number().int().min(0).max(30),
-    employmentStatus: z.enum(['EMPLOYED', 'UNEMPLOYED', 'STUDENT', 'RETIRED']),
-    educationLevel: z.enum(['SOME_HIGH_SCHOOL', 'HIGH_SCHOOL', 'COLLEGE', 'ADVANCED_DEGREE']),
+    employmentStatus: EmploymentStatusEnum,
+    educationLevel: EducationLevelEnum,
     substanceAbuseHistory: z.array(SubstanceAbuseSchema),
   }),
 
@@ -424,10 +455,14 @@ export const CharacterSchema = z.strictObject({
 // ==========================================
 // 4. ENVIRONMENT & CASE PAYLOAD
 // ==========================================
+export const LocationTypeEnum = z.enum(['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL']);
+export const TimeOfDayEnum = z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']);
+export const WeatherEnum = z.enum(['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A']);
+
 export const EnvironmentSchema = z.strictObject({
-  locationType: z.enum(['RESIDENTIAL', 'COMMERCIAL', 'PUBLIC_SPACE', 'VEHICLE', 'DIGITAL']),
-  timeOfDay: z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']),
-  weather: z.enum(['CLEAR', 'RAIN', 'FOG', 'SNOW', 'N/A']),
+  locationType: LocationTypeEnum,
+  timeOfDay: TimeOfDayEnum,
+  weather: WeatherEnum,
   description: z.string().max(500),
   // Canonical, quotable facts about the scene — meant to be threaded
   // verbatim into every downstream LLM stage that needs to stay consistent
@@ -608,7 +643,7 @@ export const MotionRulingSchema = z.strictObject({
 export const ChargeVerdictSchema = z.strictObject({
   chargeId:       z.string().min(1).max(40),
   chargeName:     z.string().max(200),
-  classification: z.enum(['FELONY', 'MISDEMEANOR', 'INFRACTION']),
+  classification: ChargeClassificationEnum,
   verdict:        VerdictValueSchema,
 });
 
