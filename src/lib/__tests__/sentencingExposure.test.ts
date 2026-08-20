@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { deriveSentencingExposure } from '../sentencingExposure';
-import { ChargeSchema } from '../../schemas/gameSchemas';
+import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
+import {
+  ChargeSchema,
+  SentenceSchema,
+  addSentencingTypeExclusivityIssues,
+  sentenceDayEquivalent,
+  type ChargeVerdict,
+} from '../../schemas/gameSchemas';
 
 type RawCharge = z.input<typeof ChargeSchema>;
 
@@ -168,5 +174,129 @@ describe('deriveSentencingExposure', () => {
     expect(deriveSentencingExposure([a, b]).maximumPenalties).toEqual([
       { type: 'JAIL', unit: 'MONTHS', amount: 9 },
     ]);
+  });
+
+  it('never derives a floor above its own ceiling when a JAIL minimum converts', () => {
+    // The felony's PRISON ceiling (6 months) is *shorter* than the
+    // misdemeanor's JAIL floor (1 year), so converting the floor to PRISON
+    // unclamped produced min 1 YEAR against max 6 MONTHS — a range the plea
+    // offer and the sentencing picker read in opposite directions.
+    const felony = charge({
+      maximumPenalties: [{ type: 'PRISON', unit: 'MONTHS', amount: 6 }],
+    });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      mandatoryMinimums: [{ type: 'JAIL', unit: 'YEARS', amount: 1 }],
+      maximumPenalties: [{ type: 'JAIL', unit: 'YEARS', amount: 1 }],
+    });
+
+    const exposure = deriveSentencingExposure([felony, misdemeanor]);
+    const floor = exposure.mandatoryMinimums.find((s) => s.type === 'PRISON');
+    const ceiling = exposure.maximumPenalties.find((s) => s.type === 'PRISON');
+
+    expect(floor).toBeDefined();
+    expect(ceiling).toBeDefined();
+    expect(sentenceDayEquivalent(floor!)!).toBeLessThanOrEqual(sentenceDayEquivalent(ceiling!)!);
+    // The ceiling wins: a floor cannot exceed the longest authorized term.
+    expect(floor).toEqual({ type: 'PRISON', unit: 'MONTHS', amount: 6 });
+  });
+
+  it('never emits both PRISON and JAIL, even for a lone wobbler listing both', () => {
+    // Exclusivity is load-bearing, not cosmetic: it is enforced downstream by
+    // addSentencingTypeExclusivityIssues on PleaPostureSchema's offer branches
+    // and on FinalResultSchema.imposedSentence. A mixed exposure makes
+    // derivePleaOfferTerms build an offer PleaPostureSchema rejects, and
+    // buildPleaPosture then throws inside usePleaPosture's useMemo — an
+    // uncaught throw during Act 1 render. So a wobbler collapses too, and
+    // PRISON governs; modelling the §17(b)/§1170(h) election properly needs a
+    // custody-election field the schema does not have.
+    const wobbler = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'JAIL', unit: 'YEARS', amount: 1 },
+      ],
+    });
+
+    const exposure = deriveSentencingExposure([wobbler]);
+    const types = new Set(exposure.maximumPenalties.map((s) => s.type));
+    expect(types.has('PRISON') && types.has('JAIL')).toBe(false);
+    expect(exposure.maximumPenalties).toEqual([{ type: 'PRISON', unit: 'YEARS', amount: 3 }]);
+  });
+
+  it('keeps the plea-offer path valid for a wobbler (the regression guard)', () => {
+    const wobbler = charge({
+      maximumPenalties: [
+        { type: 'PRISON', unit: 'YEARS', amount: 3 },
+        { type: 'JAIL', unit: 'YEARS', amount: 1 },
+      ],
+    });
+    const exposure = deriveSentencingExposure([wobbler]);
+    // The exact check PleaPostureSchema/FinalResultSchema apply to a derived
+    // sentence array — asserted here so a future change to the collapse cannot
+    // reintroduce the uncaught Act 1 throw without failing this test first.
+    const result = z.object({ s: z.array(SentenceSchema).superRefine((v, ctx) => addSentencingTypeExclusivityIssues(v, ctx)) })
+      .safeParse({ s: exposure.maximumPenalties });
+    expect(result.success).toBe(true);
+  });
+
+  it('still collapses when a separate count is jail-only (the §669 case)', () => {
+    const felony = charge({ maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }] });
+    const misdemeanor = charge({
+      classification: 'MISDEMEANOR',
+      maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+    });
+
+    expect(deriveSentencingExposure([felony, misdemeanor]).maximumPenalties).toEqual([
+      { type: 'PRISON', unit: 'YEARS', amount: 3 },
+    ]);
+  });
+});
+
+describe('selectSentenceableCharges', () => {
+  const felony = charge({ maximumPenalties: [{ type: 'PRISON', unit: 'YEARS', amount: 3 }] });
+  const misdemeanor = charge({
+    classification: 'MISDEMEANOR',
+    maximumPenalties: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
+  });
+  const verdict = (id: string, value: 'GUILTY' | 'NOT_GUILTY'): ChargeVerdict => ({
+    chargeId: id,
+    chargeName: 'Test charge',
+    classification: 'FELONY',
+    verdict: value,
+  });
+
+  it('takes every count on the plea path (the defendant pleads to all of them)', () => {
+    expect(selectSentenceableCharges([felony, misdemeanor], true, [])).toEqual([felony, misdemeanor]);
+  });
+
+  it('takes only GUILTY counts on the trial path', () => {
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'GUILTY'),
+    ]);
+    expect(selected).toEqual([misdemeanor]);
+  });
+
+  it('leaves the convicted count its own custody type when the prison-eligible count is acquitted', () => {
+    // The regression: exposure was derived from all charges, so the acquitted
+    // felony's PRISON range collapsed away the convicted misdemeanor's JAIL
+    // range — the bench was offered prison on a count the defendant beat, and
+    // no jail on the count they lost.
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'GUILTY'),
+    ]);
+    expect(deriveSentencingExposure(selected).maximumPenalties).toEqual([
+      { type: 'JAIL', unit: 'MONTHS', amount: 6 },
+    ]);
+  });
+
+  it('returns nothing on a full acquittal, so the caller adjourns', () => {
+    const selected = selectSentenceableCharges([felony, misdemeanor], false, [
+      verdict(felony.id, 'NOT_GUILTY'),
+      verdict(misdemeanor.id, 'NOT_GUILTY'),
+    ]);
+    expect(selected).toEqual([]);
+    expect(deriveSentencingExposure(selected)).toEqual({ mandatoryMinimums: [], maximumPenalties: [] });
   });
 });

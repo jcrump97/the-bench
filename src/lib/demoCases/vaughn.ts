@@ -69,9 +69,13 @@ const rawVaughnPayload = {
     description: 'The intersection of Alder Avenue and 9th, four blocks from the middle school: a bike lane the city painted last spring, a four-way stop drivers treat as a suggestion, and streetlights on a seasonal timer that, in the first week of October, still believed it was summer. At 6:40 p.m. it is dusk on the ground and daylight on paper.',
   },
   // [LLM-FILL: StatuteSelection] — charges (with elements and per-charge
-  // statutory ranges) and statuteContexts. Two charges: case-level exposure
-  // is derived across them (prison + fine from the felony, jail from the
-  // misdemeanor), and the verdict is entered per charge.
+  // statutory ranges) and statuteContexts. Two charges, and the verdict is
+  // entered per charge. Case-level exposure is derived across whichever counts
+  // are convicted: the felony contributes prison + fine and the misdemeanor
+  // jail, but a case never carries both custody types at once — when both
+  // counts are convicted the jail term is absorbed into the governing prison
+  // figure (Cal. Penal Code § 669), so the derived exposure reads prison +
+  // fine. Convict the misdemeanor alone and the exposure is jail only.
   charges: [
     {
       id: 'charge-hit-run',

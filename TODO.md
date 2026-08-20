@@ -1,5 +1,51 @@
 # TODO
 
+## Sentencing exposure follow-ups (code review, 2026-08-07 — OPEN)
+
+Opened alongside the `fix/sentencing-exposure-and-stage-context` branch, which
+fixed the verdict-scoping bug (exposure was derived from every charge, so an
+acquitted count's range shaped the sentence) and the floor-above-ceiling bug in
+the PRISON/JAIL collapse. One modelling gap is deliberately left open.
+
+- [ ] **S1 — no per-count custody election, so a wobbler loses its jail
+      option.** `deriveSentencingExposure` collapses PRISON+JAIL to PRISON
+      unconditionally. That is correct for §669 aggregation across counts, but a
+      single count that itself lists both maxima is alternative sentencing (a
+      wobbler under §17(b), a realigned felony under §1170(h)) where a real court
+      elects between them — and the collapse silently deletes the jail election.
+      **The obvious fix is not available:** emitting both types makes
+      `derivePleaOfferTerms` build an offer `PleaPostureSchema` rejects (via
+      `addSentencingTypeExclusivityIssues`), and `buildPleaPosture` then throws
+      inside `usePleaPosture`'s `useMemo` — an uncaught throw during Act 1
+      render, not even a Mistrial screen. Verified by trying it: a lone wobbler
+      with `[PRISON 3 YEARS, JAIL 1 YEAR]` reproduces exactly that. A real fix
+      needs a custody-election field on the charge (or on the derived exposure)
+      plus a UI affordance for the court to choose, so exclusivity holds while
+      both options stay reachable. Until then PRISON governs — the safe
+      direction — and `sentencingExposure.test.ts` guards the invariant so the
+      shortcut cannot be reintroduced by accident.
+- [ ] **S2 — a converted minimum keeps its own unit, so a negotiated plea
+      sentence can be unimposable.** Pre-existing on `main` (predates the
+      verdict-scoping and clamp fixes; neither causes it). The JAIL→PRISON
+      minimum conversion retypes but does not re-unit
+      (`{...jailMinimum, type: 'PRISON'}`), so the derived floor and ceiling can
+      disagree on unit. Reproduced: felony `[PRISON 3 YEARS]` + misdemeanor
+      `[JAIL 35 MONTHS]` collapses to max `{PRISON, YEARS, 3}` / min
+      `{PRISON, MONTHS, 35}`. A MODERATE offer discounts 3 YEARS to 2, falls
+      below the floor, and `discountSentences` returns the floor verbatim —
+      `[{PRISON, MONTHS, 35}]`. `SentencingControl`'s seed then matches on both
+      `type` **and** `unit`, so the `find` misses and the picker seeds at the
+      ceiling; `floorAmountFor` converts the floor into the ceiling's unit
+      (`ceil(1064.58 / 365)` = 3), leaving floor == ceiling == 3 YEARS. The
+      record narrates a 35-month negotiated term the court then cannot impose.
+      The fix needs a rounding-direction decision that is not obvious: rounding
+      a converted floor *up* to the ceiling's unit raises a statutory minimum
+      (30 DAYS would become 1 YEAR, which an existing test rightly pins against),
+      and rounding *down* discards it. Likely answer is to keep the exposure in
+      day-equivalents and let the picker present the finest unit, rather than
+      converting per-entry — which touches `sentenceBounds`, `discountSentences`,
+      and the picker together, so it wants its own change.
+
 ## Architecture review (external review, 2026-08-07 — OPEN)
 
 An outside reviewer read the repo cold, as a hiring signal rather than a code
@@ -21,7 +67,7 @@ latency, packaging, or what a teammate inherits from a clone. A1 was the sharpes
 instance and is now closed; the rest cluster in that same gap.
 
 - [x] **A1 — nothing enforced the quality gates automatically.** `deploy.yml` ran
-      `npm run build` alone: 310 unit tests, a strict ESLint config, the
+      `npm run build` alone: 328 unit tests, a strict ESLint config, the
       `tsc -b` type-negative gates, and a zero-quota six-run E2E suite all
       existed and none of them ran in CI. `CLAUDE.md`'s "run lint, test, build
       before marking any task complete" was an instruction to an agent, and the
@@ -46,8 +92,9 @@ instance and is now closed; the rest cluster in that same gap.
       `responseSchema` change and C5a is the precedent for measuring one.
 - [ ] **A3 — stale in-code comments.** `caseSource.ts:33-36` still reads "Until
       then, `demoCaseSource` is the only implementation" and carries `[LLM-FILL]`
-      tags after GameService shipped; `gameService.ts:18` says "five-stage" above
-      a six-stage list.
+      tags after GameService shipped; `gameService.ts:19` says "five-stage"
+      above a six-stage list, and the pipeline is seven LLM stages now that
+      VerdictVoice and PleaNarrative exist.
 - [ ] **A4 — duplication.** (a) `PleaRulingControl` / `MotionRulingControl` /
       `ChargeVerdictControl` are one component three times — render
       `{choice, lineText}[]` → `recordSpokenJudgeLine` → commit the structural
@@ -62,17 +109,19 @@ instance and is now closed; the rest cluster in that same gap.
       "witnesses below" when `witnesses` is above it. (e) Orphaned comment at
       `stages.ts:494-500`, attached to no code. Distinct from the
       `LedgerEntryRow` `<li>`-wrapper duplication already tracked below.
-- [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes eight
-      strictly sequential LLM round trips where the dependency graph allows six:
+- [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes seven
+      strictly sequential LLM round trips where the dependency graph allows five
+      (`finalizeCasePayload` adds an eighth only when its deterministic repair
+      is not enough):
       `EnvironmentGen` ∥ `CharacterGen` (both depend only on `charges`), and
       `VerdictVoice` ∥ `InterrogationGen`+`EvidenceGen` (depends only on charges
       + defendant). Two `Promise.all`s in `gameService.ts`, no architectural
       change. **Not in tension with C11**, which declined to *split* a stage into
       more calls — this parallelizes calls that already exist. Separately:
-      `fetchWithRetry` (`geminiClient.ts:598`) sets no `AbortSignal.timeout()`,
+      `fetchWithRetry` (`geminiClient.ts:103`) sets no `AbortSignal.timeout()`,
       so a hung connection parks the player on "Generating your case…"
       indefinitely with no way to cancel; and nothing surfaces a per-run call
-      count or cost to a player spending their own quota on eight calls.
+      count or cost to a player spending their own quota on seven calls.
 - [ ] **A6 — the E2E suite is invisible to a reader.** Partly addressed by A1
       (`npm run test:e2e` + a README testing section). Remaining: consider moving
       `driver.mjs` out of `.claude/skills/`, which reads as agent tooling — the
@@ -93,14 +142,14 @@ instance and is now closed; the rest cluster in that same gap.
       rendering. Both are cheapest as vitest store tests plus a rejecting
       `CaseSource` stub — not E2E.
 - [ ] **A8 — the API key travels in the URL query string.**
-      `geminiClient.ts:641` and `:718` interpolate `?key=…`, while
+      `geminiClient.ts:146` and `:223` interpolate `?key=…`, while
       `.cursor/rules/security.mdc:12` states the key must never touch the URL —
       the code contradicts the project's own stated invariant. Gemini accepts an
       `x-goog-api-key` header; two-line change, and it keeps the key out of any
       URL-logging surface.
 - [ ] **A9 — demo-case data ships in the eager chunk.** ~1,660 lines across five
       hand-authored bundles land in the main bundle for every visitor; the build
-      is 503 kB / 148 kB gzip and Vite already warns past its 500 kB threshold.
+      is 505 kB / 149 kB gzip and Vite already warns past its 500 kB threshold.
       `import()` per bundle behind the docket click.
 
 ## BYOK pipeline reliability — systemic mistrials (user report, 2026-08-02 — DONE)
@@ -172,11 +221,25 @@ and seven independent stages multiply — 85% each is 32% end to end.
 - [x] **C12/C13** — `qa-agent`: case memory (it was asked to find cross-beat
       contradictions while structurally unable to see earlier beats), plus
       bounded per-beat screenshot and inference cost.
-- [ ] **C10** — regression tests over the new transport errors, the
-      repair-shaped retry, and `reconcileCrossStageIds`.
+- [x] **C10** — regression tests over the new transport errors, the
+      repair-shaped retry, and `reconcileCrossStageIds`. All three landed:
+      `geminiClient.test.ts` covers `MAX_TOKENS`/`SAFETY`/`NO_CANDIDATE` and
+      the `safetySettings`/`maxOutputTokens` request body, `stages.test.ts`
+      asserts the previous raw response reaches the retry contents, and
+      `reconcileCase.test.ts` covers every branch including D12's.
 - [ ] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
-      README status, and the stale four-cases/five-runs drift at
-      `AGENTS.md:74`/`:88`).
+      README status). The four-cases/five-runs drift is fixed (`AGENTS.md:75`
+      now reads "six runs across all five cases"). Still outstanding, and
+      wider than when this was filed: `CLAUDE.md`/`README.md` were last
+      synced at `e3c385c`, before PR #7 and PR #9, so `exhibitPoints`,
+      `environment.establishedFacts`/`interrogationLocation`,
+      `addSentencingTypeExclusivityIssues` and `selectSentenceableCharges`
+      appear in no document; `AGENTS.md` is a commit behind that again and
+      still calls the LLM pipeline "future" (`:90`), omits
+      `src/lib/llm/__tests__/` from its Testing section (`:54`), and never
+      mentions VerdictVoice or `qa-agent`. See also A8: `CLAUDE.md:86` and
+      `.cursor/rules/security.mdc:12` both state the key never touches the
+      URL, which the code contradicts.
 
 **Dropped, with reasons:**
 
@@ -399,7 +462,7 @@ the session transcript; this is the consolidated action list.
       **Severity correction (external review, 2026-08-07): "burning a repair
       round" holds for `VerdictVoiceSchema` but understates the plea half.**
       `runPleaNarrative` calls `PleaNarrativeSchema.parse(...)` at
-      `stages.ts:1290` and `:1302` — both *outside* `generateValidated`, with
+      `stages.ts:1364` and `:1376` — both *outside* `generateValidated`, with
       no `try`/`catch`. So a jury reference in a plea rationale is not a
       retried repair: the `ZodError` propagates unguarded through
       `createGameService.generateCase()` to `WelcomeScreen`'s `.catch()` and
@@ -411,13 +474,17 @@ the session transcript; this is the consolidated action list.
       `ChargeSchema.pick({ id: true, verdictReactions: true,
       verdictOptions: true })`) instead of re-declaring their fields, which
       is how the refinement was dropped in the first place. See A2.
-- [ ] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
+- [x] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
       VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
       failure carries a `[StageName]` prefix; this one reports as
       `stage: 'generateCase'` on the Mistrial screen. Fix: throw
       `new GameServiceError('[VerdictVoice] missing voice for charge …')`,
       or strengthen `VerdictVoiceSchema` to require every requested charge
-      id be present (a `superRefine`).
+      id be present (a `superRefine`). *(Fixed in `77aa1fd`, which took both
+      routes: `buildVerdictVoiceSchema` refines the requested id set in both
+      directions — later hardened against duplicates in `16fcdee` and against
+      an upstream id collision in `a179630` — and the now-unreachable guard at
+      `gameService.ts:57` throws a stage-prefixed `GameServiceError`.)*
 - [ ] **R7 — `addDefendantNameIssues` does not scan `charge.name` or
       `element.description`.** A charge name like "Theft from defendant
       Arthur Pendelton" is not caught. Likely intentional (charge names are

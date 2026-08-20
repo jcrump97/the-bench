@@ -6,6 +6,7 @@ import {
   runInterrogationGen,
   runEvidenceGen,
   finalizeCasePayload,
+  runVerdictVoice,
   runPleaNarrative,
   runAftermath,
   GameServiceError,
@@ -336,6 +337,71 @@ describe('finalizeCasePayload', () => {
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the scene\'s established facts into the prompt', async () => {
+    // This stage writes statementOfFacts and both closings — the most-read
+    // narrative in the game — and was the only stage still authoring them from
+    // `description` alone while InterrogationGen and EvidenceGen got the
+    // canonical facts. That is the drift establishedFacts exists to stop.
+    const facts = ['the rear service door was found unlocked', 'the alarm had been disarmed before entry'];
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: rawValidCase.closingArguments,
+      }),
+    );
+
+    await finalizeCasePayload(API_KEY, MODEL, {
+      ...parts,
+      environment: { ...environment, establishedFacts: facts },
+    });
+
+    const contents = vi.mocked(callGemini).mock.calls[0]![2]!.contents;
+    for (const fact of facts) expect(contents).toContain(fact);
+  });
+
+  it('drops a duplicated exhibitPoints entry deterministically instead of spending a repair round', async () => {
+    const point = {
+      evidenceId: evidence[0]!.id,
+      ifAdmitted: { prosecution: 'It came in.', defense: null },
+      ifExcluded: { prosecution: null, defense: 'It stayed out.' },
+    };
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [point, point] },
+      }),
+    );
+
+    const result = await finalizeCasePayload(API_KEY, MODEL, parts);
+
+    // One call only: the duplicate must not reach CaseSchema and trigger the
+    // full-case repair round.
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    expect(result.closingArguments.exhibitPoints).toHaveLength(1);
+    expect(CaseSchema.safeParse(result).success).toBe(true);
+  });
+
+  it('omits the established-facts block entirely when the environment has none', async () => {
+    // Hand-authored demo cases omit the field; the prompt must not grow an
+    // empty heading for them.
+    mockCallsWith(
+      JSON.stringify({
+        caseId: rawValidCase.caseId,
+        summary: rawValidCase.summary,
+        statementOfFacts: rawValidCase.statementOfFacts,
+        closingArguments: rawValidCase.closingArguments,
+      }),
+    );
+
+    await finalizeCasePayload(API_KEY, MODEL, parts);
+
+    expect(vi.mocked(callGemini).mock.calls[0]![2]!.contents).not.toContain('Established facts');
+  });
+
   it('fixes duplicate ids deterministically instead of spending a repair round', async () => {
     // Two charges sharing the same element id — a cross-stage uniqueness
     // violation finalizeCasePayload's own finalize-fields call can't fix,
@@ -403,6 +469,85 @@ describe('finalizeCasePayload', () => {
     expect(CaseSchema.safeParse(result).success).toBe(true);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
     expect(result.closingArguments.exhibitPoints?.map((p) => p.evidenceId)).toEqual(['e1']);
+  });
+});
+
+describe('runVerdictVoice', () => {
+  const voiceFor = (id: string) => ({
+    id,
+    verdictReactions: charge.verdictReactions,
+    verdictOptions: charge.verdictOptions,
+  });
+
+  it('retries when the model echoes a charge id that was not requested', async () => {
+    // Before the schema checked ids against the request, a wrong echo validated
+    // here and then hit an un-retried throw in gameService, killing the whole
+    // generation two stages from the end. It must be an ordinary repairable
+    // validation failure instead.
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor('charge-hallucinated')] }),
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result[0]!.id).toBe(charge.id);
+    // The retry must name the offending id so the repair is actionable.
+    const retryPrompt = vi.mocked(callGemini).mock.calls[1]![2]!.contents;
+    expect(retryPrompt).toContain('charge-hallucinated');
+  });
+
+  it('retries when an entry for a requested charge is missing entirely', async () => {
+    const second = { ...chargeCore, id: 'charge-second', elements: [{ id: 'charge-second-el', description: 'An element.', isProven: false }] };
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+      JSON.stringify({ charges: [voiceFor(charge.id), voiceFor('charge-second')] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore, second], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result.map((c) => c.id)).toEqual([charge.id, 'charge-second']);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('charge-second');
+  });
+
+  it('retries when the model returns two entries for the same charge', async () => {
+    // Two entries for one id look like one to a Set, so this slipped past both
+    // the missing- and unknown-id checks; gameService's `find` would then keep
+    // the first silently, discarding a charge's voiced layer with no retry.
+    mockCallsWith(
+      JSON.stringify({ charges: [voiceFor(charge.id), voiceFor(charge.id)] }),
+      JSON.stringify({ charges: [voiceFor(charge.id)] }),
+    );
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('more than one entry');
+  });
+
+  it('accepts one entry when two charges collide on the same id', async () => {
+    // StatuteSelection can emit colliding charge ids; reconcileCrossStageIds
+    // repairs them, but only in finalizeCasePayload, three stages later. The
+    // duplicate-entry refinement must not reject a response that correctly
+    // returns one entry per *distinct* id in the meantime.
+    const collided = { ...chargeCore, elements: [{ id: 'c-other-el', description: 'An element.', isProven: false }] };
+    mockCallsWith(JSON.stringify({ charges: [voiceFor(charge.id)] }));
+
+    const result = await runVerdictVoice(API_KEY, MODEL, [chargeCore, collided], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+  });
+
+  it('puts each charge id on its own labelled field in the prompt', async () => {
+    mockCallsWith(JSON.stringify({ charges: [voiceFor(charge.id)] }));
+
+    await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini).mock.calls[0]![2]!.contents).toContain(`id: ${charge.id}`);
   });
 });
 

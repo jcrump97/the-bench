@@ -568,10 +568,19 @@ export const CaseSchema = z.strictObject({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Evidence ${ev.id} references unknown element: ${ev.targetElementId}` });
     }
   }
+  // Referential *and* uniqueness, matching every other id namespace above. A
+  // duplicate entry is not harmless here: courtroomScript appends one fragment
+  // per entry, so two entries for the same exhibit make the closing argue that
+  // exhibit twice.
+  const exhibitPointIds = new Set<string>();
   for (const point of v.closingArguments.exhibitPoints ?? []) {
     if (!evidenceIds.has(point.evidenceId)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `closingArguments.exhibitPoints references unknown evidence: ${point.evidenceId}` });
     }
+    if (exhibitPointIds.has(point.evidenceId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate closingArguments.exhibitPoints entry for evidence: ${point.evidenceId}` });
+    }
+    exhibitPointIds.add(point.evidenceId);
   }
   for (const w of v.witnesses) {
     if (witnessIds.has(w.id)) {
