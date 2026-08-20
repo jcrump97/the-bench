@@ -34,6 +34,7 @@ import {
   WeatherEnum,
   PleaNarrativeSchema,
   CaseSchema,
+  defendantFullName,
   AftermathNarrativeSchema,
   type Charge,
   type ChargeCore,
@@ -700,7 +701,7 @@ function buildInterrogationGenContents(
 ): string {
   const interrogationLocation = environment.interrogationLocation ?? 'a police interview room (no address given — invent a plausible station)';
   const base = [
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     `Interrogation location (set the dialogue here): ${interrogationLocation}`,
     `Offense scene (background only — do not use this as the interrogation's setting): ${environment.description}`,
     environment.establishedFacts !== undefined
@@ -842,7 +843,7 @@ function buildEvidenceGenContents(
     environment.establishedFacts !== undefined
       ? `Established facts about the scene (quote or directly reference these; do not restate them in a way that could conflict):\n${environment.establishedFacts.map((f) => `- ${f}`).join('\n')}`
       : '',
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     'Produce at least 3 evidence items and at least 2 witnesses — the response is rejected if either count falls short.',
     interrogation !== null
       ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
@@ -1017,7 +1018,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
 
   const base = [
     `Charges: ${parts.charges.map((c) => c.name).join(', ')}.`,
-    `Defendant: ${parts.defendant.firstName} ${parts.defendant.lastName}.`,
+    `Defendant: ${defendantFullName(parts.defendant)}.`,
     `Environment: ${parts.environment.description}`,
     // The canonical scene facts exist precisely so downstream stages stop
     // paraphrasing `description` and drifting. This stage writes
@@ -1248,7 +1249,7 @@ function buildVerdictVoiceContents(
   const base = [
     'Charges, in the fixed order they are resolved at trial:',
     orderedCharges,
-    `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
+    `Defendant: ${defendantFullName(defendant)}.`,
     'Return exactly one entry per count above, echoing each id character for character.',
   ].join('\n');
   return withFeedback(base, feedback);
@@ -1341,7 +1342,7 @@ function buildPleaNarrativeContents(
   feedback: string | undefined,
 ): string {
   const chargeNames = payload.charges.map((c) => c.name).join(', ');
-  const defendantName = `${payload.defendant.firstName} ${payload.defendant.lastName}`;
+  const defendantName = defendantFullName(payload.defendant);
   const factsLine = `Already on the record — the People's statement of facts: ${payload.statementOfFacts}`;
 
   let base: string;
@@ -1422,7 +1423,7 @@ RULES:
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
   const base = [
     `Case: ${ctx.caseData.charges.map((c) => c.name).join(', ')}.`,
-    `Defendant: ${ctx.caseData.defendant.firstName} ${ctx.caseData.defendant.lastName}.`,
+    `Defendant: ${defendantFullName(ctx.caseData.defendant)}.`,
     ctx.pleaDecision !== null ? `Plea decision: ${ctx.pleaDecision}.` : 'Resolved by trial.',
     ctx.verdict !== null ? `Verdict: ${ctx.verdict.map((v) => `${v.chargeName}: ${v.verdict}`).join('; ')}.` : '',
     `Imposed sentence: ${JSON.stringify(ctx.imposedSentence)}.`,

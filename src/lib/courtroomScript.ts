@@ -7,6 +7,7 @@ import {
   type ChargeVerdict,
   type GamePhase,
   type Sentence,
+  defendantFullName,
 } from '../schemas/gameSchemas';
 import { formatSentence, enumLabel } from './format';
 
@@ -236,7 +237,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
   // evidence and every witness is disclosed by counsel — briefly and
   // unverified — before any plea lands, so the judge rules knowing what
   // discovery holds and nothing more.
-  const defendantName = `${caseData.defendant.firstName} ${caseData.defendant.lastName}`;
+  const defendantName = defendantFullName(caseData.defendant);
   pushStatement({
     id: 'case-opened',
     entryKind: 'CASE_OPENED',
@@ -401,8 +402,8 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         entryKind: 'ALLOCUTION',
         phase: 'ACT_3_VERDICT',
         speaker: 'DEFENSE',
-        speakerName: `${caseData.defendant.firstName} ${caseData.defendant.lastName}`,
-        heading: `Allocution of ${caseData.defendant.firstName} ${caseData.defendant.lastName}`,
+        speakerName: defendantName,
+        heading: `Allocution of ${defendantName}`,
         body: allocution,
       });
     }

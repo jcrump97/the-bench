@@ -15,6 +15,18 @@ function noJury<T extends z.ZodString>(schema: T) {
   });
 }
 
+// How the defendant is named everywhere they are named: the transcript, every
+// pipeline prompt, the dossier modal, and the refinement below that checks a
+// generated field named the right person. Lives here rather than in
+// lib/format.ts because that module imports this one — and the schema itself
+// is one of the callers.
+//
+// Trimmed: the two halves are independently bounded but not required to be
+// non-empty, so a missing surname must not leave a trailing space.
+export function defendantFullName(person: { firstName: string; lastName: string }): string {
+  return `${person.firstName} ${person.lastName}`.trim();
+}
+
 // A live pipeline stage once authored verdict lines for "defendant Arthur
 // Pendelton" when the actual defendant was Marcus Vance. The wrong name was
 // a prosecution witness. In a bench trial there is only one defendant, so any
@@ -23,7 +35,7 @@ function addDefendantNameIssues(
   caseData: z.infer<typeof CaseSchema>,
   ctx: z.RefinementCtx,
 ): void {
-  const fullName = `${caseData.defendant.firstName} ${caseData.defendant.lastName}`.trim();
+  const fullName = defendantFullName(caseData.defendant);
   const firstName = caseData.defendant.firstName.trim();
   const lastName = caseData.defendant.lastName.trim();
   if (fullName.length === 0) return;
@@ -738,6 +750,8 @@ export type ProsecutionStrength = z.infer<typeof ProsecutionStrengthSchema>;
 export type DefenseRisk         = z.infer<typeof DefenseRiskSchema>;
 export type FinalResult         = z.infer<typeof FinalResultSchema>;
 export type EvidenceRuling      = z.infer<typeof EvidenceRulingSchema>;
+export type ChargeClassification = z.infer<typeof ChargeClassificationEnum>;
+export type ObjectionRisk        = z.infer<typeof ObjectionRiskEnum>;
 export type VerdictValue        = z.infer<typeof VerdictValueSchema>;
 export type ReactionLine        = z.infer<typeof ReactionLineSchema>;
 export type ReactionBeat        = z.infer<typeof ReactionBeatSchema>;
