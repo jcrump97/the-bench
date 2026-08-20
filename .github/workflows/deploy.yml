@@ -5,52 +5,29 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Verify built index.html
-        run: cat dist/index.html
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+  # Runs every gate and uploads the Pages artifact it verified, so the deploy
+  # below publishes exactly the build the E2E suite passed against.
+  verify:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify.yml
 
   deploy:
-    needs: build
+    needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # No checkout needed — this consumes the artifact `verify` uploaded.
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
