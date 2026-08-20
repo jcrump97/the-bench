@@ -15,7 +15,9 @@ vi.mock('../../lib/llm/gameService', () => ({
 
 import { createGameService } from '../../lib/llm/gameService';
 
-const VALID_KEY = 'AIzaSyTestKeyThatIsLongEnough0123456789';
+// Fixture, not a credential — see the note in useSecurityStore.test.ts for
+// why this is 34 characters and not a real key's 39.
+const VALID_KEY = 'AIzaNotARealKey_ExampleOnly_000000';
 const bundle = DEMO_CASES[0]!;
 
 describe('selectCaseSource', () => {

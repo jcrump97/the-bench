@@ -14,8 +14,13 @@ import { useSecurityStore } from '../useSecurityStore';
 // sessionStorage, never a cookie. That invariant is asserted at the bottom.
 // ===========================================================================
 
-// Shape-valid but obviously fake: 'AIza' prefix, comfortably over 30 chars.
-const VALID_KEY = 'AIzaSyTestKeyThatIsLongEnough0123456789';
+// A fixture, not a credential. Deliberately 34 characters rather than 39:
+// a real Gemini key is `AIza` plus exactly 35 more, and secret scanners match
+// on that shape — an earlier version of this line was 39 characters and
+// tripped GitHub's Google API Key detector on a string that never existed
+// outside this file. It still satisfies BYOKSchema (AIza prefix, >= 30 chars),
+// which is all these tests need.
+const VALID_KEY = 'AIzaNotARealKey_ExampleOnly_000000';
 
 beforeEach(() => {
   useSecurityStore.getState().clearVault();
