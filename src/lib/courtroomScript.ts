@@ -602,3 +602,47 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
 
   return beats;
 }
+
+
+// ===========================================================================
+// The reveal cursor applied to a script.
+//
+// Split out from useCourtroomScript so it can be tested directly: it is a
+// pure projection of (script, cursor) with two real behaviours in it, and it
+// belongs beside buildCourtroomScript for the same reason deriveRevealState
+// does — the hook's job is to read the stores, not to hold logic.
+// ===========================================================================
+export interface CourtroomScriptView {
+  // The full known script (up to and including the first unresolved decision).
+  script: ScriptBeat[];
+  // The reveal cursor, clamped to the script (defensive — prefix stability
+  // means the script never shrinks under the cursor in practice).
+  cursor: number;
+  // The transcript as revealed so far: statements among the first `cursor` beats.
+  visibleEntries: StatementBeat[];
+  // The beat waiting at the cursor: a statement (Continue reveals it), a
+  // decision (its control renders), or undefined when the script is exhausted.
+  pendingBeat: ScriptBeat | undefined;
+}
+
+export function projectScriptView(script: ScriptBeat[], beatCursor: number): CourtroomScriptView {
+  const cursor = Math.min(beatCursor, script.length);
+  const last = script.at(-1);
+  // Self-heal an overshoot: a raced double-advance can push the raw cursor
+  // past the script's trailing unresolved decision (emission truncates at
+  // it, so cursor lands at length). Re-present that decision instead of
+  // rendering no control at all — the alternative is a soft-lock.
+  const pendingBeat = cursor < script.length
+    ? script[cursor]
+    : last?.kind === 'DECISION'
+      ? last
+      : undefined;
+  return {
+    script,
+    cursor,
+    visibleEntries: script
+      .slice(0, cursor)
+      .filter((beat): beat is StatementBeat => beat.kind === 'STATEMENT'),
+    pendingBeat,
+  };
+}

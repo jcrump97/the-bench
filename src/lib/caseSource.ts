@@ -25,12 +25,11 @@ export interface AftermathContext {
 
 // The seam between the game and whatever produces its narrative content.
 //
-// [LLM-FILL: CasePayload + PleaNarrative + Aftermath] — GameService implements
-// this same interface over the four-stage Gemini pipeline (generateCase) and
-// the post-sentencing Aftermath call (generateAftermath). Until then,
-// demoCaseSource is the only implementation. Callers must treat both methods
-// as fallible and asynchronous; outputs still pass through the store's Zod
-// boundary before touching game state.
+// GameService implements this same interface over the seven-stage Gemini
+// pipeline (generateCase) and the post-sentencing Aftermath call
+// (generateAftermath); demoCaseSource below is the offline implementation.
+// Callers must treat both methods as fallible and asynchronous; outputs still
+// pass through the store's Zod boundary before touching game state.
 export interface CaseSource {
   generateCase(): Promise<GeneratedCase>;
   generateAftermath(ctx: AftermathContext): Promise<string>;
