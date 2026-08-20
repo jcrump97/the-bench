@@ -80,9 +80,13 @@ npx vitest run   # unit tests (fast, no browser)
 npm run lint && npm run build
 ```
 
-A pre-commit hook runs `lint` + `build` (tsc -b) on every commit and blocks
-on failure — don't be surprised when `git commit` takes a few seconds and
-prints a Vite build.
+CI is what actually enforces these: `.github/workflows/verify.yml` runs
+lint, unit tests, build and this driver (`npm run test:e2e`, against the
+`vite preview` build) on every pull request. A local pre-commit hook running
+`lint` + `build` may exist in a given working copy — if so, don't be
+surprised when `git commit` takes a few seconds and prints a Vite build —
+but no hook is tracked in the repo and `core.hooksPath` is unset, so it does
+not survive a fresh clone. Never treat it as the gate.
 
 ## Gotchas
 

@@ -227,19 +227,33 @@ and seven independent stages multiply — 85% each is 32% end to end.
       the `safetySettings`/`maxOutputTokens` request body, `stages.test.ts`
       asserts the previous raw response reaches the retry contents, and
       `reconcileCase.test.ts` covers every branch including D12's.
-- [ ] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
-      README status). The four-cases/five-runs drift is fixed (`AGENTS.md:75`
-      now reads "six runs across all five cases"). Still outstanding, and
-      wider than when this was filed: `CLAUDE.md`/`README.md` were last
-      synced at `e3c385c`, before PR #7 and PR #9, so `exhibitPoints`,
-      `environment.establishedFacts`/`interrogationLocation`,
-      `addSentencingTypeExclusivityIssues` and `selectSentenceableCharges`
-      appear in no document; `AGENTS.md` is a commit behind that again and
-      still calls the LLM pipeline "future" (`:90`), omits
-      `src/lib/llm/__tests__/` from its Testing section (`:54`), and never
-      mentions VerdictVoice or `qa-agent`. See also A8: `CLAUDE.md:86` and
-      `.cursor/rules/security.mdc:12` both state the key never touches the
-      URL, which the code contradicts.
+- [x] **C14** — docs sync (CLAUDE.md + AGENTS.md together per `AGENTS.md:10`,
+      README status). Done in one sweep across all three documents. The
+      features that had landed in PR #7 and PR #9 and appeared in no
+      document are now documented where they belong: `exhibitPoints` and
+      `assembleClosingArgument` under the courtroom-script projection,
+      `environment.establishedFacts`/`interrogationLocation` as the
+      cross-stage anti-drift contract, `addSentencingTypeExclusivityIssues`
+      and the §669 collapse under legal infrastructure, and
+      `selectSentenceableCharges` wherever exposure is described — including
+      the README's Mermaid node and prose, which both still said exposure
+      aggregated every charge. `AGENTS.md` was two commits further behind
+      and got the larger rewrite: the LLM pipeline is no longer "future",
+      `src/lib/llm/__tests__/` and the live suite are in the Testing
+      section, `src/lib/llm/` is in Where to Look, the seven-stage order and
+      the color/structure mandate are in Architecture Reminders, and the
+      pre-commit-hook line — which A1 established does not survive a clone —
+      is replaced by the CI gates that do. `test:e2e` and `verify.yml` are
+      in all three command lists, with `test:live`/`qa-agent` marked
+      manual-only in each.
+
+      **One thing is deliberately documented rather than fixed.**
+      `CLAUDE.md`'s BYOKVault invariant ("the key never touches ... the
+      URL") is contradicted by `geminiClient.ts:146`/`:223`. The rule is
+      right and the code is wrong, so the invariant stands and the
+      violation is now stated under it, pointing at A8. Relaxing the
+      documented rule to match the code would have turned a tracked
+      security bug into documented behaviour.
 
 **Dropped, with reasons:**
 
