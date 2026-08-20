@@ -84,6 +84,15 @@ function buildRetryFeedback(issues: string[], previousResponse: string): string 
   ].join('\n');
 }
 
+// Every stage's contents builder ends the same way: the stage's own prompt on
+// a first attempt, that prompt plus the repair feedback on a retry. The
+// feedback is appended rather than substituted so the retry still carries the
+// original task — a repair prompt with no statement of the job is a request to
+// fix an object with no idea what it was for.
+function withFeedback(base: string, feedback: string | undefined): string {
+  return feedback ? `${base}\n\n${feedback}` : base;
+}
+
 // ============================================================================
 // Generic "generate, parse, validate, retry-with-repair" loop shared by every
 // pipeline stage. Gemini's structured-output mode shapes the response; the
@@ -219,6 +228,16 @@ export const SENTENCE_GEMINI_SCHEMA: GeminiSchema = {
   },
   required: ['type', 'unit', 'amount'],
 };
+
+// A stage whose response is one named field wraps its payload schema here.
+// The wrapping is not cosmetic: a stage that passes the *inner* shape by
+// mistake gets a response Zod rejects with a message that names the field as
+// missing rather than the mistake as unwrapping — which is exactly how the
+// InterrogationGen bug below survived, since the unit-test mock returned the
+// wrapped shape and only the live API disagreed.
+function geminiObjectOf(field: string, schema: GeminiSchema): GeminiSchema {
+  return { type: 'object', properties: { [field]: schema }, required: [field] };
+}
 
 function reactionBeatGeminiSchema(): GeminiSchema {
   return {
@@ -556,7 +575,7 @@ EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildStatuteSelectionContents(feedback: string | undefined): string {
   const base = 'Generate the charges and statuteContexts for a new case.';
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runStatuteSelection(
@@ -579,11 +598,7 @@ export async function runStatuteSelection(
 // ============================================================================
 const EnvironmentGenSchema = z.object({ environment: EnvironmentSchema });
 
-const ENVIRONMENT_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { environment: ENVIRONMENT_GEMINI_SCHEMA },
-  required: ['environment'],
-};
+const ENVIRONMENT_GEN_GEMINI_SCHEMA = geminiObjectOf('environment', ENVIRONMENT_GEMINI_SCHEMA);
 
 const ENVIRONMENT_GEN_SYSTEM = `ROLE: You are an investigator recording the scene of an alleged offense for a California criminal case.
 
@@ -597,7 +612,7 @@ RULES:
 
 function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the environment for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runEnvironmentGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Environment> {
@@ -618,11 +633,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
 // ============================================================================
 const CharacterGenSchema = z.object({ defendant: CharacterSchema });
 
-const CHARACTER_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { defendant: CHARACTER_GEMINI_SCHEMA },
-  required: ['defendant'],
-};
+const CHARACTER_GEN_GEMINI_SCHEMA = geminiObjectOf('defendant', CHARACTER_GEMINI_SCHEMA);
 
 const CHARACTER_GEN_SYSTEM = `ROLE: You are a probation officer compiling the defendant's background for a California criminal case.
 
@@ -638,7 +649,7 @@ EXAMPLE: ${SENTENCE_SHAPE}`;
 
 function buildCharacterGenContents(charges: ChargeCore[], feedback: string | undefined): string {
   const base = `Generate the defendant for a case involving these charges: ${charges.map((c) => c.name).join(', ')}.`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runCharacterGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Defendant> {
@@ -667,11 +678,7 @@ const InterrogationGenSchema = z.object({ interrogation: InterrogationSchema });
 // it with `interrogation: Invalid input` — every other stage wraps correctly,
 // the unit-test mock returned the wrapped shape so the divergence was invisible
 // until a live run.
-const INTERROGATION_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { interrogation: INTERROGATION_GEMINI_SCHEMA },
-  required: ['interrogation'],
-};
+const INTERROGATION_GEN_GEMINI_SCHEMA = geminiObjectOf('interrogation', INTERROGATION_GEMINI_SCHEMA);
 
 const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
 
@@ -702,7 +709,7 @@ function buildInterrogationGenContents(
     `Required outcome: ${profile.outcome}.`,
     `Required challengeGround: ${profile.challengeGround}.`,
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runInterrogationGen(
@@ -841,7 +848,7 @@ function buildEvidenceGenContents(
       ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
       : 'Do not include any evidence item with type "INTERROGATION" — no usable tape exists for this defendant.',
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runEvidenceGen(
@@ -1024,7 +1031,7 @@ function buildFinalizeContents(parts: FinalizeParts, feedback: string | undefine
     'Witnesses:',
     witnessList,
   ].filter((line) => line.length > 0).join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 const REPAIR_SYSTEM = `ROLE: You are correcting a California criminal case file that failed schema validation.
@@ -1053,7 +1060,7 @@ function buildRepairContents(assembled: unknown, issues: z.ZodError, feedback: s
   const previousResponse = extractPreviousResponse(feedback);
   const object = previousResponse ?? JSON.stringify(assembled);
   const base = `Object:\n${object}\n\nValidation issues:\n${issueList}`;
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 interface FinalizeParts {
@@ -1244,7 +1251,7 @@ function buildVerdictVoiceContents(
     `Defendant: ${defendant.firstName} ${defendant.lastName}.`,
     'Return exactly one entry per count above, echoing each id character for character.',
   ].join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runVerdictVoice(
@@ -1297,11 +1304,7 @@ const OfferPleaNarrativeSchema = z
     if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
   });
 
-const WEAK_PLEA_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { prosecutionRationale: { type: 'string', minLength: 1, maxLength: 1000 } },
-  required: ['prosecutionRationale'],
-};
+const WEAK_PLEA_GEMINI_SCHEMA = geminiObjectOf('prosecutionRationale', { type: 'string', minLength: 1, maxLength: 1000 });
 
 const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
@@ -1358,7 +1361,7 @@ function buildPleaNarrativeContents(
       'Write the parties\' rationales, allocution, reactions, and ruling lines to match these exact terms.'
     ].join('\n');
   }
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runPleaNarrative(
@@ -1405,11 +1408,7 @@ export async function runPleaNarrative(
 // ============================================================================
 const AftermathFieldSchema = z.object({ narrative: AftermathNarrativeSchema });
 
-const AFTERMATH_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: { narrative: { type: 'string', minLength: 1, maxLength: 4000 } },
-  required: ['narrative'],
-};
+const AFTERMATH_GEMINI_SCHEMA = geminiObjectOf('narrative', { type: 'string', minLength: 1, maxLength: 4000 });
 
 const AFTERMATH_SYSTEM = `ROLE: You are a court reporter writing the follow-up story once a California criminal case has closed.
 
@@ -1428,7 +1427,7 @@ function buildAftermathContents(ctx: AftermathContext, feedback: string | undefi
     ctx.verdict !== null ? `Verdict: ${ctx.verdict.map((v) => `${v.chargeName}: ${v.verdict}`).join('; ')}.` : '',
     `Imposed sentence: ${JSON.stringify(ctx.imposedSentence)}.`,
   ].join('\n');
-  return feedback ? `${base}\n\n${feedback}` : base;
+  return withFeedback(base, feedback);
 }
 
 export async function runAftermath(apiKey: string, model: string, ctx: AftermathContext): Promise<string> {
