@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../useGameStore';
 import { validCase } from '../../lib/__tests__/fixtures';
+import type { GamePhase } from '../../schemas/gameSchemas';
 
 beforeEach(() => {
   useGameStore.getState().resetGameState();
@@ -204,5 +205,157 @@ describe('useGameStore — case + narrative load atomically at WELCOME', () => {
     expect(useGameStore.getState().currentPhase).toBe('ACT_1_INTAKE');
     expect(useGameStore.getState().activeCase).not.toBeNull();
     expect(useGameStore.getState().activePleaNarrative).toEqual({ prosecutionRationale: 'Ready for intake.' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Characterization coverage for the transition matrix itself.
+//
+// ALLOWED_PHASE_TRANSITIONS is the state machine's whole contract, and until
+// now nothing exercised it directly — the suite covered the individual
+// actions' phase gates but never the table they all depend on. These tests
+// pin every (from, to) pair so the matrix cannot be widened, narrowed, or
+// reordered without a failure naming the exact pair that moved.
+// ---------------------------------------------------------------------------
+const ALL_PHASES = [
+  'WELCOME',
+  'ACT_1_INTAKE',
+  'ACT_2_MOTIONS',
+  'ACT_3_VERDICT',
+  'END_STATE',
+  'ERROR_STATE',
+] as const satisfies readonly GamePhase[];
+
+// The matrix as the store declares it, restated here on purpose: a test that
+// imported the real table would pass no matter how the table changed.
+const EXPECTED_TRANSITIONS: Record<GamePhase, readonly GamePhase[]> = {
+  WELCOME: ['ACT_1_INTAKE', 'ERROR_STATE'],
+  ACT_1_INTAKE: ['ACT_2_MOTIONS', 'ACT_3_VERDICT', 'ERROR_STATE'],
+  ACT_2_MOTIONS: ['ACT_3_VERDICT', 'ERROR_STATE'],
+  ACT_3_VERDICT: ['END_STATE', 'ERROR_STATE'],
+  END_STATE: ['ERROR_STATE'],
+  ERROR_STATE: ['WELCOME'],
+};
+
+// Every phase is reachable only by walking legal transitions — the store
+// offers no back door, which is the point. ERROR_STATE is reached the way the
+// app reaches it: by attempting something illegal.
+function driveTo(phase: GamePhase): void {
+  useGameStore.getState().resetGameState();
+  if (phase === 'ERROR_STATE') {
+    useGameStore.getState().setPhase('END_STATE'); // illegal from WELCOME
+    return;
+  }
+  // Loaded even for the WELCOME case: entering ACT_1_INTAKE is gated on an
+  // active case, and that guard has its own test below. Without this, the
+  // matrix table would be re-testing the guard instead of the matrix.
+  useGameStore.getState().setActiveCase(validCase);
+  if (phase === 'WELCOME') return;
+  useGameStore.getState().setPhase('ACT_1_INTAKE');
+  if (phase === 'ACT_1_INTAKE') return;
+  if (phase === 'ACT_2_MOTIONS') {
+    useGameStore.getState().setPhase('ACT_2_MOTIONS');
+    return;
+  }
+  useGameStore.getState().setPhase('ACT_3_VERDICT');
+  if (phase === 'ACT_3_VERDICT') return;
+  useGameStore.getState().setPhase('END_STATE');
+}
+
+describe('useGameStore — ALLOWED_PHASE_TRANSITIONS', () => {
+  it('driveTo reaches every phase, so the table below is actually exercised', () => {
+    for (const phase of ALL_PHASES) {
+      driveTo(phase);
+      expect(useGameStore.getState().currentPhase).toBe(phase);
+    }
+  });
+
+  for (const from of ALL_PHASES) {
+    for (const to of ALL_PHASES) {
+      const legal = EXPECTED_TRANSITIONS[from].includes(to);
+
+      it(`${legal ? 'allows' : 'blocks'} ${from} -> ${to}`, () => {
+        driveTo(from);
+        useGameStore.getState().setPhase(to);
+
+        if (legal) {
+          expect(useGameStore.getState().currentPhase).toBe(to);
+        } else {
+          // An illegal transition does not merely refuse — it force-resets.
+          expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+          expect(useGameStore.getState().activeCase).toBeNull();
+        }
+      });
+    }
+  }
+
+  it('a legal transition into ERROR_STATE preserves state; an illegal one wipes it', () => {
+    // Both land on ERROR_STATE, so the phase alone cannot tell them apart.
+    // The difference is the payload: `set({ currentPhase })` on the legal
+    // path vs. ERROR_RESET on the illegal one.
+    driveTo('ACT_1_INTAKE');
+    useGameStore.getState().setPhase('ERROR_STATE');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().activeCase).not.toBeNull();
+
+    driveTo('ACT_1_INTAKE');
+    useGameStore.getState().setPhase('WELCOME');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().activeCase).toBeNull();
+  });
+
+  it('force-resets to ERROR_STATE on a phase value outside the schema', () => {
+    useGameStore.getState().setPhase('ADJOURNED');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+  });
+
+  it('blocks entry to ACT_1_INTAKE when no case is loaded', () => {
+    // A legal transition by the matrix, refused by the guard: the intake act
+    // has nothing to arraign without a case.
+    expect(useGameStore.getState().currentPhase).toBe('WELCOME');
+    useGameStore.getState().setPhase('ACT_1_INTAKE');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+  });
+});
+
+describe('useGameStore — setPleaDecision', () => {
+  it('accepts ACCEPT and REJECT', () => {
+    useGameStore.getState().setPleaDecision('ACCEPT');
+    expect(useGameStore.getState().pleaDecision).toBe('ACCEPT');
+    useGameStore.getState().setPleaDecision('REJECT');
+    expect(useGameStore.getState().pleaDecision).toBe('REJECT');
+  });
+
+  it('force-resets to ERROR_STATE on a value outside the closed vocabulary', () => {
+    useGameStore.getState().setPleaDecision('MAYBE');
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().pleaDecision).toBeNull();
+  });
+});
+
+describe('useGameStore — setImposedSentence', () => {
+  it('accepts a valid sentence array', () => {
+    useGameStore.getState().setImposedSentence([{ type: 'JAIL', unit: 'MONTHS', amount: 6 }]);
+    expect(useGameStore.getState().imposedSentence).toEqual([
+      { type: 'JAIL', unit: 'MONTHS', amount: 6 },
+    ]);
+  });
+
+  it('accepts an empty array', () => {
+    useGameStore.getState().setImposedSentence([]);
+    expect(useGameStore.getState().imposedSentence).toEqual([]);
+  });
+
+  it('force-resets to ERROR_STATE on a malformed sentence', () => {
+    // Fractional amount: SentenceSchema requires a positive whole number.
+    useGameStore.getState().setImposedSentence([{ type: 'JAIL', unit: 'MONTHS', amount: 1.5 }]);
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().imposedSentence).toEqual([]);
+  });
+
+  it('force-resets to ERROR_STATE when a unit contradicts the sentence type', () => {
+    // The correlated-unit constraint: a FINE is in DOLLARS, never YEARS.
+    useGameStore.getState().setImposedSentence([{ type: 'FINE', unit: 'YEARS', amount: 500 }]);
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
   });
 });
