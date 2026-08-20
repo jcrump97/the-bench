@@ -114,158 +114,143 @@ function logSecurityWarning(): void {
   console.warn('Security boundary violation blocked');
 }
 
-export const useGameStore = create<GameState>((set, get) => ({
-  ...INITIAL_STATE,
+export const useGameStore = create<GameState>((set, get) => {
+  // ---------------------------------------------------------------------
+  // Every write into this store follows the same shape: refuse the call if
+  // the game is not in a phase where it makes sense, validate the payload,
+  // and on either failure force ERROR_STATE and wipe rather than continue
+  // with half-applied state.
+  //
+  // That shape was written out longhand in seven actions. The repetition was
+  // the risk: an action that forgets its `set(ERROR_RESET)` fails *open* —
+  // bad data lands in the store and the game plays on. Building the actions
+  // through this factory makes the reset structural instead of something
+  // each new action has to remember.
+  //
+  // The phase gate deliberately runs before the parse, so an off-phase write
+  // is reported as a security violation rather than a validation failure
+  // regardless of whether its payload was also malformed.
+  // ---------------------------------------------------------------------
+  function validatedAction<Schema extends z.ZodTypeAny>(
+    schema: Schema,
+    commit: (value: z.infer<Schema>) => Partial<GameState>,
+    allowedPhases?: ReadonlySet<GamePhase>,
+  ): (input: unknown) => void {
+    return (input) => {
+      if (allowedPhases !== undefined && !allowedPhases.has(get().currentPhase)) {
+        logSecurityWarning();
+        set(ERROR_RESET);
+        return;
+      }
+      const result = schema.safeParse(input);
+      if (!result.success) {
+        logValidationFailure(result.error);
+        set(ERROR_RESET);
+        return;
+      }
+      set(commit(result.data));
+    };
+  }
 
-  setPhase: (newPhase) => {
-    const { currentPhase, activeCase } = get();
-    const allowedTransitions = ALLOWED_PHASE_TRANSITIONS[currentPhase];
+  // Rulings and verdicts accumulate one entry at a time so the court record
+  // can show each as it lands, and re-deciding the same item replaces its
+  // entry rather than appending a second one.
+  function upsertBy<T>(existing: T[], incoming: T, sameItem: (a: T, b: T) => boolean): T[] {
+    return [...existing.filter((entry) => !sameItem(entry, incoming)), incoming];
+  }
 
-    const phaseResult = GamePhaseSchema.safeParse(newPhase);
-    if (!phaseResult.success) {
-      logValidationFailure(phaseResult.error);
-      set(ERROR_RESET);
-      return;
-    }
+  return {
+    ...INITIAL_STATE,
 
-    if (!allowedTransitions.has(phaseResult.data)) {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+    // Not built through the factory: the transition matrix and the
+    // active-case guard are checks no other action has, and folding them in
+    // would mean parameterising the factory for a single caller.
+    setPhase: (newPhase) => {
+      const { currentPhase, activeCase } = get();
+      const allowedTransitions = ALLOWED_PHASE_TRANSITIONS[currentPhase];
 
-    // Guard: entering ACT_1_INTAKE requires an active case already loaded
-    if (phaseResult.data === 'ACT_1_INTAKE' && activeCase === null) {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+      const phaseResult = GamePhaseSchema.safeParse(newPhase);
+      if (!phaseResult.success) {
+        logValidationFailure(phaseResult.error);
+        set(ERROR_RESET);
+        return;
+      }
 
-    set({ currentPhase: phaseResult.data });
-  },
+      if (!allowedTransitions.has(phaseResult.data)) {
+        logSecurityWarning();
+        set(ERROR_RESET);
+        return;
+      }
 
-  setActiveCase: (caseData) => {
-    const currentPhase = get().currentPhase;
-    if (!CASE_REHYDRATION_ALLOWED_PHASES.has(currentPhase)) {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+      // Guard: entering ACT_1_INTAKE requires an active case already loaded
+      if (phaseResult.data === 'ACT_1_INTAKE' && activeCase === null) {
+        logSecurityWarning();
+        set(ERROR_RESET);
+        return;
+      }
 
-    const result = CasePayloadSchema.safeParse(caseData);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ activeCase: result.data });
-  },
+      set({ currentPhase: phaseResult.data });
+    },
 
-  setActivePleaNarrative: (narrative) => {
-    const currentPhase = get().currentPhase;
-    if (!CASE_REHYDRATION_ALLOWED_PHASES.has(currentPhase)) {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+    setActiveCase: validatedAction(
+      CasePayloadSchema,
+      (activeCase) => ({ activeCase }),
+      CASE_REHYDRATION_ALLOWED_PHASES,
+    ),
 
-    const result = PleaNarrativeSchema.safeParse(narrative);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ activePleaNarrative: result.data });
-  },
+    setActivePleaNarrative: validatedAction(
+      PleaNarrativeSchema,
+      (activePleaNarrative) => ({ activePleaNarrative }),
+      CASE_REHYDRATION_ALLOWED_PHASES,
+    ),
 
-  setPleaDecision: (decision) => {
-    const result = PleaDecisionSchema.safeParse(decision);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ pleaDecision: result.data });
-  },
+    setPleaDecision: validatedAction(PleaDecisionSchema, (pleaDecision) => ({ pleaDecision })),
 
-  addMotionRuling: (ruling) => {
     // Motion rulings are made from the bench during the evidentiary
     // hearing — any other phase is an off-path write.
-    if (get().currentPhase !== 'ACT_2_MOTIONS') {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+    addMotionRuling: validatedAction(
+      MotionRulingSchema,
+      (ruling) => ({
+        motionRulings: upsertBy(get().motionRulings, ruling, (a, b) => a.evidenceId === b.evidenceId),
+      }),
+      new Set<GamePhase>(['ACT_2_MOTIONS']),
+    ),
 
-    const result = MotionRulingSchema.safeParse(ruling);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    const existing = get().motionRulings;
-    const deduplicated = existing.filter(r => r.evidenceId !== result.data.evidenceId);
-    set({ motionRulings: [...deduplicated, result.data] });
-  },
-
-  addChargeVerdict: (chargeVerdict) => {
     // Verdicts are entered one charge at a time from the bench during
     // ACT_3_VERDICT, mirroring addMotionRuling's accumulate-and-dedupe shape.
-    if (get().currentPhase !== 'ACT_3_VERDICT') {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+    addChargeVerdict: validatedAction(
+      ChargeVerdictSchema,
+      (verdict) => ({
+        chargeVerdicts: upsertBy(get().chargeVerdicts, verdict, (a, b) => a.chargeId === b.chargeId),
+      }),
+      new Set<GamePhase>(['ACT_3_VERDICT']),
+    ),
 
-    const result = ChargeVerdictSchema.safeParse(chargeVerdict);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    const existing = get().chargeVerdicts;
-    const deduplicated = existing.filter(v => v.chargeId !== result.data.chargeId);
-    set({ chargeVerdicts: [...deduplicated, result.data] });
-  },
+    setImposedSentence: validatedAction(z.array(SentenceSchema), (imposedSentence) => ({
+      imposedSentence,
+    })),
 
-  setImposedSentence: (sentences) => {
-    const result = z.array(SentenceSchema).safeParse(sentences);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ imposedSentence: result.data });
-  },
-
-  setAftermathNarrative: (narrative) => {
     // The aftermath is generated after sentencing, immediately before the
     // END_STATE transition — any other phase is an off-path write.
-    if (get().currentPhase !== 'ACT_3_VERDICT') {
-      logSecurityWarning();
-      set(ERROR_RESET);
-      return;
-    }
+    setAftermathNarrative: validatedAction(
+      AftermathNarrativeSchema,
+      (aftermathNarrative) => ({ aftermathNarrative }),
+      new Set<GamePhase>(['ACT_3_VERDICT']),
+    ),
 
-    const result = AftermathNarrativeSchema.safeParse(narrative);
-    if (!result.success) {
-      logValidationFailure(result.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ aftermathNarrative: result.data });
-  },
+    // Two independently validated arguments rather than one payload, so it
+    // does not fit the factory's single-input shape.
+    recordSpokenJudgeLine: (decisionId, lineText) => {
+      const idResult = SpokenDecisionIdSchema.safeParse(decisionId);
+      const textResult = SpokenLineTextSchema.safeParse(lineText);
+      if (!idResult.success || !textResult.success) {
+        logValidationFailure(!idResult.success ? idResult.error : textResult.error);
+        set(ERROR_RESET);
+        return;
+      }
+      set({ spokenJudgeLines: { ...get().spokenJudgeLines, [idResult.data]: textResult.data } });
+    },
 
-  recordSpokenJudgeLine: (decisionId, lineText) => {
-    const idResult = SpokenDecisionIdSchema.safeParse(decisionId);
-    const textResult = SpokenLineTextSchema.safeParse(lineText);
-    if (!idResult.success || !textResult.success) {
-      logValidationFailure(!idResult.success ? idResult.error : textResult.error);
-      set(ERROR_RESET);
-      return;
-    }
-    set({ spokenJudgeLines: { ...get().spokenJudgeLines, [idResult.data]: textResult.data } });
-  },
-
-  resetGameState: () => set({ ...INITIAL_STATE }),
-}));
+    resetGameState: () => set({ ...INITIAL_STATE }),
+  };
+});
