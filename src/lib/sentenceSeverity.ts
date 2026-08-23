@@ -109,32 +109,32 @@ export function deriveSentenceSeverity(
   const atFloor = imposedWeight <= floor;
   const atCeiling = imposedWeight >= ceiling && ceiling > 0;
 
-  // The endpoints are read as themselves: everything the statute allowed is
-  // severe however narrow the range, and the statutory minimum is leniency
-  // even when the minimum is harsh. But a range with no room in it has no
-  // endpoints to read — the term is simultaneously the floor and the ceiling,
-  // and taking the ceiling branch credited the judge with a severity they
-  // were given no way to avoid.
-  const band: SeverityBand = noDiscretion
-    ? 'MEASURED'
-    : atCeiling
-    ? 'SEVERE'
-    : atFloor
-      ? 'LENIENT'
-      : shareOfRoom < LENIENT_CEILING
-        ? 'LENIENT'
-        : shareOfRoom < SEVERE_FLOOR
-          ? 'MEASURED'
-          : 'SEVERE';
-
   return {
-    band,
+    band: readBand({ noDiscretion, atFloor, atCeiling, shareOfRoom }),
     shareOfExposure,
     shareOfRoom: round2(shareOfRoom),
     atFloor,
     atCeiling,
     versusOffer: offered === null ? null : compareToOffer(imposed, offered),
   };
+}
+
+// The endpoints are read as themselves: everything the statute allowed is
+// severe however narrow the range, and the statutory minimum is leniency even
+// when the minimum is harsh. But a range with no room in it has no endpoints
+// to read — the term is simultaneously the floor and the ceiling, and taking
+// the ceiling branch credited the judge with a severity they were given no
+// way to avoid.
+function readBand(
+  { noDiscretion, atFloor, atCeiling, shareOfRoom }:
+  { noDiscretion: boolean; atFloor: boolean; atCeiling: boolean; shareOfRoom: number },
+): SeverityBand {
+  if (noDiscretion) return 'MEASURED';
+  if (atCeiling) return 'SEVERE';
+  if (atFloor) return 'LENIENT';
+  if (shareOfRoom < LENIENT_CEILING) return 'LENIENT';
+  if (shareOfRoom < SEVERE_FLOOR) return 'MEASURED';
+  return 'SEVERE';
 }
 
 // Both sides of this comparison have to sit on the same scale. weigh() falls
