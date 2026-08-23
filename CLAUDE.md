@@ -90,7 +90,23 @@ buildFinalResult(state)  →  setFinalResult (FinalResultSchema)  →  saveFinal
 
 `resultArchive.ts` treats localStorage as a trust boundary in both directions: bounded to `MAX_ARCHIVED_RESULTS` newest-first entries, every entry re-parsed through `FinalResultSchema` on read (a hand-edited or older-schema snapshot is dropped individually, never taking the rest of the record with it), and every access wrapped — reading `globalThis.localStorage` itself throws with site data blocked, and `setItem` throws on quota, neither of which may take down a game the player just finished.
 
+The bench record also totals every day of custody the judge has ordered across the archive — the one unit a career on the bench accumulates in.
+
 Two read surfaces, both fed by the pure projections in `src/lib/resultSummary.ts` (`dispositionOf` reuses the same `classifyOutcome` in `src/lib/outcome.ts` the aftermath variants are picked with, so no surface can classify an outcome differently): the **minute order** filed under the record at `END_STATE` (rendered as the `Ledger`'s `footer` so it sits above the scroll pin and arrives on screen with the aftermath beat — it is not a spoken beat and stays out of the courtroom script), and the **bench record** on the docket screen, hidden until the first case closes. Its guilty rate is over *counts tried*, and is `null` rather than `0%` on an all-plea docket where no count was ever tried.
+
+### Aftermath & Consequence (how the sentence lands)
+
+The judge's most discretionary act is choosing the number inside the statutory range, and for a long time nothing downstream could tell three years of mercy from three years of the hammer: the demo docket keyed its aftermath on the outcome alone (four buckets — impose the floor or the ceiling and Webb printed the same paragraph word for word), and the BYOK prompt was handed the sentence as raw JSON with no range beside it.
+
+`deriveSentenceSeverity` (`src/lib/sentenceSeverity.ts`) is the deterministic reading: where the imposed term sits between the floor the picker would actually allow (**not** zero — with no mandatory minimum that floor is one unit, and the lightest available term has to read as leniency) and the statutory ceiling, plus how it compares to the plea terms the defendant refused. Custody governs when present — a maxed-out fine beside a year of a ten-year exposure is not a severe sentence. Three bands, `LENIENT | MEASURED | SEVERE`, because the tiers exist to be *written to*. `severityOfImposedSentence` resolves the same reading from end-of-game state, so both paths read a sentence identically.
+
+Two surfaces consume it:
+- **The demo docket's aftermath is assembled, not quoted** — the same pattern as `assembleClosingArgument`. The authored base answers the outcome; a per-case `sentenceCodas` passage (one per band, appended by `assembleAftermath`) answers the term. Codas are written to follow any sentence-bearing base and carry no figures — the band knows where the term sat, not what it was. An acquittal takes no coda. `defineDemoCase` validates the *assembled* text through the real `AftermathNarrativeSchema`, so a bundle crosses the same gate at module load that the store applies at runtime.
+- **The Aftermath prompt** gets the range, the severity reading, the comparison against the refused offer, the exhibits excluded (`AftermathContext.motionRulings`), and the household the sentence lands on — with rules telling the reporter to write the sentence as a choice, follow consequences onto named people, and treat exclusions as part of the story.
+
+`describeConsequences` (`src/lib/consequences.ts`) closes it on the record side: the minute order reads the term back as consequence — release year and age, dependents, the job a custodial term ends, what the counts of conviction carry, the fine, the supervision conditions. Derived, never generated (the aftermath owns the narrative voice), and lines are omitted rather than padded — only custody separates a household, so a fine never raises the children.
+
+**`noJury` covers roles, not just the word.** A shipped demo aftermath opened "Not guilty, the foreman said" — no banned word in it, a jury foreman announcing the verdict all the same. The pattern now catches foreman/forewoman/foreperson and voir dire, bluntly: a work-crew foreman is accepted collateral damage, because context-matching the role word against verdict language is not reliable and a false positive only costs one self-healing retry.
 
 ### Courtroom Script (`src/lib/courtroomScript.ts`)
 

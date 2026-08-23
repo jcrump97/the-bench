@@ -1002,6 +1002,38 @@ so they aren't lost.
       Follow-ups deliberately not taken: no rehydration of an in-progress game
       (only completed results persist, by design), and no cross-case scoring
       beyond the record's tallies.
+- [x] **The aftermath answers the sentence, not just the verdict** (2026-08-23
+      — DONE). Follow-on to the result pipeline: the loop persisted the
+      judgment but the player could not feel it. Three gaps, all closed:
+      the demo docket keyed its aftermath on the outcome alone (impose the
+      floor or the ceiling of the range and the same paragraph printed, word
+      for word); the BYOK prompt got the sentence as raw JSON with no range
+      beside it, so the model could restate a number but never judge it; and
+      the person disappeared at sentencing.
+      - `c307d01` feat: `deriveSentenceSeverity` — where the term sits between
+        the pickable floor and the statutory ceiling, plus the comparison to a
+        refused offer. Custody governs when present; three bands because the
+        tiers exist to be written to.
+      - `2ebf157` fix: a jury foreman was announcing verdicts in a bench trial
+        ("Not guilty, the foreman said" — shipped, in Webb's acquittal). The
+        old pattern also had `foremen?`, which matches "foreme"/"foremen" but
+        never "foreman".
+      - `43a4a85` feat: 15 authored severity codas (3 per demo case), assembled
+        onto the outcome base. `defineDemoCase` now validates the assembled
+        text through the real `AftermathNarrativeSchema`.
+      - `48c4fce` feat: the Aftermath prompt gets the range, the severity
+        reading, the refused offer, the excluded exhibits and the household.
+      - `fd4fb2b` feat: `describeConsequences` — the minute order reads the
+        term back as release year and age, dependents, livelihood, record,
+        money, supervision.
+      - `a92c15f` feat: custody ordered totalled across the whole bench record.
+      Design note: severity measures against the floor the *picker* allows
+      (one unit with no mandatory minimum), not zero. Measuring against zero
+      made the lightest available term on a three-year exposure read as
+      "measured" — the player's mercy described back to them as the middle of
+      the road. Authoring note: **a new demo case must author all three
+      codas**, and they must carry no figures (the band knows where the term
+      sat, not what it was).
 - [x] Aftermath narrative source — done: the demo docket uses authored
       `aftermathVariants` keyed by outcome, surfaced through the `CaseSource`
       seam (`demoCaseSource`). The BYOK path will call `generateAftermath()`
