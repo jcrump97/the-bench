@@ -6,11 +6,14 @@ import {
 } from '../../schemas/gameSchemas';
 import { computePleaPostureForCase } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
+import type { CaseOutcome } from '../outcome';
 
-// How the player's run of a case can end. The real Aftermath LLM call will be
+// How the player's run of a case can end. The real Aftermath LLM call is
 // conditioned on this same end-of-game state; demo bundles author one
-// narrative per reachable outcome instead.
-export type AftermathOutcome = 'PLEA_ACCEPTED' | 'CONVICTED' | 'ACQUITTED' | 'SPLIT';
+// narrative per reachable outcome instead. Aliased to the shared union in
+// lib/outcome.ts so the aftermath variants and the persisted FinalResult's
+// disposition can never classify an outcome differently.
+export type AftermathOutcome = CaseOutcome;
 
 // PLEA_ACCEPTED is optional at the type level because reachability depends on
 // the case's *computed* plea posture (only PENDING_JUDICIAL_REVIEW puts an

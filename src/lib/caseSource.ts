@@ -6,7 +6,8 @@ import type {
   Sentence,
 } from '../schemas/gameSchemas';
 import type { DemoCaseBundle } from './demoCases';
-import { classifyOutcome, selectAftermath } from './demoCases/aftermath';
+import { selectAftermath } from './demoCases/aftermath';
+import { classifyOutcome } from './outcome';
 
 export interface GeneratedCase {
   payload: CasePayload;
