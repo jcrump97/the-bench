@@ -43,9 +43,23 @@ describe('describeConsequences — custody', () => {
     expect(textOf(describeConsequences(validCase, result))).toMatch(/\b38\b/);
   });
 
+  it('counts a term of months to the calendar date it actually ends', () => {
+    // Sentenced 2026-08-23 at 34. Eighteen months runs to February 2028 — a
+    // release year the term's whole-year floor could never produce.
+    const result = close(validCase, [{ type: 'PRISON', unit: 'MONTHS', amount: 18 }], guilty());
+    expect(textOf(describeConsequences(validCase, result))).toMatch(/Out in 2028 at the earliest, aged 35/);
+  });
+
+  it('never releases a defendant in the year it sentenced them', () => {
+    const result = close(validCase, [{ type: 'PRISON', unit: 'MONTHS', amount: 6 }], guilty());
+    expect(textOf(describeConsequences(validCase, result))).toMatch(/Out in 2027 at the earliest, aged 34/);
+  });
+
   it('says nothing about release when no custody was imposed', () => {
     const result = close(validCase, [{ type: 'FINE', unit: 'DOLLARS', amount: 2000 }], guilty());
-    expect(textOf(describeConsequences(validCase, result))).not.toMatch(/due out/);
+    // The words the custody line actually uses — asserting against a phrase
+    // the module never emits passes whether or not the guard is there.
+    expect(textOf(describeConsequences(validCase, result))).not.toMatch(/remanded|at the earliest/i);
   });
 });
 

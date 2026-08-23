@@ -38,13 +38,40 @@ function custodyDays(sentences: Sentence[]): number {
     .reduce((total, s) => total + (sentenceDayEquivalent(s) ?? 0), 0);
 }
 
+// The day the custodial term runs out, walked forward on the calendar in the
+// units the court actually spoke in. Reducing the term to whole years first
+// and adding those to the filing year got the hedge backwards: eighteen
+// months imposed in August 2026 printed 2027 when the earliest release is
+// February 2028, and anything under a year printed the year of sentencing.
+// UTC throughout — completedAt is stored in UTC, and a release year that
+// moved with the reader's timezone would not be a record of anything.
+function releaseDate(filed: Date, sentences: Sentence[]): Date {
+  const out = new Date(filed.getTime());
+  for (const s of sentences) {
+    if (s.type !== 'PRISON' && s.type !== 'JAIL') continue;
+    if (s.unit === 'YEARS') out.setUTCFullYear(out.getUTCFullYear() + s.amount);
+    else if (s.unit === 'MONTHS') out.setUTCMonth(out.getUTCMonth() + s.amount);
+    else out.setUTCDate(out.getUTCDate() + s.amount);
+  }
+  return out;
+}
+
+// Birthdays, not fractions: a term ending the day before an anniversary has
+// not aged the defendant another year.
+function fullYearsBetween(from: Date, to: Date): number {
+  const years = to.getUTCFullYear() - from.getUTCFullYear();
+  const beforeAnniversary =
+    to.getUTCMonth() < from.getUTCMonth()
+    || (to.getUTCMonth() === from.getUTCMonth() && to.getUTCDate() < from.getUTCDate());
+  return beforeAnniversary ? years - 1 : years;
+}
+
 export function describeConsequences(caseData: CasePayload, result: FinalResult): Consequence[] {
   const { defendant } = caseData;
   const name = defendantFullName(defendant);
   const lines: Consequence[] = [];
 
   const days = custodyDays(result.imposedSentence);
-  const years = days / 365;
   const filed = new Date(result.completedAt);
   const convicted = result.resolutionPath === 'PLEA'
     || result.verdict.some((v) => v.verdict === 'GUILTY');
@@ -53,8 +80,9 @@ export function describeConsequences(caseData: CasePayload, result: FinalResult)
   // is doing real work: credits and half-time are not modelled, and the court
   // does not know the release date on the day it sentences.
   if (days > 0 && !Number.isNaN(filed.getTime())) {
-    const releaseYear = filed.getFullYear() + Math.floor(years);
-    const ageAtRelease = defendant.age + Math.floor(years);
+    const release = releaseDate(filed, result.imposedSentence);
+    const releaseYear = release.getUTCFullYear();
+    const ageAtRelease = defendant.age + fullYearsBetween(filed, release);
     lines.push({
       label: 'Custody',
       text: `${name} is remanded today. Out in ${releaseYear} at the earliest, aged ${ageAtRelease}.`,
