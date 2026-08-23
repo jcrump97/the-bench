@@ -7,7 +7,7 @@ import {
 } from '../schemas/gameSchemas';
 import { deriveSentencingExposure, selectSentenceableCharges, type SentencingExposure } from './sentencingExposure';
 import { assessProsecution, derivePleaOfferTerms } from './pleaAssessment';
-import { buildSentences, floorAmountFor } from './sentenceBounds';
+import { buildSentences, floorAmountFor, UNIT_DAYS } from './sentenceBounds';
 
 // ===========================================================================
 // How hard the sentence landed.
@@ -43,13 +43,32 @@ export interface SentenceSeverity {
 const LENIENT_CEILING = 1 / 3;
 const SEVERE_FLOOR = 2 / 3;
 
+// How large a single term is, for the purpose of placing it inside its own
+// range. Custody and fines carry a day or dollar equivalent already;
+// probation and community service carry none, and treating that absence as
+// zero made an exposure built out of nothing else weigh zero at the floor,
+// at the ceiling and at the imposed term alike — so every such sentence read
+// as the lightest one available, the statutory maximum included. The scale
+// only ever compares a range against itself, so the unit's own weight is
+// enough to order the terms within it.
+function magnitude(s: Sentence): number {
+  return sentenceDayEquivalent(s) ?? s.amount * UNIT_DAYS[s.unit];
+}
+
+function custodyOf(sentences: Sentence[]): Sentence[] {
+  return sentences.filter((s) => s.type === 'PRISON' || s.type === 'JAIL');
+}
+
+function total(sentences: Sentence[]): number {
+  return sentences.reduce((sum, s) => sum + magnitude(s), 0);
+}
+
 // Custody governs when it is present. A maxed-out fine alongside a year of a
 // ten-year exposure is not a severe sentence — time is what a person serves,
 // and the aftermath has to speak about what they lost.
 function weigh(sentences: Sentence[]): number {
-  const custody = sentences.filter((s) => s.type === 'PRISON' || s.type === 'JAIL');
-  const measured = custody.length > 0 ? custody : sentences;
-  return measured.reduce((total, s) => total + (sentenceDayEquivalent(s) ?? 0), 0);
+  const custody = custodyOf(sentences);
+  return total(custody.length > 0 ? custody : sentences);
 }
 
 export function deriveSentenceSeverity(
@@ -74,9 +93,10 @@ export function deriveSentenceSeverity(
     exposure.maximumPenalties.map((max) => floorAmountFor(max, exposure.mandatoryMinimums)),
   ));
 
-  // A range with no room in it (floor equals ceiling, or an exposure that
-  // weighs nothing) leaves the court no discretion to read.
+  // A range with no room in it — a mandatory minimum equal to the statutory
+  // maximum — leaves the court exactly one lawful term.
   const room = ceiling - floor;
+  const noDiscretion = room <= 0;
   const shareOfExposure = ceiling <= 0 ? 0 : round2(imposedWeight / ceiling);
   const shareOfRoom = room <= 0 ? 0 : (imposedWeight - floor) / room;
 
@@ -85,8 +105,13 @@ export function deriveSentenceSeverity(
 
   // The endpoints are read as themselves: everything the statute allowed is
   // severe however narrow the range, and the statutory minimum is leniency
-  // even when the minimum is harsh.
-  const band: SeverityBand = atCeiling
+  // even when the minimum is harsh. But a range with no room in it has no
+  // endpoints to read — the term is simultaneously the floor and the ceiling,
+  // and taking the ceiling branch credited the judge with a severity they
+  // were given no way to avoid.
+  const band: SeverityBand = noDiscretion
+    ? 'MEASURED'
+    : atCeiling
     ? 'SEVERE'
     : atFloor
       ? 'LENIENT'

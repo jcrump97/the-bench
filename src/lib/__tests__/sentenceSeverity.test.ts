@@ -8,6 +8,8 @@ const exposure = (max: Sentence[], min: Sentence[] = []) => ({
 });
 const prison = (amount: number): Sentence => ({ type: 'PRISON', unit: 'YEARS', amount });
 const fine = (amount: number): Sentence => ({ type: 'FINE', unit: 'DOLLARS', amount });
+const probation = (amount: number): Sentence =>
+  ({ type: 'PROBATION', unit: 'YEARS', amount, conditions: ['RANDOM_DRUG_TESTING'] });
 
 describe('deriveSentenceSeverity — where the term sits in the range', () => {
   it('reads the floor of the range as leniency', () => {
@@ -60,6 +62,25 @@ describe('deriveSentenceSeverity — where the term sits in the range', () => {
     const severity = deriveSentenceSeverity([prison(6)], exposure([prison(6)], [prison(5)]), null);
     expect(severity?.band).toBe('SEVERE');
     expect(severity?.atCeiling).toBe(true);
+  });
+
+  it('reads a range with no room in it as measured, not severe', () => {
+    // A mandatory minimum equal to the maximum leaves exactly one lawful
+    // term. The court chose nothing, so there is no mercy or hammer to read —
+    // calling it "the maximum the statute allowed" credits a decision the
+    // judge was never allowed to make.
+    const severity = deriveSentenceSeverity([prison(5)], exposure([prison(5)], [prison(5)]), null);
+    expect(severity?.band).toBe('MEASURED');
+    expect(severity?.atFloor).toBe(true);
+    expect(severity?.atCeiling).toBe(true);
+  });
+
+  it('positions a term inside a range that carries neither custody nor a fine', () => {
+    // Probation and community service have no day or dollar equivalent, so
+    // the floor, the ceiling and the imposed term all weighed zero: every
+    // sentence read as the lightest one available, the maximum included.
+    expect(deriveSentenceSeverity([probation(5)], exposure([probation(5)]), null)?.band).toBe('SEVERE');
+    expect(deriveSentenceSeverity([probation(1)], exposure([probation(5)]), null)?.band).toBe('LENIENT');
   });
 });
 
