@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling, type Verdict } from '../../schemas/gameSchemas';
+import { CasePayloadSchema, PleaNarrativeSchema, type MotionRuling } from '../../schemas/gameSchemas';
 import { assessProsecution, buildPleaPosture, computePleaPostureForCase, sentencingModifierFromRulings } from '../pleaAssessment';
 import { deriveSentencingExposure } from '../sentencingExposure';
 import { deriveInterrogationProfile } from '../interrogation';
 import { DEMO_CASES } from '../demoCases';
-import { classifyOutcome, selectAftermath } from '../demoCases/aftermath';
+import { selectAftermath } from '../demoCases/aftermath';
+import { classifyOutcome } from '../outcome';
 import { defineDemoCase } from '../demoCases/types';
 import { navarroCase } from '../demoCases/navarro';
 import { webbCase } from '../demoCases/webb';
@@ -201,25 +202,7 @@ describe('vaughnCase (People v. Teresa Vaughn)', () => {
   });
 });
 
-describe('classifyOutcome / selectAftermath', () => {
-  const guilty = (chargeId: string) => ({ chargeId, chargeName: 'X', classification: 'FELONY' as const, verdict: 'GUILTY' as const });
-  const notGuilty = (chargeId: string) => ({ chargeId, chargeName: 'X', classification: 'FELONY' as const, verdict: 'NOT_GUILTY' as const });
-
-  it('classifies an accepted plea regardless of verdict', () => {
-    expect(classifyOutcome('ACCEPT', null)).toBe('PLEA_ACCEPTED');
-  });
-
-  it('classifies all-guilty as CONVICTED, all-not-guilty as ACQUITTED, mixed as SPLIT', () => {
-    expect(classifyOutcome('REJECT', [guilty('a')])).toBe('CONVICTED');
-    expect(classifyOutcome(null, [notGuilty('a')])).toBe('ACQUITTED');
-    expect(classifyOutcome(null, [guilty('a'), notGuilty('b')])).toBe('SPLIT');
-  });
-
-  it('throws on the off-path call (no accepted plea and no verdict)', () => {
-    expect(() => classifyOutcome(null, null)).toThrow();
-    expect(() => classifyOutcome('REJECT', [] as unknown as Verdict)).toThrow();
-  });
-
+describe('selectAftermath', () => {
   it('selectAftermath returns the authored variant and throws for unreachable outcomes', () => {
     expect(selectAftermath(webbCase, 'CONVICTED')).toBe(webbCase.aftermath.CONVICTED);
     expect(() => selectAftermath(webbCase, 'SPLIT')).toThrow(/unreachable outcome SPLIT/);
@@ -286,6 +269,7 @@ describe('defineDemoCase — authored/reachable pairings', () => {
       payload: structuredClone(webbCase.payload) as Record<string, unknown>,
       pleaNarrative: structuredClone(webbCase.pleaNarrative) as Record<string, unknown>,
       aftermath: { ...webbCase.aftermath },
+      sentenceCodas: { ...webbCase.sentenceCodas },
     };
   }
 
@@ -319,6 +303,24 @@ describe('defineDemoCase — authored/reachable pairings', () => {
     expect(() => defineDemoCase(raw)).toThrow(
       new RegExp(`Demo case ${webbCase.payload.caseId}.*PENDING_JUDICIAL_REVIEW`),
     );
+  });
+
+  it('rejects a bundle missing a severity coda', () => {
+    const raw = webbBundle();
+    delete (raw.sentenceCodas as Partial<typeof raw.sentenceCodas>).SEVERE;
+    expect(() => defineDemoCase(raw)).toThrow(/sentenceCodas\.SEVERE must be a non-empty string/);
+  });
+
+  it('rejects a coda that pushes an assembled aftermath past the schema bound', () => {
+    const raw = webbBundle();
+    raw.sentenceCodas.MEASURED = 'x'.repeat(4000);
+    expect(() => defineDemoCase(raw)).toThrow(/assembled with its codas/);
+  });
+
+  it('rejects a coda that seats a jury in the aftermath', () => {
+    const raw = webbBundle();
+    raw.sentenceCodas.LENIENT = 'The jury foreman told reporters the term felt about right.';
+    expect(() => defineDemoCase(raw)).toThrow(/assembled with its codas/);
   });
 
   it('rejects a single-charge case that authors a SPLIT aftermath', () => {

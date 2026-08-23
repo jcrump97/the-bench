@@ -180,6 +180,27 @@ describe('noJury bench-trial guard', () => {
     expect(result.success).toBe(false);
   });
 
+  // A shipped demo aftermath once opened "Not guilty, the foreman said" — no
+  // banned word in it, and a jury foreman announcing the verdict all the same.
+  it('rejects the roles and rituals that only exist with a jury in the box', () => {
+    for (const text of [
+      'Not guilty, the foreman said, and the defendant sat down.',
+      'The forewoman read the verdict twice.',
+      'The foreperson handed up the form.',
+      'Counsel spent two days on voir dire.',
+    ]) {
+      expect(AftermathNarrativeSchema.safeParse(text).success).toBe(false);
+    }
+  });
+
+  // The ban is deliberately blunt: a work-crew foreman is collateral damage.
+  // On the LLM path that costs one retry with feedback, which self-heals; a
+  // jury foreman announcing a verdict in a bench trial does not.
+  it('rejects the role word even in an innocent context (accepted cost)', () => {
+    expect(AftermathNarrativeSchema.safeParse('The site foreman testified about the schedule.').success)
+      .toBe(false);
+  });
+
   it('is case-insensitive and catches "juror" and "jurys" typo-adjacent forms too', () => {
     expect(ReactionLineSchema.safeParse({ speaker: 'DEFENSE', text: 'JURY.' }).success).toBe(false);
     expect(ReactionLineSchema.safeParse({ speaker: 'DEFENSE', text: 'One juror agreed.' }).success).toBe(false);

@@ -89,8 +89,10 @@ It is free and deterministic, and it reads **fixed demo data**. The separate `qa
 - Three Zustand stores (`useGameStore`, `useSecurityStore`, `useUIStore`). Never use Redux or Context for global state.
 - `ValidationLayer` (Zod) gates every inbound payload — LLM responses, demo case, and `FinalResult`.
 - `GameService` is the **only** caller of the Gemini API. It orchestrates seven LLM stages — StatuteSelection → EnvironmentGen → CharacterGen → InterrogationGen (conditional) → EvidenceGen → VerdictVoice → PleaNarrative, with `finalizeCasePayload` assembling in between — and derives the interrogation profile, prosecution band, plea offer terms and defense posture *deterministically* between calls.
+- **The aftermath answers the sentence, not just the verdict.** A demo case's closing story is assembled: authored base (outcome) + authored coda (severity band from `deriveSentenceSeverity`). If you add a demo case you must author all three codas; `defineDemoCase` validates every assembled combination through `AftermathNarrativeSchema`.
 - **LLM provides color, deterministic code provides structure.** Plea structure, sentencing exposure, and the Act 2 → Act 3 modifier are pure functions of validated data. If you are about to let a model decide something structural, you are about to break the core mandate.
-- `localStorage` persists only immutable `FinalResult` snapshots post-game. Never store active game state or the API key there.
+- `localStorage` persists only immutable `FinalResult` snapshots post-game, under `the-bench:results:v1` via `src/lib/resultArchive.ts`. Never store active game state or the API key there. The archive is a trust boundary on **read** as well as write: every entry is re-parsed through `FinalResultSchema` and a failing one dropped, and every access is wrapped so blocked storage or a full quota degrades to an empty record instead of throwing into a finished game.
+- The case-closing sequence is assemble → validate → persist, one module each: `resultGenerator.ts` (pure, generates nothing), the store's `setFinalResult` gate, then `resultArchive.ts`. `recordJudgment.ts` wires them and is the one `lib/` module that talks to the store, on purpose.
 
 ## Where to Look
 
@@ -102,4 +104,6 @@ It is free and deterministic, and it reads **fixed demo data**. The separate `qa
 - LLM generation pipeline: `src/lib/llm/` — `gameService.ts` (orchestration), `stages.ts` (one function per stage + its Gemini `responseSchema`), `geminiClient.ts` (transport), `modelSelection.ts` (runtime model discovery), `reconcileCase.ts` (deterministic cross-stage id repair)
 - Deterministic derivations (plea, sentencing, modifiers): `src/lib/pleaAssessment.ts`, `src/lib/sentencingExposure.ts`, `src/lib/sentenceBounds.ts`
 - Courtroom script projection (beats + decisions): `src/lib/courtroomScript.ts`
+- End-of-game result: `src/lib/resultGenerator.ts` (assembly), `src/lib/recordJudgment.ts` (wiring), `src/lib/resultArchive.ts` (persistence), `src/lib/resultSummary.ts` (read-side wording), `src/components/result/`
+- How the sentence lands: `src/lib/sentenceSeverity.ts` (deterministic band), demo `sentenceCodas` per case, `src/lib/consequences.ts` (the minute order's derived epilogue)
 - App shell / phase router: `src/App.tsx` → `AppShell`

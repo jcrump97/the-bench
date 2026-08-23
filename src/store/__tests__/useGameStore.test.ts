@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../useGameStore';
 import { validCase } from '../../lib/__tests__/fixtures';
-import type { GamePhase } from '../../schemas/gameSchemas';
+import { defendantFullName, type GamePhase } from '../../schemas/gameSchemas';
+import { assessProsecution } from '../../lib/pleaAssessment';
 
 beforeEach(() => {
   useGameStore.getState().resetGameState();
@@ -85,6 +86,62 @@ describe('useGameStore — aftermathNarrative', () => {
     useGameStore.getState().setAftermathNarrative('An ending.');
     useGameStore.getState().resetGameState();
     expect(useGameStore.getState().aftermathNarrative).toBeNull();
+  });
+});
+
+describe('useGameStore — finalResult', () => {
+  function advanceToAct3(): void {
+    useGameStore.getState().setActiveCase(validCase);
+    useGameStore.getState().setPhase('ACT_1_INTAKE');
+    useGameStore.getState().setPleaDecision('ACCEPT');
+    useGameStore.getState().setPhase('ACT_3_VERDICT');
+  }
+
+  // The snapshot ResultGenerator assembles, as the store's schema gate sees
+  // it: written at ACT_3_VERDICT, immediately before the END_STATE hop.
+  function candidate(overrides: Record<string, unknown> = {}): unknown {
+    return {
+      schemaVersion: 1,
+      resolutionPath: 'PLEA',
+      pleaDecision: 'ACCEPT',
+      caseId: validCase.caseId,
+      defendantName: defendantFullName(validCase.defendant),
+      completedAt: '2026-08-23T17:04:05.000Z',
+      prosecutionStrength: assessProsecution(validCase),
+      defenseRisk: null,
+      imposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 2 }],
+      aftermathNarrative: 'The courthouse emptied by four.',
+      ...overrides,
+    };
+  }
+
+  it('accepts a valid snapshot while at ACT_3_VERDICT', () => {
+    advanceToAct3();
+    useGameStore.getState().setFinalResult(candidate());
+    expect(useGameStore.getState().finalResult).toEqual(candidate());
+    expect(useGameStore.getState().currentPhase).toBe('ACT_3_VERDICT');
+  });
+
+  it('force-resets to ERROR_STATE when written outside ACT_3_VERDICT', () => {
+    useGameStore.getState().setFinalResult(candidate());
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().finalResult).toBeNull();
+  });
+
+  it('force-resets to ERROR_STATE on a snapshot that fails FinalResultSchema', () => {
+    advanceToAct3();
+    // A plea resolution cannot carry a trial record — the discriminated
+    // union has no such member, so this never reaches the archive.
+    useGameStore.getState().setFinalResult(candidate({ verdict: [] }));
+    expect(useGameStore.getState().currentPhase).toBe('ERROR_STATE');
+    expect(useGameStore.getState().finalResult).toBeNull();
+  });
+
+  it('resetGameState clears finalResult back to null', () => {
+    advanceToAct3();
+    useGameStore.getState().setFinalResult(candidate());
+    useGameStore.getState().resetGameState();
+    expect(useGameStore.getState().finalResult).toBeNull();
   });
 });
 

@@ -143,6 +143,16 @@ async function callCharge(page, verdict, label) {
   if (await advanceTo(page, btn, label)) await btn.click();
 }
 
+// The minute order filed under the record when a case closes: the persisted
+// FinalResult rendered back, keyed by the outcome it was classified as.
+const minuteOrder = (page) => page.locator('[data-judgment-summary]');
+async function checkMinuteOrder(page, label, disposition) {
+  const card = minuteOrder(page);
+  check(`${label}: minute order filed as ${disposition}`,
+    (await card.count()) === 1 && (await card.getAttribute('data-disposition')) === disposition,
+    `count=${await card.count()} disposition=${await card.getAttribute('data-disposition')}`);
+}
+
 // Sentencing (or adjournment), then advance through the sentence and
 // aftermath beats to the case-closed actions.
 async function finishCase(page, label, buttonName = 'Impose Sentence') {
@@ -164,6 +174,8 @@ const browser = await chromium.launch(
   await gotoWithRetry(page, BASE);
   const docketEntries = await page.locator('button:has-text("People v.")').count();
   check('Welcome: 5 docket entries listed', docketEntries === 5, `got ${docketEntries}`);
+  check('Welcome: no bench record before the first case closes',
+    (await page.locator('[data-bench-record]').count()) === 0);
   check('Welcome: tutorial case leads the docket with the Start here badge',
     (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
@@ -259,7 +271,29 @@ const browser = await chromium.launch(
     JSON.stringify(end));
   check('Webb end(plea): plea-accepted aftermath variant shown',
     (await page.locator('text=never had to board a plane').count()) === 1);
+  await checkMinuteOrder(page, 'Webb end(plea)', 'PLEA_ACCEPTED');
+  // The negotiated term seeds mid-range, so the aftermath's severity coda is
+  // the MEASURED one. Run 2 sentences the same case at the statutory maximum
+  // and must get a different coda — that contrast is the whole feature.
+  check('Webb end(plea): aftermath carries the mid-range sentence coda',
+    (await page.locator('li[data-entry-kind="AFTERMATH"]').innerText()).includes('mid-range'));
+  check('Webb end(plea): minute order names the defendant and the imposed sentence',
+    (await minuteOrder(page).innerText()).includes('People v. Marcus Webb') &&
+    /\d+ (year|month|day)s? in (prison|jail)|\$[\d,]+ fine/.test(await minuteOrder(page).innerText()));
   await page.screenshot({ path: path.join(SHOTS, '04-endstate-plea.png'), fullPage: true });
+
+  // The loop closes here: New Case returns to the docket, where the judgment
+  // just filed is waiting in the persisted bench record.
+  await page.getByRole('button', { name: 'New Case' }).click();
+  const recorded = page.locator('[data-bench-record]');
+  check('Welcome after a case: bench record lists the judgment just filed',
+    (await recorded.count()) === 1 &&
+    (await page.locator('[data-bench-record-count]').innerText()).includes('1 case decided') &&
+    (await recorded.innerText()).includes('People v. Marcus Webb') &&
+    (await recorded.innerText()).includes('Plea accepted'));
+  check('Welcome after a case: bench record totals the custody ordered',
+    (await page.locator('[data-custody-total]').innerText()).includes('Custody ordered across this record'));
+  await page.screenshot({ path: path.join(SHOTS, '17-bench-record.png'), fullPage: true });
   await page.close();
 }
 
@@ -306,6 +340,9 @@ const browser = await chromium.launch(
     speakers.filter((s) => s === 'WITNESS').length === 11, JSON.stringify(speakers));
   check('Webb end(trial): trial order + 5 rulings + verdict + sentence are THE COURT',
     speakers.filter((s) => s === 'COURT').length === 8, JSON.stringify(speakers));
+  check('Webb end(trial): maximum term draws the severe sentence coda',
+    (await page.locator('li[data-entry-kind="AFTERMATH"]').innerText())
+      .includes('at the top of what the range allowed'));
   check('Webb end(trial): convicted aftermath variant shown',
     (await page.locator('text=came back in under a day').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '06-endstate-trial-mobile.png'), fullPage: true });
@@ -331,6 +368,9 @@ const browser = await chromium.launch(
     (await page.locator('text=multiple-choice question with one answer in bold').count()) === 1);
   await callCharge(page, 'NOT_GUILTY', 'Boone verdict');
   await finishCase(page, 'Boone acquittal', 'Adjourn');
+  await checkMinuteOrder(page, 'Boone end', 'ACQUITTED');
+  check('Boone end: an acquittal still records what it leaves behind',
+    (await page.locator('[data-consequences]').innerText()).includes('No conviction is entered'));
   check('Boone end: acquittal aftermath variant shown',
     (await page.locator('text=the quiet scandal').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '08-boone-acquittal.png'), fullPage: true });
@@ -391,6 +431,13 @@ const browser = await chromium.launch(
     (await page.locator('text=Verdict of the Court').count()) === 2);
   check('Vaughn end: split-verdict aftermath variant shown',
     (await page.locator('text=down the center line').count()) === 1);
+  await checkMinuteOrder(page, 'Vaughn end', 'SPLIT');
+  check('Vaughn end: minute order reads the sentence back as consequence',
+    (await page.locator('[data-consequences]').innerText()).includes('at the earliest, aged') &&
+    (await page.locator('[data-consequences]').innerText()).includes('felony conviction is entered'));
+  check('Vaughn end: minute order counts the split and tallies the rulings',
+    (await minuteOrder(page).innerText()).includes('Guilty on 1 of 2 counts') &&
+    (await minuteOrder(page).innerText()).includes('6 admitted, 0 excluded'));
   await page.screenshot({ path: path.join(SHOTS, '13-vaughn-split-endstate.png'), fullPage: true });
   await page.close();
 }

@@ -1,30 +1,7 @@
-import type { PleaDecision, Verdict } from '../../schemas/gameSchemas';
-import type { AftermathOutcome, DemoCaseBundle } from './types';
+import type { CaseOutcome } from '../outcome';
+import type { DemoCaseBundle } from './types';
 
-// Pure projection of end-of-game state onto the outcome classes an aftermath
-// narrative is conditioned on. The future GameService Aftermath call uses the
-// same classification to build its prompt context; the demo path uses it to
-// pick an authored variant.
-export function classifyOutcome(
-  pleaDecision: PleaDecision | null,
-  verdict: Verdict | null
-): AftermathOutcome {
-  if (pleaDecision === 'ACCEPT') return 'PLEA_ACCEPTED';
-
-  // Precondition: on every non-plea path the state machine requires a verdict
-  // before END_STATE, so a missing/empty verdict here is an off-path call
-  // (programming error), not a real outcome.
-  if (verdict === null || verdict.length === 0) {
-    throw new Error('classifyOutcome requires an accepted plea or a non-empty verdict');
-  }
-
-  const guiltyCount = verdict.filter((v) => v.verdict === 'GUILTY').length;
-  if (guiltyCount === verdict.length) return 'CONVICTED';
-  if (guiltyCount === 0) return 'ACQUITTED';
-  return 'SPLIT';
-}
-
-export function selectAftermath(bundle: DemoCaseBundle, outcome: AftermathOutcome): string {
+export function selectAftermath(bundle: DemoCaseBundle, outcome: CaseOutcome): string {
   const text = bundle.aftermath[outcome];
   // defineDemoCase pins variant presence to the outcomes the deterministic
   // engine makes reachable, so a miss here is an off-path call.
@@ -32,4 +9,17 @@ export function selectAftermath(bundle: DemoCaseBundle, outcome: AftermathOutcom
     throw new Error(`Demo case ${bundle.id} has no aftermath variant for unreachable outcome ${outcome}`);
   }
   return text;
+}
+
+// The aftermath is assembled, not quoted — the same shape as
+// assembleClosingArgument: an authored base that answers the outcome, plus a
+// coda that answers the sentence the judge actually chose. Without it a
+// docket case reads identically whether the court gave the floor of the range
+// or the ceiling, which is the one decision the judge makes alone.
+//
+// The coda is authored per case and per severity band rather than per
+// outcome × band: the base already carries what happened, so the coda only
+// has to carry how the term landed on the people the base just named.
+export function assembleAftermath(base: string, coda: string | null): string {
+  return coda === null ? base : `${base}\n\n${coda}`;
 }

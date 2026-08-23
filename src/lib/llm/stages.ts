@@ -45,6 +45,8 @@ import {
 } from '../../schemas/gameSchemas';
 import type { InterrogationProfile } from '../interrogation';
 import type { AftermathContext } from '../caseSource';
+import { severityOfImposedSentence, type SentenceSeverity } from '../sentenceSeverity';
+import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
 import { callGemini, GeminiError, type GeminiSchema } from './geminiClient';
 import { reportAttemptFailure } from './generationObserver';
 import { reconcileCrossStageIds } from './reconcileCase';
@@ -1417,18 +1419,71 @@ TASK: Write the aftermath — public reaction, the consequences for those involv
 
 RULES:
 1. Ground every claim in the outcome you are given: the plea or the verdict that actually happened, and the sentence the judge actually imposed.
-2. Write between 1 and 4000 characters.
-3. This was a bench trial: the judge alone heard the case and decided it. Write the coverage around the judge's decision — that is what reporters and the public would be reacting to. Never reference a jury, jurors, or a jury trial — there was none. Phrases like "in the absence of a jury" or "without a jury" are unnecessary and will be rejected; the bench trial is the default, not a deviation.`;
+2. Write about the sentence as a choice, not a number. You are told the statutory range the court was working within and where inside it the term landed. A term at the floor of the range is mercy and reads as mercy; a term at the ceiling is the court taking everything the statute allowed. Say which one this was, the way a reporter would.
+3. Follow the consequences onto named people. The defendant's household, employment, and record are given to you; so are the victim and the witnesses. A sentence lands on somebody — write who, and what changed for them.
+4. Where the court excluded evidence, that is part of the story: what the People could not use, and what it cost them.
+5. Write between 1 and 4000 characters.
+6. This was a bench trial: the judge alone heard the case and decided it. Write the coverage around the judge's decision — that is what reporters and the public would be reacting to. Never reference a jury, jurors, a foreman or forewoman, or voir dire — there was none, and no one read a verdict form aloud. Phrases like "in the absence of a jury" or "without a jury" are unnecessary and will be rejected; the bench trial is the default, not a deviation.
 
+EXAMPLE of rule 2, for a case whose range ran to five years: a one-year term is written as "the court took the bottom of the range and said why", not as "the court imposed one year". The figure is in the record; the judgment is the story.`;
+
+// Everything the coverage needs to say what the judgment meant. The sentence
+// alone was never enough: an amount with no range beside it reads the same at
+// the floor and at the ceiling, so the model could only restate the number.
 function buildAftermathContents(ctx: AftermathContext, feedback: string | undefined): string {
+  const { caseData, imposedSentence } = ctx;
+  const { defendant } = caseData;
+  const severity = severityOfImposedSentence(caseData, ctx.pleaDecision, ctx.verdict, imposedSentence);
+  const exposure = deriveSentencingExposure(
+    selectSentenceableCharges(caseData.charges, ctx.pleaDecision === 'ACCEPT', ctx.verdict ?? []),
+  );
+  const excluded = ctx.motionRulings.filter((r) => r.ruling === 'EXCLUDED');
+  const nameOfEvidence = (id: string) => caseData.evidence.find((e) => e.id === id)?.name ?? id;
+  const victims = caseData.witnesses.filter((w) => w.role === 'VICTIM');
+
   const base = [
-    `Case: ${ctx.caseData.charges.map((c) => c.name).join(', ')}.`,
-    `Defendant: ${defendantFullName(ctx.caseData.defendant)}.`,
+    `Case: ${caseData.charges.map((c) => c.name).join(', ')}.`,
+    `Defendant: ${defendantFullName(defendant)}, age ${defendant.age}, ${defendant.demographics.employmentStatus.toLowerCase()}, ${defendant.demographics.relationshipStatus.toLowerCase()}, ${defendant.demographics.children} dependent child(ren), ${defendant.pastConvictions.length} prior conviction(s).`,
+    victims.length > 0 ? `Victim(s): ${victims.map((v) => v.name).join(', ')}.` : '',
     ctx.pleaDecision !== null ? `Plea decision: ${ctx.pleaDecision}.` : 'Resolved by trial.',
     ctx.verdict !== null ? `Verdict: ${ctx.verdict.map((v) => `${v.chargeName}: ${v.verdict}`).join('; ')}.` : '',
-    `Imposed sentence: ${JSON.stringify(ctx.imposedSentence)}.`,
-  ].join('\n');
+    `Imposed sentence: ${JSON.stringify(imposedSentence)}.`,
+    `Statutory range the court could impose within: maximum ${JSON.stringify(exposure.maximumPenalties)}, mandatory minimum ${JSON.stringify(exposure.mandatoryMinimums)}.`,
+    severity !== null
+      ? `Where the term landed: ${severityLabel(severity)}.`
+      : 'No sentence was imposed — the defendant was acquitted on every count.',
+    severity !== null && severity.versusOffer !== null
+      ? `Against the plea terms the People had on the table, which this case did not resolve on, the imposed term is ${OFFER_COMPARISON[severity.versusOffer]}.`
+      : '',
+    excluded.length > 0
+      ? `Evidence the court excluded (the People could not use it): ${excluded.map((r) => nameOfEvidence(r.evidenceId)).join(', ')}.`
+      : 'The court excluded no evidence.',
+  ].filter((line) => line !== '').join('\n');
   return withFeedback(base, feedback);
+}
+
+// Prose, because the enum is not a sentence: interpolating the value itself
+// produced "the imposed term is matches the offer". Who declined the deal is
+// left unsaid — on one trial path the defense refused it, on the other the
+// court did, and the prompt used to assert the defendant had turned down an
+// offer even when they had accepted it.
+const OFFER_COMPARISON: Record<'BELOW' | 'MATCHES' | 'ABOVE', string> = {
+  BELOW: 'lighter than that offer',
+  MATCHES: 'the same as that offer',
+  ABOVE: 'heavier than that offer',
+};
+
+function severityLabel(severity: SentenceSeverity): string {
+  // Floor and ceiling at once: a mandatory minimum equal to the maximum left
+  // the court one lawful term, and calling that the top of the range credits
+  // a choice it never made.
+  if (severity.atFloor && severity.atCeiling) return 'the only term the statute allowed — the court had no range to choose within';
+  if (severity.atCeiling) return 'the maximum the statute allowed — the top of the range';
+  if (severity.atFloor) return 'the lightest term available — the floor of the range';
+  // shareOfRoom, not shareOfExposure: the band is read from the room the
+  // court had, and quoting the share of the statutory maximum beside it let
+  // the prompt say "lenient, roughly 55% of the statutory maximum".
+  return `${severity.band.toLowerCase()}, roughly ${Math.round(severity.shareOfRoom * 100)}% of the way up the range the court could choose within`;
 }
 
 export async function runAftermath(apiKey: string, model: string, ctx: AftermathContext): Promise<string> {
