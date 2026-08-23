@@ -88,6 +88,7 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
         pleaDecision,
         verdict: isPleaPath ? null : chargeVerdicts,
         imposedSentence,
+        motionRulings,
       });
       setAftermathNarrative(aftermath);
       // The case is now fully decided: snapshot it, validate it through the

@@ -627,7 +627,49 @@ describe('runAftermath', () => {
     pleaDecision: 'ACCEPT' as const,
     verdict: null,
     imposedSentence: [],
+    motionRulings: [],
   };
+
+  // The sentence alone was never enough: an amount with no range beside it
+  // reads the same at the floor and at the ceiling, so the model could only
+  // restate the number instead of judging it.
+  it('tells the reporter what the sentence meant, not just what it was', async () => {
+    mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
+    const charge = ctx.caseData.charges[0]!;
+    await runAftermath(API_KEY, MODEL, {
+      ...ctx,
+      imposedSentence: charge.maximumPenalties,
+      motionRulings: [{ evidenceId: ctx.caseData.evidence[0]!.id, ruling: 'EXCLUDED' }],
+    });
+
+    const prompt = JSON.stringify(vi.mocked(callGemini).mock.calls[0]);
+    // The range it sat in, where in that range it landed, who it lands on,
+    // and what the court kept out.
+    expect(prompt).toContain('Statutory range the court could impose within');
+    expect(prompt).toContain('the top of the range');
+    expect(prompt).toContain('dependent child(ren)');
+    expect(prompt).toContain('Evidence the court excluded');
+    expect(prompt).toContain(ctx.caseData.evidence[0]!.name);
+  });
+
+  it('tells the reporter when the court kept nothing out', async () => {
+    mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
+    await runAftermath(API_KEY, MODEL, { ...ctx, imposedSentence: ctx.caseData.charges[0]!.maximumPenalties });
+    expect(JSON.stringify(vi.mocked(callGemini).mock.calls[0])).toContain('The court excluded no evidence');
+  });
+
+  it('says plainly that an acquittal imposed nothing', async () => {
+    mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
+    await runAftermath(API_KEY, MODEL, {
+      ...ctx,
+      pleaDecision: 'REJECT',
+      verdict: ctx.caseData.charges.map((c) => ({
+        chargeId: c.id, chargeName: c.name, classification: c.classification, verdict: 'NOT_GUILTY' as const,
+      })),
+      imposedSentence: [],
+    });
+    expect(JSON.stringify(vi.mocked(callGemini).mock.calls[0])).toContain('acquitted on every count');
+  });
 
   it('returns the validated narrative', async () => {
     mockCallsWith(JSON.stringify({ narrative: 'The defendant accepted responsibility and the community moved on.' }));

@@ -1,5 +1,6 @@
 import type {
   CasePayload,
+  MotionRuling,
   PleaNarrative,
   PleaDecision,
   Verdict,
@@ -23,6 +24,11 @@ export interface AftermathContext {
   pleaDecision: PleaDecision | null;
   verdict: Verdict | null;
   imposedSentence: Sentence[];
+  // The evidentiary rulings the judge made on the way here. Empty on the plea
+  // path, where Act 2 never happened. The demo path does not read them (its
+  // aftermath is authored per outcome and severity); the Aftermath prompt
+  // does, so generated coverage can mention what the court kept out.
+  motionRulings: MotionRuling[];
 }
 
 // The seam between the game and whatever produces its narrative content.

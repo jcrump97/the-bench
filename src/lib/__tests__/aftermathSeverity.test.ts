@@ -29,6 +29,7 @@ const aftermathFor = (bundle: DemoCaseBundle, verdict: ChargeVerdict[] | null, i
     pleaDecision: verdict === null ? 'ACCEPT' : 'REJECT',
     verdict,
     imposedSentence,
+    motionRulings: [],
   });
 
 describe('the demo aftermath answers the sentence, not just the verdict', () => {

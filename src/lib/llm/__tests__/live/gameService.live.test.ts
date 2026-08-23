@@ -40,6 +40,7 @@ describe.skipIf(LIVE_API_KEY === null)('GameService (live)', () => {
       pleaDecision: 'ACCEPT',
       verdict: null,
       imposedSentence: payload.charges[0]?.maximumPenalties ?? [],
+      motionRulings: [],
     });
 
     expect(AftermathNarrativeSchema.safeParse(narrative).success).toBe(true);

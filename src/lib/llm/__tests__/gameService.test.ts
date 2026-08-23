@@ -110,6 +110,7 @@ describe('createGameService().generateCase', () => {
       pleaDecision: 'ACCEPT',
       verdict: null,
       imposedSentence: [],
+      motionRulings: [],
     });
 
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
@@ -135,6 +136,7 @@ describe('createGameService().generateAftermath', () => {
         verdict: 'GUILTY' as const,
       })),
       imposedSentence: [],
+      motionRulings: [],
     };
 
     const result = await service.generateAftermath(ctx);
