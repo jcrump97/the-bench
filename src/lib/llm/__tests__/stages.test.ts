@@ -658,6 +658,34 @@ describe('runAftermath', () => {
     expect(JSON.stringify(vi.mocked(callGemini).mock.calls[0])).toContain('The court excluded no evidence');
   });
 
+  // The prompt is the reporter's only source. A false premise in it is a
+  // false premise in the coverage.
+  it('does not tell the reporter an accepted plea was turned down', async () => {
+    mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
+    await runAftermath(API_KEY, MODEL, {
+      ...ctx,
+      imposedSentence: ctx.caseData.charges[0]!.maximumPenalties,
+    });
+    const prompt = JSON.stringify(vi.mocked(callGemini).mock.calls[0]);
+    expect(prompt).not.toContain('turned down');
+  });
+
+  it('phrases the comparison against a refused offer as prose', async () => {
+    mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
+    await runAftermath(API_KEY, MODEL, {
+      ...ctx,
+      pleaDecision: 'REJECT',
+      verdict: ctx.caseData.charges.map((c) => ({
+        chargeId: c.id, chargeName: c.name, classification: c.classification, verdict: 'GUILTY' as const,
+      })),
+      imposedSentence: ctx.caseData.charges[0]!.maximumPenalties,
+    });
+    const prompt = JSON.stringify(vi.mocked(callGemini).mock.calls[0]);
+    // Interpolating the enum produced "the imposed term is matches the offer".
+    expect(prompt).not.toMatch(/is (below|matches|above) the offer/);
+    expect(prompt).toMatch(/(lighter than|the same as|heavier than) that offer/);
+  });
+
   it('says plainly that an acquittal imposed nothing', async () => {
     mockCallsWith(JSON.stringify({ narrative: 'Coverage followed.' }));
     await runAftermath(API_KEY, MODEL, {

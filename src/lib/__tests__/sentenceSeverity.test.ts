@@ -76,6 +76,16 @@ describe('deriveSentenceSeverity — where the term sits in the range', () => {
     expect(severity?.atCeiling).toBe(true);
   });
 
+  it('reports the share of the range the band was actually read from', () => {
+    // shareOfExposure is measured against the statutory maximum; the band is
+    // read from the room the court had to choose within. Both are on the
+    // record so no consumer can quote one as evidence for the other.
+    const severity = deriveSentenceSeverity([prison(6)], exposure([prison(10)], [prison(2)]), null);
+    expect(severity?.band).toBe('MEASURED');
+    expect(severity?.shareOfExposure).toBe(0.6);
+    expect(severity?.shareOfRoom).toBe(0.5);
+  });
+
   it('positions a term inside a range that carries neither custody nor a fine', () => {
     // Probation and community service have no day or dollar equivalent, so
     // the floor, the ceiling and the imposed term all weighed zero: every

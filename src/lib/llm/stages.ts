@@ -1452,8 +1452,8 @@ function buildAftermathContents(ctx: AftermathContext, feedback: string | undefi
     severity !== null
       ? `Where the term landed: ${severityLabel(severity)}.`
       : 'No sentence was imposed — the defendant was acquitted on every count.',
-    severity?.versusOffer !== null && severity !== null
-      ? `Against the plea the defendant turned down, the imposed term is ${severity.versusOffer.toLowerCase()} the offer.`
+    severity !== null && severity.versusOffer !== null
+      ? `Against the plea terms the People had on the table, which this case did not resolve on, the imposed term is ${OFFER_COMPARISON[severity.versusOffer]}.`
       : '',
     excluded.length > 0
       ? `Evidence the court excluded (the People could not use it): ${excluded.map((r) => nameOfEvidence(r.evidenceId)).join(', ')}.`
@@ -1462,10 +1462,28 @@ function buildAftermathContents(ctx: AftermathContext, feedback: string | undefi
   return withFeedback(base, feedback);
 }
 
+// Prose, because the enum is not a sentence: interpolating the value itself
+// produced "the imposed term is matches the offer". Who declined the deal is
+// left unsaid — on one trial path the defense refused it, on the other the
+// court did, and the prompt used to assert the defendant had turned down an
+// offer even when they had accepted it.
+const OFFER_COMPARISON: Record<'BELOW' | 'MATCHES' | 'ABOVE', string> = {
+  BELOW: 'lighter than that offer',
+  MATCHES: 'the same as that offer',
+  ABOVE: 'heavier than that offer',
+};
+
 function severityLabel(severity: SentenceSeverity): string {
+  // Floor and ceiling at once: a mandatory minimum equal to the maximum left
+  // the court one lawful term, and calling that the top of the range credits
+  // a choice it never made.
+  if (severity.atFloor && severity.atCeiling) return 'the only term the statute allowed — the court had no range to choose within';
   if (severity.atCeiling) return 'the maximum the statute allowed — the top of the range';
   if (severity.atFloor) return 'the lightest term available — the floor of the range';
-  return `${severity.band.toLowerCase()}, roughly ${Math.round(severity.shareOfExposure * 100)}% of the statutory maximum`;
+  // shareOfRoom, not shareOfExposure: the band is read from the room the
+  // court had, and quoting the share of the statutory maximum beside it let
+  // the prompt say "lenient, roughly 55% of the statutory maximum".
+  return `${severity.band.toLowerCase()}, roughly ${Math.round(severity.shareOfRoom * 100)}% of the way up the range the court could choose within`;
 }
 
 export async function runAftermath(apiKey: string, model: string, ctx: AftermathContext): Promise<string> {

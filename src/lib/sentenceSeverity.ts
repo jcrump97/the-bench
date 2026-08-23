@@ -28,9 +28,14 @@ export type SeverityBand = 'LENIENT' | 'MEASURED' | 'SEVERE';
 
 export interface SentenceSeverity {
   band: SeverityBand;
-  // Where the term sits in the range, 0 (floor of what could be imposed) to 1
-  // (everything the statute allowed).
+  // Where the term sits against the statutory maximum, 0 to 1.
   shareOfExposure: number;
+  // Where the term sits inside the room the court actually had to choose
+  // within — floor of the picker to statutory ceiling, 0 to 1. This is the
+  // number the band is read from, and it is on the record separately because
+  // quoting shareOfExposure beside the band let the prompt say "lenient,
+  // roughly 55% of the statutory maximum".
+  shareOfRoom: number;
   atFloor: boolean;
   atCeiling: boolean;
   // How the imposed term compares to plea terms the case did not resolve on —
@@ -125,6 +130,7 @@ export function deriveSentenceSeverity(
   return {
     band,
     shareOfExposure,
+    shareOfRoom: round2(shareOfRoom),
     atFloor,
     atCeiling,
     versusOffer: offered === null ? null : compareToOffer(imposed, offered),
