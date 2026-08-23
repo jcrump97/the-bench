@@ -367,6 +367,8 @@ const browser = await chromium.launch(
   await callCharge(page, 'NOT_GUILTY', 'Boone verdict');
   await finishCase(page, 'Boone acquittal', 'Adjourn');
   await checkMinuteOrder(page, 'Boone end', 'ACQUITTED');
+  check('Boone end: an acquittal still records what it leaves behind',
+    (await page.locator('[data-consequences]').innerText()).includes('No conviction is entered'));
   check('Boone end: acquittal aftermath variant shown',
     (await page.locator('text=the quiet scandal').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '08-boone-acquittal.png'), fullPage: true });
@@ -428,6 +430,9 @@ const browser = await chromium.launch(
   check('Vaughn end: split-verdict aftermath variant shown',
     (await page.locator('text=down the center line').count()) === 1);
   await checkMinuteOrder(page, 'Vaughn end', 'SPLIT');
+  check('Vaughn end: minute order reads the sentence back as consequence',
+    (await page.locator('[data-consequences]').innerText()).includes('at the earliest, aged') &&
+    (await page.locator('[data-consequences]').innerText()).includes('felony conviction is entered'));
   check('Vaughn end: minute order counts the split and tallies the rulings',
     (await minuteOrder(page).innerText()).includes('Guilty on 1 of 2 counts') &&
     (await minuteOrder(page).innerText()).includes('6 admitted, 0 excluded'));

@@ -2,8 +2,9 @@ import { Badge } from '../common/Badge';
 import { SentenceList } from '../common/SentenceList';
 import { enumLabel, formatJudgmentDate } from '../../lib/format';
 import { describeDisposition, dispositionOf } from '../../lib/resultSummary';
+import { describeConsequences } from '../../lib/consequences';
 import type { CaseOutcome } from '../../lib/outcome';
-import type { FinalResult } from '../../schemas/gameSchemas';
+import type { CasePayload, FinalResult } from '../../schemas/gameSchemas';
 
 // Keyed by the outcome union, so a new outcome is a type error here rather
 // than an uncoloured badge.
@@ -18,8 +19,11 @@ const DISPOSITION_TONE: Record<CaseOutcome, 'neutral' | 'good' | 'bad' | 'warn'>
 // did, rendered from the persisted FinalResult rather than from live state.
 // It is the snapshot the record was filed under — if this and the transcript
 // above it ever disagreed, this is the one that survived to localStorage.
-export function JudgmentSummary({ result }: { result: FinalResult }) {
+export function JudgmentSummary({ result, caseData }: { result: FinalResult; caseData: CasePayload }) {
   const disposition = dispositionOf(result);
+  // What the order does to the people in it — derived, never generated: the
+  // aftermath above is where the narrative voice lives.
+  const consequences = describeConsequences(caseData, result);
   const admitted = result.resolutionPath === 'TRIAL'
     ? result.motionRulings.filter((r) => r.ruling === 'ADMITTED').length
     : 0;
@@ -78,6 +82,18 @@ export function JudgmentSummary({ result }: { result: FinalResult }) {
         <div className="mt-1 text-sm">
           <SentenceList sentences={result.imposedSentence} />
         </div>
+      </div>
+
+      <div data-consequences className="mt-4 border-t border-(--border) pt-3">
+        <h4 className="text-sm font-medium text-(--text-h)">What the order does</h4>
+        <dl className="mt-1 space-y-1.5">
+          {consequences.map((consequence) => (
+            <div key={consequence.label} className="text-sm">
+              <dt className="text-xs tracking-wide text-(--text-muted) uppercase">{consequence.label}</dt>
+              <dd className="text-(--text)">{consequence.text}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       <p className="mt-3 text-xs text-(--text-muted)">

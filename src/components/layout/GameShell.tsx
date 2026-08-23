@@ -49,6 +49,7 @@ export function GameShell() {
   // is spoken beats only, and nobody speaks a minute order aloud.
   const finalResult = useGameStore((state) => state.finalResult);
   const currentPhase = useGameStore((state) => state.currentPhase);
+  const activeCase = useGameStore((state) => state.activeCase);
 
   // Fire the collapse-affordance hint the first time the courtroom mounts
   // this session; the timeout outlives the longest animation so the classes
@@ -85,8 +86,8 @@ export function GameShell() {
             <Ledger
               entries={visibleEntries}
               footer={
-                currentPhase === 'END_STATE' && finalResult !== null
-                  ? <JudgmentSummary result={finalResult} />
+                currentPhase === 'END_STATE' && finalResult !== null && activeCase !== null
+                  ? <JudgmentSummary result={finalResult} caseData={activeCase} />
                   : undefined
               }
             />
