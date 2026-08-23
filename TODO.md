@@ -966,21 +966,42 @@ so they aren't lost.
       Manual-only, like `test:live`: spends real API quota on both case
       generation and every judgment call, and must never run in
       `npm test`/lint/build/CI.
-- [ ] `ResultGenerator` + `FinalResult` localStorage persistence. END_STATE
-      currently renders only in-memory state via the ledger; nothing survives
-      a refresh. Note: `FinalResult.pleaOutcome`/`resolutionPath` can be derived
-      entirely from existing state (`pleaDecision === 'ACCEPT'` → `PLEA`;
-      otherwise `TRIAL` with `pleaOutcome` read off `pleaPosture.status`).
-      **Until it is built, the docs must stop claiming it exists** (external
-      review, 2026-08-07): `README.md`'s architecture diagram wires
-      `RG[ResultGenerator]` → `LS[LocalStorage FinalResult]` and `CLAUDE.md`'s
-      layer table lists ResultGenerator as a layer, both reading as shipped —
-      `CLAUDE.md`'s "(not yet implemented)" parenthetical is the only hedge
-      anywhere and the README has none. For a project whose thesis is that the
-      documentation is the deliverable, a reviewer opening the README and
-      finding a module that does not exist is the worst available first
-      impression. Either build it (~50 lines) or mark it unbuilt on both
-      surfaces.
+- [x] **`ResultGenerator` + `FinalResult` localStorage persistence** (2026-08-23
+      — DONE). Built, wired, and documented; the docs now describe a module
+      that exists. Seven commits, test-first:
+      - `e76ea07` refactor: `classifyOutcome` lifted out of `demoCases/` into
+        `src/lib/outcome.ts`, so the aftermath variant picker and the persisted
+        disposition cannot classify an outcome differently.
+      - `5769860` feat: `src/lib/resultGenerator.ts` — pure assembly.
+        `resolutionPath` from the plea decision; `pleaOutcome` read off the
+        **computed posture** (the offer-less paths write no `pleaDecision`, so
+        the posture is the only field that distinguishes them);
+        `prosecutionStrength`/`defenseRisk` snapshotted from the same
+        derivations the game was played under; `completedAt` injected.
+      - `97c3c17` feat: `src/lib/resultArchive.ts` — bounded (25), newest
+        first, every entry re-parsed through `FinalResultSchema` on read and
+        every access wrapped (blocked site data throws on *access*; `setItem`
+        throws on quota).
+      - `6ed77f7` feat: `finalResult` in the game store (validated setter,
+        phase-gated to `ACT_3_VERDICT`) + `src/lib/recordJudgment.ts`, which
+        feeds the archive from `getState()` so a rejected snapshot can never
+        be persisted. Tested end to end against the real state machine.
+      - `b261bf4` feat: the minute order filed under the record at END_STATE,
+        rendered as the `Ledger`'s `footer` (above the scroll pin, so it lands
+        on screen with the aftermath beat) and deliberately not a courtroom
+        beat.
+      - `ab630bd` feat: the bench record on the docket screen — the loop
+        closer. Hidden until the first case closes; guilty rate over counts
+        tried, `null` (not 0%) on an all-plea docket.
+      - docs: README diagram/status, CLAUDE.md layer table + Result Pipeline
+        section, AGENTS.md reminders.
+      Design decisions worth keeping: the split of assemble / validate /
+      persist across three modules is what makes "the archive only ever holds
+      validated snapshots" a type-level fact rather than a convention; and the
+      snapshot is an **output** — no derivation reads `finalResult`.
+      Follow-ups deliberately not taken: no rehydration of an in-progress game
+      (only completed results persist, by design), and no cross-case scoring
+      beyond the record's tallies.
 - [x] Aftermath narrative source — done: the demo docket uses authored
       `aftermathVariants` keyed by outcome, surfaced through the `CaseSource`
       seam (`demoCaseSource`). The BYOK path will call `generateAftermath()`

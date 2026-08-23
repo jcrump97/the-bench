@@ -47,11 +47,11 @@ This is a public portfolio project documenting a career transition into AI Syste
 |---|---|---|
 | **UI (React 19)** | Displays state, triggers actions | Never calls `fetch()` or reads the API key back |
 | **GameService** | Orchestrates all Gemini calls via native `fetch()`; triggers the generation pipeline and the Aftermath call | Only caller of the Gemini API |
-| **ResultGenerator** | Standalone module — assembles the `FinalResult` object from end-of-game state (not yet implemented — designed alongside GameService) | Sends unvalidated result to ValidationLayer; never writes to localStorage directly |
+| **ResultGenerator** | Standalone module (`src/lib/resultGenerator.ts`) — assembles the `FinalResult` object from end-of-game state | Sends unvalidated result to ValidationLayer; never writes to localStorage directly |
 | **DemoCase** | Hardcoded JSON payload for offline/keyless play | Bypasses GameService and LLM entirely; feeds directly into ValidationLayer |
 | **ValidationLayer** | Zod parses every LLM response and every `FinalResult` before state hydration | Three outputs: validated data → GameState, any failure → ErrorState, immutable FinalResult → localStorage |
 | **Zustand stores** | Source of truth for game, security, and view state | Three isolated slices (see below) |
-| **localStorage** | Persists only immutable `FinalResult` objects post-game | Never stores active state or the API key |
+| **localStorage** | Persists only immutable `FinalResult` objects post-game, via `src/lib/resultArchive.ts` | Never stores active state or the API key; every snapshot read back is re-validated |
 
 ### State Machine (`useGameStore`)
 
@@ -67,11 +67,30 @@ All phases → ERROR_STATE → WELCOME (reset)
 
 The transition matrix is defined in `ALLOWED_PHASE_TRANSITIONS` in `src/store/useGameStore.ts`. Every call to `setPhase()` is validated against it and then run through `GamePhaseSchema.safeParse()` before mutating state.
 
+The store also holds `finalResult` — the validated end-of-game snapshot (see the Result Pipeline section below). It is an output, never an input: no derivation reads it.
+
 Alongside `activeCase`, the store holds `activePleaNarrative` — the LLM's (or demo case's) narrative-only plea input. It is upstream input data, not a derived value: the computed `PleaPosture` stays a pure derivation and is never stored. `setActivePleaNarrative` mirrors case hydration — phase-gated to `WELCOME` and `PleaNarrativeSchema.safeParse`d, with any violation forcing `ERROR_STATE`.
 
 Player decisions accumulate one entry at a time so the court record can show each ruling as it lands: `addMotionRuling` (upsert by `evidenceId`, phase-gated to `ACT_2_MOTIONS`) and `addChargeVerdict` (upsert by `chargeId`, phase-gated to `ACT_3_VERDICT`). There is no atomic `setVerdict`.
 
 The store also keeps `spokenJudgeLines` — the judge's chosen line per decision-point id (`'plea'` | `` `motion-${evidenceId}` `` | `` `verdict-${chargeId}` ``), written by `recordSpokenJudgeLine` from the same handler that dispatches the structural decision. It is a narrative voice record only: game logic never reads it, and the courtroom-script projection falls back deterministically to the first authored option matching the recorded decision when a key is absent.
+
+### Result Pipeline (`resultGenerator.ts` → store → `resultArchive.ts`)
+
+The close of a case runs the layer table left to right, and each module does exactly one of the three jobs:
+
+```
+buildFinalResult(state)  →  setFinalResult (FinalResultSchema)  →  saveFinalResult(validated)
+   assemble (pure)              validate (ValidationLayer)            persist (localStorage)
+```
+
+`buildFinalResult` is pure and generates nothing: `resolutionPath` falls out of `pleaDecision === 'ACCEPT'`, and `pleaOutcome` is read off the **computed posture**, not off any stored field — the offer-less paths (`NO_OFFER`, `REJECTED_BY_DEFENSE`) record no plea decision at all, so the posture is the only thing that can tell them apart from a judge who refused a live offer. `prosecutionStrength`/`defenseRisk` are snapshotted from the same deterministic derivations the game was played under, so the record shows the case as it was tried rather than a re-scored version of it. `completedAt` is injected by the caller, keeping the assembly a pure function of its inputs.
+
+`recordJudgment` (`src/lib/recordJudgment.ts`) is the wiring, and deliberately the one module in `lib/` that touches the store: it feeds the archive from `getState()` rather than from the candidate, so a snapshot that failed the schema gate (which has already forced `ERROR_STATE` inside the store) can never reach localStorage. It runs in the last moment of `ACT_3_VERDICT` — `finalResult`, like `aftermathNarrative`, is phase-gated there and written immediately before the hop to `END_STATE`.
+
+`resultArchive.ts` treats localStorage as a trust boundary in both directions: bounded to `MAX_ARCHIVED_RESULTS` newest-first entries, every entry re-parsed through `FinalResultSchema` on read (a hand-edited or older-schema snapshot is dropped individually, never taking the rest of the record with it), and every access wrapped — reading `globalThis.localStorage` itself throws with site data blocked, and `setItem` throws on quota, neither of which may take down a game the player just finished.
+
+Two read surfaces, both fed by the pure projections in `src/lib/resultSummary.ts` (`dispositionOf` reuses the same `classifyOutcome` in `src/lib/outcome.ts` the aftermath variants are picked with, so no surface can classify an outcome differently): the **minute order** filed under the record at `END_STATE` (rendered as the `Ledger`'s `footer` so it sits above the scroll pin and arrives on screen with the aftermath beat — it is not a spoken beat and stays out of the courtroom script), and the **bench record** on the docket screen, hidden until the first case closes. Its guilty rate is over *counts tried*, and is `null` rather than `0%` on an all-plea docket where no count was ever tried.
 
 ### Courtroom Script (`src/lib/courtroomScript.ts`)
 
