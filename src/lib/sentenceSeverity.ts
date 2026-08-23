@@ -33,8 +33,9 @@ export interface SentenceSeverity {
   shareOfExposure: number;
   atFloor: boolean;
   atCeiling: boolean;
-  // How the imposed term compares to the plea terms the defendant refused —
-  // null when no offer was ever on the table, which is most trial paths.
+  // How the imposed term compares to plea terms the case did not resolve on —
+  // null when no offer was ever made, and null on the plea path, where the
+  // imposed term is the offer.
   versusOffer: 'BELOW' | 'MATCHES' | 'ABOVE' | null;
 }
 
@@ -126,11 +127,23 @@ export function deriveSentenceSeverity(
     shareOfExposure,
     atFloor,
     atCeiling,
-    versusOffer: offered === null ? null : compareToOffer(imposedWeight, weigh(offered)),
+    versusOffer: offered === null ? null : compareToOffer(imposed, offered),
   };
 }
 
-function compareToOffer(imposedWeight: number, offeredWeight: number): 'BELOW' | 'MATCHES' | 'ABOVE' {
+// Both sides of this comparison have to sit on the same scale. weigh() falls
+// back to the non-custodial terms when a sentence carries no custody, so
+// weighing each side on its own terms could put dollars against days: on a
+// partial acquittal where the only count that stuck carries a fine, a $5,000
+// fine outweighed the multi-year prison offer the defendant had refused and
+// the record called the fine the harsher outcome. Custody governs whenever
+// *either* side carries any, and the side without it weighs no days — which
+// is exactly what it is.
+function compareToOffer(imposed: Sentence[], offered: Sentence[]): 'BELOW' | 'MATCHES' | 'ABOVE' {
+  const custodyInPlay = custodyOf(imposed).length > 0 || custodyOf(offered).length > 0;
+  const measure = custodyInPlay ? (s: Sentence[]) => total(custodyOf(s)) : total;
+  const imposedWeight = measure(imposed);
+  const offeredWeight = measure(offered);
   if (imposedWeight < offeredWeight) return 'BELOW';
   if (imposedWeight > offeredWeight) return 'ABOVE';
   return 'MATCHES';
@@ -158,9 +171,13 @@ export function severityOfImposedSentence(
   );
 
   // A WEAK case never produced offer terms, so there is nothing to compare a
-  // trial sentence against.
+  // trial sentence against — and neither does an accepted plea, where the
+  // imposed term *is* the bargain. Comparing the sentence to the deal it came
+  // from told the aftermath the defendant had turned down the offer they took.
   const band = assessProsecution(caseData).band;
-  const offered = band === 'WEAK' ? null : derivePleaOfferTerms(caseData, band).proposedSentence;
+  const offered = isPleaPath || band === 'WEAK'
+    ? null
+    : derivePleaOfferTerms(caseData, band).proposedSentence;
 
   return deriveSentenceSeverity(imposedSentence, exposure, offered);
 }

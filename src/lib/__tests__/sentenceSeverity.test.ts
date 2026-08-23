@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { deriveSentenceSeverity } from '../sentenceSeverity';
+import { deriveSentenceSeverity, severityOfImposedSentence } from '../sentenceSeverity';
 import type { Sentence } from '../../schemas/gameSchemas';
+import { webbCase } from '../demoCases/webb';
 
 const exposure = (max: Sentence[], min: Sentence[] = []) => ({
   maximumPenalties: max,
@@ -100,5 +101,33 @@ describe('deriveSentenceSeverity — against the deal the judge refused', () => 
 
   it('has nothing to compare against when no offer was ever made', () => {
     expect(deriveSentenceSeverity([prison(8)], exposure([prison(10)]), null)?.versusOffer).toBeNull();
+  });
+
+  it('weighs custody against custody when only one side carries any', () => {
+    // A partial acquittal can leave a fine standing on the one count that
+    // stuck while the refused offer was years of custody. Weighing each side
+    // on its own terms put dollars against days and called $5,000 the
+    // harsher outcome.
+    const severity = deriveSentenceSeverity([fine(5_000)], exposure([fine(5_000)]), [prison(3)]);
+    expect(severity?.versusOffer).toBe('BELOW');
+  });
+});
+
+describe('severityOfImposedSentence — resolved from end-of-game state', () => {
+  it('has no refused offer to weigh an accepted plea against', () => {
+    // On the plea path the imposed term *is* the bargain. Comparing it to the
+    // offer told the aftermath the defendant had turned down the deal they
+    // took.
+    const severity = severityOfImposedSentence(webbCase.payload, 'ACCEPT', null, [prison(2)]);
+    expect(severity).not.toBeNull();
+    expect(severity?.versusOffer).toBeNull();
+  });
+
+  it('still weighs a trial sentence against the offer that was refused', () => {
+    const verdict = webbCase.payload.charges.map((c) => ({
+      chargeId: c.id, chargeName: c.name, classification: c.classification, verdict: 'GUILTY' as const,
+    }));
+    const severity = severityOfImposedSentence(webbCase.payload, 'REJECT', verdict, [prison(1)]);
+    expect(severity?.versusOffer).not.toBeNull();
   });
 });
