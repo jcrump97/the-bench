@@ -109,6 +109,13 @@ describe('describeConsequences — money and supervision', () => {
     expect(textOf(describeConsequences(validCase, result))).toMatch(/\$2,500/);
   });
 
+  it('supervises for one year, not "1 years"', () => {
+    const result = close(validCase, [
+      { type: 'PROBATION', unit: 'YEARS', amount: 1, conditions: ['RANDOM_DRUG_TESTING'] },
+    ], guilty());
+    expect(textOf(describeConsequences(validCase, result))).toMatch(/Supervised for 1 year:/);
+  });
+
   it('lists probation conditions in plain words', () => {
     const result = close(validCase, [
       { type: 'PROBATION', unit: 'YEARS', amount: 3, conditions: ['RANDOM_DRUG_TESTING', 'NO_CONTACT_ORDER'] },

@@ -5,7 +5,7 @@ import {
   type FinalResult,
   type Sentence,
 } from '../schemas/gameSchemas';
-import { enumLabel } from './format';
+import { enumLabel, pluralizeUnit } from './format';
 
 // ===========================================================================
 // What the order does to the people in it.
@@ -142,7 +142,7 @@ export function describeConsequences(caseData: CasePayload, result: FinalResult)
   if (probation !== undefined && probation.type === 'PROBATION') {
     lines.push({
       label: 'Supervision',
-      text: `Supervised for ${probation.amount} ${probation.unit.toLowerCase()}: ${probation.conditions.map(enumLabel).join(', ')}. A violation is decided by a judge, not a trial.`,
+      text: `Supervised for ${probation.amount} ${pluralizeUnit(probation.unit, probation.amount)}: ${probation.conditions.map(enumLabel).join(', ')}. A violation is decided by a judge, not a trial.`,
     });
   }
 

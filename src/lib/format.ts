@@ -21,7 +21,7 @@ const UNIT_SINGULAR: Record<'YEARS' | 'MONTHS' | 'DAYS' | 'HOURS', string> = {
   HOURS: 'hour',
 };
 
-function pluralizeUnit(unit: 'YEARS' | 'MONTHS' | 'DAYS' | 'HOURS', amount: number): string {
+export function pluralizeUnit(unit: 'YEARS' | 'MONTHS' | 'DAYS' | 'HOURS', amount: number): string {
   const singular = UNIT_SINGULAR[unit];
   return amount === 1 ? singular : `${singular}s`;
 }
