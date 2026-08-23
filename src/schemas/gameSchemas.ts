@@ -8,10 +8,21 @@ import { z } from 'zod';
 // every voiced/narrative string field below; failing this sends the LLM
 // pipeline's retry-with-feedback loop the concrete correction instead of
 // silently letting anachronistic dialogue into the record.
-const JURY_PATTERN = /\bjur(?:y|ies|or|ors)\b/i;
+//
+// The word "jury" is not the only way to seat one. A shipped demo aftermath
+// opened "Not guilty, the foreman said" — no banned word in it, and a jury
+// foreman announcing the verdict all the same. The pattern covers the roles
+// and rituals that only exist with a jury in the box.
+//
+// Blunt on purpose: a work-crew foreman is collateral damage. Context-matching
+// the role word against verdict language was tried and is not reliable — "the
+// court found him not guilty, and the foreman of the crew testified" trips any
+// sentence-scoped window. On the LLM path a false positive costs one retry
+// with feedback, which self-heals; a jury foreman in the record does not.
+const JURY_PATTERN = /\bjur(?:y|ies|or|ors)\b|\bfore(?:man|men|woman|women|person|persons)\b|\bvoir dire\b/i;
 function noJury<T extends z.ZodString>(schema: T) {
   return schema.refine((text) => !JURY_PATTERN.test(text), {
-    message: 'must not reference a jury or jurors — this is a bench trial; the judge alone rules and decides the verdict',
+    message: 'must not reference a jury, jurors, a foreperson, or voir dire — this is a bench trial; the judge alone rules and decides the verdict',
   });
 }
 
