@@ -1,4 +1,4 @@
-import { defineDemoCase } from './types';
+import { defineDemoCase, type SentenceCodas } from './types';
 
 // People v. Curtis Boone — Second-Degree Commercial Burglary (PC § 459).
 // Tuned WEAK (score ~33: element coverage 1/2, HIGH objection risk on the
@@ -265,10 +265,25 @@ const booneAftermath = {
     'The court took five hours before returning to the bench, most of it — a courtroom clerk later told the Sentinel — spent with the array photos spread across the desk. Not guilty, and Curtis Boone exhaled like a man surfacing. What the verdict did not give back: the job he had already lost, the two months of hearings, or any account of who did come through that door. Sam Herrera\'s insurer denied the claim pending an "unresolved loss event," and QuickCoin now closes at dark. Marta Voss stands by what she saw; she also stopped cashing her checks there. The detective\'s file stays open with no other names in it, which Boone\'s lawyer calls the quiet scandal of the whole affair: four people knew the blind spot, one got charged, and when the charge fell apart nobody went looking at the other three. Boone moved in with his sister for good. He sleeps on the couch.',
 };
 
+// How the term landed. Selected by the deterministic severity band, not
+// by the outcome — the aftermath above answers what happened, these answer
+// what the court did with the discretion it had. Written to follow any
+// sentence-bearing base (a plea taken or a count proven), and deliberately
+// free of numbers: the band knows where the term sat in the range, it does
+// not know the figure.
+const booneSentenceCodas: SentenceCodas = {
+  LENIENT:
+    'The sentence stayed low — low enough that the appellate clinic\'s intake memo led with it. A court that convicts and then sentences at the floor, the supervising attorney wrote to her students, is a court with a doubt it could not put on the record; go find it. Tasha Boone drove down on the first visiting day with a bag of the paperbacks from her couch. Sam Herrera, who had wanted the thing over more than he had wanted anybody punished, called the number in the Sentinel\'s story to ask whether the restitution could be waived. It could not.',
+  MEASURED:
+    'The sentence came in near the middle of the range, and the Sentinel\'s courthouse reporter noted that the court had done its arithmetic in open court and shown the work. The appellate clinic took the file anyway, flagging the uniform shirt in the photo array. Tasha Boone drove down on visiting days until the gas money ran out, then wrote instead. Sam Herrera put the camera where the blind spot used to be and stopped reading the coverage.',
+  SEVERE:
+    'Then the court went to the top of the range, and the sixty-three feet became a number people repeated. The appellate clinic\'s memo used the sentence as its opening paragraph — a maximum term on a single identification, at night, in rain, from across a street. Tasha Boone\'s couch stayed empty; she kept the blanket folded over the arm of it, which a neighbor mentioned to the Sentinel and the Sentinel, to its credit, printed without comment. Marta Voss stood by what she saw. She also stopped saying it out loud.',
+};
 export const booneCase = defineDemoCase({
   title: 'People v. Curtis Boone',
   teaser: 'A rainy-night break-in, a forty-foot identification, and no offer on the table.',
   payload: rawBoonePayload,
   pleaNarrative: rawBoonePleaNarrative,
   aftermath: booneAftermath,
+  sentenceCodas: booneSentenceCodas,
 });

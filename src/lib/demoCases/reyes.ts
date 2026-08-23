@@ -1,4 +1,4 @@
-import { defineDemoCase } from './types';
+import { defineDemoCase, type SentenceCodas } from './types';
 
 // People v. Dominic Reyes — Assault by Means Likely to Produce Great Bodily
 // Injury (PC § 245(a)(4)). Tuned STRONG (score ~67: clean video, LOW-risk
@@ -271,10 +271,25 @@ const reyesAftermath = {
     'Self-defense, the court found in effect, and the courtroom split into two families\' worth of noise. The Sentinel ran the fourteen seconds of tape one last time under the headline "The Four Seconds That Weren\'t There." Kyle Merritt, still in speech therapy, told the reporter through his son that a not-guilty verdict doesn\'t un-crack a skull; his family has retained civil counsel, where the burden of proof is lighter and the tape will play again. Elena Reyes said the only thing anyone remembers from the courthouse steps: "He came when I called. That\'s the whole story." The bouncer gave no interviews. Reyes withdrew from his June bout anyway — his manager called it "optics" — and the Golden Spur\'s insurer, unmoved by acquittals, required a second camera and a two-guard exit policy before renewing. The People\'s office issued a two-line statement noting that the court decides facts. It did not congratulate anyone.',
 };
 
+// How the term landed. Selected by the deterministic severity band, not
+// by the outcome — the aftermath above answers what happened, these answer
+// what the court did with the discretion it had. Written to follow any
+// sentence-bearing base (a plea taken or a count proven), and deliberately
+// free of numbers: the band knows where the term sat in the range, it does
+// not know the figure.
+const reyesSentenceCodas: SentenceCodas = {
+  LENIENT:
+    'The term landed near the bottom of the range, and the Merritt family called it the second injury. Their statement — read on the courthouse steps by Kyle\'s son, because Kyle\'s speech was not up to it — used the phrase "a discount for a good record" twice. Elena Reyes said nothing on the way out, having learned by then what the cameras were for. The gym put the photograph back up in the fall, in a smaller frame, further down the wall.',
+  MEASURED:
+    'The term sat in the middle of the range, which the Sentinel\'s columnist noted is where sentences land when the tape shows the punch and not the twenty minutes before it. The Merritts said they would have taken more and could live with this. Elena Reyes sold her car to keep her brother\'s commissary account funded and told nobody at the gym, which is how the gym found out.',
+  SEVERE:
+    'Then the court imposed the top of the range, and the Golden Spur\'s parking lot held the Sentinel\'s editorial page for a week — not the punch, which nobody disputed, but the four seconds of tape that were never recovered and the maximum term handed down without them. The Merritts said it was the first time the system had kept pace with what happened to Kyle. Elena Reyes stopped coming to the gym altogether. Her brother\'s photograph never went back on the wall, and the owner, asked about it a year later, said only that sponsors have long memories.',
+};
 export const reyesCase = defineDemoCase({
   title: 'People v. Dominic Reyes',
   teaser: 'One punch on tape, a skull fracture, and the twenty minutes the camera never saw.',
   payload: rawReyesPayload,
   pleaNarrative: rawReyesPleaNarrative,
   aftermath: reyesAftermath,
+  sentenceCodas: reyesSentenceCodas,
 });

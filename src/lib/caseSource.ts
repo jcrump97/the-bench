@@ -6,8 +6,9 @@ import type {
   Sentence,
 } from '../schemas/gameSchemas';
 import type { DemoCaseBundle } from './demoCases';
-import { selectAftermath } from './demoCases/aftermath';
+import { assembleAftermath, selectAftermath } from './demoCases/aftermath';
 import { classifyOutcome } from './outcome';
+import { severityOfImposedSentence } from './sentenceSeverity';
 
 export interface GeneratedCase {
   payload: CasePayload;
@@ -37,14 +38,24 @@ export interface CaseSource {
 }
 
 // Demo implementation: resolves instantly from a hand-authored bundle,
-// bypassing the LLM entirely, but through the exact seam the BYOK path will
-// use. generateAftermath conditions on the player's outcome the same way the
-// real Aftermath prompt will.
+// bypassing the LLM entirely, but through the exact seam the BYOK path uses.
+// generateAftermath conditions on the player's outcome *and* on how hard the
+// sentence landed, the same two things the real Aftermath prompt is told —
+// the authored base answers the verdict, the coda answers the term.
 export function demoCaseSource(bundle: DemoCaseBundle): CaseSource {
   return {
     generateCase: () =>
       Promise.resolve({ payload: bundle.payload, pleaNarrative: bundle.pleaNarrative }),
-    generateAftermath: (ctx) =>
-      Promise.resolve(selectAftermath(bundle, classifyOutcome(ctx.pleaDecision, ctx.verdict))),
+    generateAftermath: (ctx) => {
+      const base = selectAftermath(bundle, classifyOutcome(ctx.pleaDecision, ctx.verdict));
+      const severity = severityOfImposedSentence(
+        ctx.caseData,
+        ctx.pleaDecision,
+        ctx.verdict,
+        ctx.imposedSentence,
+      );
+      // No sentence, no coda: on a full acquittal the base is the whole story.
+      return Promise.resolve(assembleAftermath(base, severity && bundle.sentenceCodas[severity.band]));
+    },
   };
 }

@@ -1,5 +1,13 @@
-import { sentenceDayEquivalent, type Sentence } from '../schemas/gameSchemas';
-import type { SentencingExposure } from './sentencingExposure';
+import {
+  sentenceDayEquivalent,
+  type CasePayload,
+  type ChargeVerdict,
+  type PleaDecision,
+  type Sentence,
+} from '../schemas/gameSchemas';
+import { deriveSentencingExposure, selectSentenceableCharges, type SentencingExposure } from './sentencingExposure';
+import { assessProsecution, derivePleaOfferTerms } from './pleaAssessment';
+import { buildSentences, floorAmountFor } from './sentenceBounds';
 
 // ===========================================================================
 // How hard the sentence landed.
@@ -55,7 +63,16 @@ export function deriveSentenceSeverity(
 
   const imposedWeight = weigh(imposed);
   const ceiling = weigh(exposure.maximumPenalties);
-  const floor = weigh(exposure.mandatoryMinimums);
+  // The floor is what the picker would actually let the court choose, not
+  // zero: with no mandatory minimum that is one unit of each penalty, and the
+  // lightest term available has to read as leniency. Measuring against zero
+  // made the lowest selectable term on a three-year exposure land a third of
+  // the way up the range and read as "measured" — the mercy the player
+  // actually extended, described back to them as the middle of the road.
+  const floor = weigh(buildSentences(
+    exposure.maximumPenalties,
+    exposure.maximumPenalties.map((max) => floorAmountFor(max, exposure.mandatoryMinimums)),
+  ));
 
   // A range with no room in it (floor equals ceiling, or an exposure that
   // weighs nothing) leaves the court no discretion to read.
@@ -63,7 +80,7 @@ export function deriveSentenceSeverity(
   const shareOfExposure = ceiling <= 0 ? 0 : round2(imposedWeight / ceiling);
   const shareOfRoom = room <= 0 ? 0 : (imposedWeight - floor) / room;
 
-  const atFloor = imposedWeight <= floor || (floor === 0 && shareOfExposure === 0);
+  const atFloor = imposedWeight <= floor;
   const atCeiling = imposedWeight >= ceiling && ceiling > 0;
 
   // The endpoints are read as themselves: everything the statute allowed is
@@ -96,4 +113,29 @@ function compareToOffer(imposedWeight: number, offeredWeight: number): 'BELOW' |
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+// The same reading, resolved from end-of-game state alone — the exposure the
+// court was actually working within (counts of conviction only, never the
+// whole charge list) and the plea terms the People would have offered.
+// Both the demo docket's aftermath selection and the BYOK aftermath prompt go
+// through here, so the offline and generated paths read a sentence the same
+// way.
+export function severityOfImposedSentence(
+  caseData: CasePayload,
+  pleaDecision: PleaDecision | null,
+  verdict: ChargeVerdict[] | null,
+  imposedSentence: Sentence[],
+): SentenceSeverity | null {
+  const isPleaPath = pleaDecision === 'ACCEPT';
+  const exposure = deriveSentencingExposure(
+    selectSentenceableCharges(caseData.charges, isPleaPath, verdict ?? []),
+  );
+
+  // A WEAK case never produced offer terms, so there is nothing to compare a
+  // trial sentence against.
+  const band = assessProsecution(caseData).band;
+  const offered = band === 'WEAK' ? null : derivePleaOfferTerms(caseData, band).proposedSentence;
+
+  return deriveSentenceSeverity(imposedSentence, exposure, offered);
 }

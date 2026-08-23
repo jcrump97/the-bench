@@ -272,6 +272,11 @@ const browser = await chromium.launch(
   check('Webb end(plea): plea-accepted aftermath variant shown',
     (await page.locator('text=never had to board a plane').count()) === 1);
   await checkMinuteOrder(page, 'Webb end(plea)', 'PLEA_ACCEPTED');
+  // The negotiated term seeds mid-range, so the aftermath's severity coda is
+  // the MEASURED one. Run 2 sentences the same case at the statutory maximum
+  // and must get a different coda — that contrast is the whole feature.
+  check('Webb end(plea): aftermath carries the mid-range sentence coda',
+    (await page.locator('li[data-entry-kind="AFTERMATH"]').innerText()).includes('mid-range'));
   check('Webb end(plea): minute order names the defendant and the imposed sentence',
     (await minuteOrder(page).innerText()).includes('People v. Marcus Webb') &&
     /\d+ (year|month|day)s? in (prison|jail)|\$[\d,]+ fine/.test(await minuteOrder(page).innerText()));
@@ -333,6 +338,9 @@ const browser = await chromium.launch(
     speakers.filter((s) => s === 'WITNESS').length === 11, JSON.stringify(speakers));
   check('Webb end(trial): trial order + 5 rulings + verdict + sentence are THE COURT',
     speakers.filter((s) => s === 'COURT').length === 8, JSON.stringify(speakers));
+  check('Webb end(trial): maximum term draws the severe sentence coda',
+    (await page.locator('li[data-entry-kind="AFTERMATH"]').innerText())
+      .includes('at the top of what the range allowed'));
   check('Webb end(trial): convicted aftermath variant shown',
     (await page.locator('text=came back in under a day').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '06-endstate-trial-mobile.png'), fullPage: true });

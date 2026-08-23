@@ -269,6 +269,7 @@ describe('defineDemoCase — authored/reachable pairings', () => {
       payload: structuredClone(webbCase.payload) as Record<string, unknown>,
       pleaNarrative: structuredClone(webbCase.pleaNarrative) as Record<string, unknown>,
       aftermath: { ...webbCase.aftermath },
+      sentenceCodas: { ...webbCase.sentenceCodas },
     };
   }
 
@@ -302,6 +303,24 @@ describe('defineDemoCase — authored/reachable pairings', () => {
     expect(() => defineDemoCase(raw)).toThrow(
       new RegExp(`Demo case ${webbCase.payload.caseId}.*PENDING_JUDICIAL_REVIEW`),
     );
+  });
+
+  it('rejects a bundle missing a severity coda', () => {
+    const raw = webbBundle();
+    delete (raw.sentenceCodas as Partial<typeof raw.sentenceCodas>).SEVERE;
+    expect(() => defineDemoCase(raw)).toThrow(/sentenceCodas\.SEVERE must be a non-empty string/);
+  });
+
+  it('rejects a coda that pushes an assembled aftermath past the schema bound', () => {
+    const raw = webbBundle();
+    raw.sentenceCodas.MEASURED = 'x'.repeat(4000);
+    expect(() => defineDemoCase(raw)).toThrow(/assembled with its codas/);
+  });
+
+  it('rejects a coda that seats a jury in the aftermath', () => {
+    const raw = webbBundle();
+    raw.sentenceCodas.LENIENT = 'The jury foreman told reporters the term felt about right.';
+    expect(() => defineDemoCase(raw)).toThrow(/assembled with its codas/);
   });
 
   it('rejects a single-charge case that authors a SPLIT aftermath', () => {

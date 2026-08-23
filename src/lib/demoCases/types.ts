@@ -1,4 +1,5 @@
 import {
+  AftermathNarrativeSchema,
   CasePayloadSchema,
   PleaNarrativeSchema,
   type CasePayload,
@@ -7,6 +8,8 @@ import {
 import { computePleaPostureForCase } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseOutcome } from '../outcome';
+import type { SeverityBand } from '../sentenceSeverity';
+import { assembleAftermath } from './aftermath';
 
 // How the player's run of a case can end. The real Aftermath LLM call is
 // conditioned on this same end-of-game state; demo bundles author one
@@ -25,6 +28,13 @@ type AftermathVariantsBase = {
   CONVICTED: string;
   ACQUITTED: string;
 };
+// How the sentence landed, authored once per case per severity band and
+// appended to whichever outcome base applies. Required on every bundle: every
+// case on the docket can reach a sentence (a plea or any guilty count), and a
+// case that answers the verdict but not the term is the gap these exist to
+// close.
+export type SentenceCodas = Record<SeverityBand, string>;
+
 export type SingleChargeAftermath = AftermathVariantsBase & { SPLIT?: never };
 export type MultiChargeAftermath = AftermathVariantsBase & { SPLIT: string };
 export type AftermathVariants = SingleChargeAftermath | MultiChargeAftermath;
@@ -58,6 +68,7 @@ export interface DemoCaseBundle {
   payload: CasePayload;
   pleaNarrative: PleaNarrative;
   aftermath: AftermathVariants;
+  sentenceCodas: SentenceCodas;
   tutorial?: TutorialGuidance;
 }
 
@@ -67,6 +78,7 @@ interface RawDemoCase {
   payload: unknown;
   pleaNarrative: unknown;
   aftermath: AftermathVariants;
+  sentenceCodas: SentenceCodas;
   tutorial?: TutorialGuidance;
 }
 
@@ -82,9 +94,34 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
   const payload = CasePayloadSchema.parse(raw.payload);
   const pleaNarrative = PleaNarrativeSchema.parse(raw.pleaNarrative);
 
+  // Validate what the player is actually shown, not the fragments: the
+  // acquittal base stands alone (nothing was imposed), and every other base is
+  // read assembled with each severity coda. Running the real
+  // AftermathNarrativeSchema over the assembled text means a bundle crosses
+  // the same gate at module load that the store applies at runtime — length
+  // and the bench-trial guard both.
+  const bands: SeverityBand[] = ['LENIENT', 'MEASURED', 'SEVERE'];
+  for (const band of bands) {
+    const coda = raw.sentenceCodas[band];
+    if (typeof coda !== 'string' || coda.length === 0) {
+      throw new Error(`Demo case ${payload.caseId}: sentenceCodas.${band} must be a non-empty string`);
+    }
+  }
   for (const [outcome, text] of Object.entries(raw.aftermath)) {
     if (typeof text !== 'string' || text.length === 0 || text.length > AFTERMATH_MAX_LENGTH) {
       throw new Error(`Demo case ${payload.caseId}: aftermath ${outcome} must be 1-${AFTERMATH_MAX_LENGTH} chars`);
+    }
+    // ACQUITTED imposes nothing, so no coda is ever appended to it.
+    const assembled = outcome === 'ACQUITTED'
+      ? [text]
+      : bands.map((band) => assembleAftermath(text, raw.sentenceCodas[band]));
+    for (const candidate of assembled) {
+      const result = AftermathNarrativeSchema.safeParse(candidate);
+      if (!result.success) {
+        throw new Error(
+          `Demo case ${payload.caseId}: aftermath ${outcome} (assembled with its codas) fails AftermathNarrativeSchema — ${result.error.issues.map((i) => i.message).join('; ')}`
+        );
+      }
     }
   }
 
@@ -162,6 +199,7 @@ export function defineDemoCase(raw: RawDemoCase): DemoCaseBundle {
     payload,
     pleaNarrative,
     aftermath: raw.aftermath,
+    sentenceCodas: raw.sentenceCodas,
     ...(raw.tutorial !== undefined ? { tutorial: raw.tutorial } : {}),
   };
 }

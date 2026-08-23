@@ -1,4 +1,4 @@
-import { defineDemoCase } from './types';
+import { defineDemoCase, type SentenceCodas } from './types';
 
 // People v. Eli Navarro — Misdemeanor Vandalism (PC § 594(a)). The guided
 // tutorial case: a small, morally legible matter (a repeat tagger, a city
@@ -268,12 +268,27 @@ const navarroAftermath = {
     'Not guilty, on a record the court had thinned exhibit by exhibit, and the People\'s office accepted it in a two-line statement that noted, without quite saying so, that no one ever saw a face. The Sentinel\'s courthouse reporter called it a tidy first trial for the new judge: rulings on the record, reasons with each one, and a verdict that followed the evidence that survived. Officer Pruitt shrugged on the courthouse steps — "the wall\'s still painted, and I still know what I know" — and went back to the beat. The city repainted, again. Ruth Okada put Navarro on the beautification program\'s subcontract the following spring, painting over other people\'s tags at municipal rates, which everyone involved agreed was either irony or rehabilitation, depending on the comment section.',
 };
 
+// How the term landed. Selected by the deterministic severity band, not
+// by the outcome — the aftermath above answers what happened, these answer
+// what the court did with the discretion it had. Written to follow any
+// sentence-bearing base (a plea taken or a count proven), and deliberately
+// free of numbers: the band knows where the term sat in the range, it does
+// not know the figure.
+const navarroSentenceCodas: SentenceCodas = {
+  LENIENT:
+    'The sentence was the part the courthouse talked about. The court took the low end of what the code allowed and said why out loud, which the clerks — who had been watching the new judge all morning — recorded without comment. Officer Pruitt called it about right for paint and went back to the beat. Ruth Okada, who had already penciled in a season without her letter-painter, tore up the schedule she had made and put Navarro back on Monday\'s board.',
+  MEASURED:
+    'The sentence itself landed in the middle of the range and pleased nobody, which two separate courthouse veterans offered as evidence that it was correct. Officer Pruitt thought it light. Ruth Okada thought it heavy, and rebuilt the shop\'s week around the hours the court had ordered. The Sentinel\'s brief noted only that the new judge had explained the reasoning on the record, at length, before signing anything.',
+  SEVERE:
+    'Then the court went to the top of what a misdemeanor allows, and the story changed shape. Ruth Okada lost her letter-painter for the season and said so in a letter the Sentinel printed under a headline about small businesses. Even Officer Pruitt allowed, on the courthouse steps, that he had asked for a deterrent and got a hole in a sign shop\'s schedule. The comment section, which had spent three days arguing about blight, switched sides overnight.',
+};
 export const navarroCase = defineDemoCase({
   title: 'People v. Eli Navarro',
   teaser: 'Your first morning on the bench: a tagged city wall, $380 in damage, and every ruling explained as you go.',
   payload: rawNavarroPayload,
   pleaNarrative: rawNavarroPleaNarrative,
   aftermath: navarroAftermath,
+  sentenceCodas: navarroSentenceCodas,
   tutorial: {
     decisionExplainers: {
       CONTINUE:

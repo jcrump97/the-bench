@@ -1,4 +1,4 @@
-import { defineDemoCase } from './types';
+import { defineDemoCase, type SentenceCodas } from './types';
 
 // People v. Marcus Webb — Grand Theft (PC § 487(a)). Chosen because the
 // statute's three elements are individually provable by distinct evidence
@@ -368,10 +368,25 @@ const webbAftermath = {
     'The court found him not guilty, and Marcus Webb put his head in his hands. The Peninsula Sentinel ran it under "Reasonable Doubt at Hollis & Associates." The defense\'s two notes — the overwritten footage and the expert\'s concession that any of three employees could have moved the money — had been enough. Ray Hollis, 71, did not call it vindication; he told the reporter that the money was still gone, that somebody he trusted still took it, and that he had stopped trying to work out which sentence hurt more. The widow\'s escrow was made whole by the firm\'s insurer, which then raised the premium and required a two-signature rule anyway. Webb walked out with no conviction, no job, and a name that returns this story on the first page of any search. His older son came to hear the verdict in his school blazer; outside, for the first time since the arraignment, the two of them talked. The State Board of Accountancy\'s inquiry into the firm\'s trust controls stayed open. The laminated card above the coffee maker stayed too: "Reconcile daily."',
 };
 
+// How the term landed. Selected by the deterministic severity band, not
+// by the outcome — the aftermath above answers what happened, these answer
+// what the court did with the discretion it had. Written to follow any
+// sentence-bearing base (a plea taken or a count proven), and deliberately
+// free of numbers: the band knows where the term sat in the range, it does
+// not know the figure.
+const webbSentenceCodas: SentenceCodas = {
+  LENIENT:
+    'The term stayed near the floor of the range, and the Sentinel\'s follow-up ran with a question mark in the headline. Ray Hollis said he had no quarrel with mercy, only with checkbooks, and that the two were not the same argument. The support order kept running throughout — the one obligation no ruling suspends — and Webb was working again, in a South City warehouse that does not handle money, before the Board of Accountancy closed its inquiry. His older son took the bus down on a Saturday to help him move his things.',
+  MEASURED:
+    'The term came in mid-range, which the Sentinel called unremarkable in the way reporters mean as praise. Ray Hollis stopped returning calls about the case. The support order kept running, as support orders do, and the arrears grew at a rate his ex-wife\'s attorney summarized for the court in a single page. His older son wrote twice a month, on paper, because the mail room permits paper.',
+  SEVERE:
+    'Then came the term, at the top of what the range allowed, and the arithmetic in the Sentinel\'s follow-up was all about the boys. The support payments stopped that month; their mother filed for enforcement against a man in custody and was told, in effect, to take a number. Ray Hollis read about the sentence rather than attend it, and said he had wanted the money back and an apology, in that order, and now had neither. The laminated card came down off the wall that spring — not out of anger, the new bookkeeper said, but because it was in somebody else\'s handwriting.',
+};
 export const webbCase = defineDemoCase({
   title: 'People v. Marcus Webb',
   teaser: 'A bookkeeper hired on faith, $14,200 gone from the client trust account — and $3,100 quietly put back.',
   payload: rawWebbPayload,
   pleaNarrative: rawWebbPleaNarrative,
   aftermath: webbAftermath,
+  sentenceCodas: webbSentenceCodas,
 });

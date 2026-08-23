@@ -1,4 +1,4 @@
-import { defineDemoCase } from './types';
+import { defineDemoCase, type SentenceCodas } from './types';
 
 // People v. Teresa Vaughn — Felony Hit-and-Run Causing Injury (VC § 20001(a))
 // + Driving on a Suspended License (VC § 14601.1(a)). The docket's
@@ -432,10 +432,25 @@ const vaughnAftermath = {
     'The court split the verdict — guilty on one count, acquitted on the other — and each table left with half a win it had to explain. The Sentinel called it "a verdict down the center line" and noted, not unkindly, that splitting the difference is sometimes what judging honestly looks like: the paper and the eight seconds were never really one case. Gordon Pyle heard the word "guilty" once, which his son said mattered more than which count it was attached to; his civil counsel, wanting the whole loaf, filed within the month. The conviction — whichever half of the docket it landed on — went into the family-court file, where Vaughn\'s transportation plan (a bus pass, Walt Emery\'s Tuesday rides) persuaded the judge more than the verdict did; she kept primary custody by a narrower margin than before. The DMV\'s position required no deliberation at all: still suspended. The city fixed the Alder streetlight timer that winter, and the bike lane got a fresh coat of paint that spring, which is how municipalities apologize.',
 };
 
+// How the term landed. Selected by the deterministic severity band, not
+// by the outcome — the aftermath above answers what happened, these answer
+// what the court did with the discretion it had. Written to follow any
+// sentence-bearing base (a plea taken or a count proven), and deliberately
+// free of numbers: the band knows where the term sat in the range, it does
+// not know the figure.
+const vaughnSentenceCodas: SentenceCodas = {
+  LENIENT:
+    'The term itself came in at the low end, and family court read the sentence as closely as it read the conviction: the boy stayed. Gordon Pyle told the Sentinel he had wanted her sorry, not gone, and that he was aware how that sounds coming from a man who was hit by a car. Vaughn kept the Tuesday meeting and added a Thursday one. Walt Emery kept driving her.',
+  MEASURED:
+    'The term came in mid-range and the Sentinel moved on inside a week, which is its own kind of verdict. Gordon Pyle\'s restitution ran on a schedule that assumed a paycheck; Vaughn\'s budget assumed a bus. Family court left the school-year order in place and set a review date. Walt Emery\'s Tuesday list held her seat, and she used it.',
+  SEVERE:
+    'Then the court took the top of the range, and the custody arrangement stopped being an arrangement. The school-year order became a full one, the boy\'s grandmother enrolled him in a district two counties over, and the editorial board — which had already spent a week on the arithmetic that put a sober woman behind the wheel — spent another on the arithmetic that took her out of her son\'s life. Gordon Pyle declined to comment on the length. Walt Emery kept her name at the bottom of the Tuesday list anyway, with the date she was due back.',
+};
 export const vaughnCase = defineDemoCase({
   title: 'People v. Teresa Vaughn',
   teaser: 'A struck cyclist, eight seconds of engine idle, and a license she was never supposed to be using.',
   payload: rawVaughnPayload,
   pleaNarrative: rawVaughnPleaNarrative,
   aftermath: vaughnAftermath,
+  sentenceCodas: vaughnSentenceCodas,
 });

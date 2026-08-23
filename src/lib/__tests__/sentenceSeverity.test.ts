@@ -16,6 +16,14 @@ describe('deriveSentenceSeverity — where the term sits in the range', () => {
     expect(severity?.shareOfExposure).toBe(0.1);
   });
 
+  it('reads the lightest available term as lenient even on a short range', () => {
+    // A three-year exposure with no mandatory minimum: one year is the least
+    // the picker allows, so it is mercy, not the middle of the road.
+    const severity = deriveSentenceSeverity([prison(1)], exposure([prison(3)]), null);
+    expect(severity?.band).toBe('LENIENT');
+    expect(severity?.atFloor).toBe(true);
+  });
+
   it('reads the ceiling as severity', () => {
     expect(deriveSentenceSeverity([prison(10)], exposure([prison(10)]), null)?.band).toBe('SEVERE');
   });

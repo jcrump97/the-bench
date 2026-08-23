@@ -80,7 +80,11 @@ function rowTreatment(entry: StatementBeat): { shell: string; padding: string; c
         <>
           <p className="text-xs tracking-widest text-(--text-muted) uppercase">In the Press</p>
           <h3 className="mt-1 font-medium text-(--text-h)">{entry.heading}</h3>
-          <p className="mt-1 text-(--text) italic">{entry.body}</p>
+          {/* The aftermath is the longest text in the game and the only beat
+              assembled from more than one authored piece (the outcome story,
+              then how the sentence landed). whitespace-pre-line keeps that
+              break as a paragraph instead of collapsing it into one wall. */}
+          <p className="mt-1 whitespace-pre-line text-(--text) italic">{entry.body}</p>
         </>
       ),
     };
