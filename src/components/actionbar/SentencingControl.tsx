@@ -8,6 +8,7 @@ import { describeDemeanor } from '../../lib/demeanorNotes';
 import { SentencePicker } from './SentencePicker';
 import { buildSentences, floorAmountFor } from '../../lib/sentenceBounds';
 import { deriveSentencingExposure, selectSentenceableCharges } from '../../lib/sentencingExposure';
+import { recordJudgment } from '../../lib/recordJudgment';
 import type { Sentence } from '../../schemas/gameSchemas';
 
 const PRIMARY_BUTTON =
@@ -89,6 +90,10 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
         imposedSentence,
       });
       setAftermathNarrative(aftermath);
+      // The case is now fully decided: snapshot it, validate it through the
+      // store, and file it in the judge's record — all still inside
+      // ACT_3_VERDICT, which is the only phase those writes are allowed in.
+      recordJudgment(aftermath, imposedSentence);
       setPhase('END_STATE');
       advanceBeat();
     } catch (err) {

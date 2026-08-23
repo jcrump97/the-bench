@@ -8,12 +8,14 @@ import {
   SentenceSchema,
   PleaNarrativeSchema,
   AftermathNarrativeSchema,
+  FinalResultSchema,
   type GamePhase,
   type CasePayload,
   type PleaDecision,
   type MotionRuling,
   type ChargeVerdict,
   type PleaNarrative,
+  type FinalResult,
 } from '../schemas/gameSchemas';
 import { z } from 'zod';
 
@@ -40,6 +42,12 @@ interface GameState {
   // Aftermath call on the BYOK path) and read at END_STATE.
   aftermathNarrative: string | null;
 
+  // The immutable end-of-game snapshot ResultGenerator assembles, written
+  // alongside the aftermath just before the END_STATE transition. Read by the
+  // judgment summary and handed to the archive; never an input to anything
+  // the game derives — by the time it exists, every decision is already made.
+  finalResult: FinalResult | null;
+
   // The chosen judge line per decision point, keyed by decision-point id
   // ('plea' | `motion-${evidenceId}` | `verdict-${chargeId}`). Narrative
   // voice record only — game logic must never read this field; the
@@ -55,6 +63,7 @@ interface GameState {
   addChargeVerdict:      (chargeVerdict: unknown) => void;
   setImposedSentence:    (sentences: unknown) => void;
   setAftermathNarrative: (narrative: unknown) => void;
+  setFinalResult:        (result: unknown) => void;
   recordSpokenJudgeLine: (decisionId: unknown, lineText: unknown) => void;
   // Sanctioned escape hatch from END_STATE; bypasses transition matrix by design.
   resetGameState:    () => void;
@@ -62,7 +71,7 @@ interface GameState {
 
 const INITIAL_STATE: Pick<
   GameState,
-  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'chargeVerdicts' | 'imposedSentence' | 'aftermathNarrative' | 'spokenJudgeLines'
+  'currentPhase' | 'activeCase' | 'activePleaNarrative' | 'pleaDecision' | 'motionRulings' | 'chargeVerdicts' | 'imposedSentence' | 'aftermathNarrative' | 'finalResult' | 'spokenJudgeLines'
 > = {
   currentPhase:    'WELCOME',
   activeCase:      null,
@@ -72,6 +81,7 @@ const INITIAL_STATE: Pick<
   chargeVerdicts:  [],
   imposedSentence: [],
   aftermathNarrative: null,
+  finalResult: null,
   spokenJudgeLines: {},
 };
 
@@ -235,6 +245,17 @@ export const useGameStore = create<GameState>((set, get) => {
     setAftermathNarrative: validatedAction(
       AftermathNarrativeSchema,
       (aftermathNarrative) => ({ aftermathNarrative }),
+      new Set<GamePhase>(['ACT_3_VERDICT']),
+    ),
+
+    // The ValidationLayer gate for the persisted snapshot: ResultGenerator
+    // assembles an unvalidated candidate, this parses it, and only what comes
+    // out the far side is ever written to localStorage. Same phase gate as
+    // the aftermath — both are written in the last moment of ACT_3_VERDICT,
+    // before the hop to END_STATE.
+    setFinalResult: validatedAction(
+      FinalResultSchema,
+      (finalResult) => ({ finalResult }),
       new Set<GamePhase>(['ACT_3_VERDICT']),
     ),
 
