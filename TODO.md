@@ -1034,6 +1034,44 @@ so they aren't lost.
       the road. Authoring note: **a new demo case must author all three
       codas**, and they must carry no figures (the band knows where the term
       sat, not what it was).
+- [x] **Code-review corrections on the severity/consequence derivations**
+      (2026-08-23 — DONE). A review pass over the whole branch cleared the
+      result pipeline, the store's `validatedAction` refactor and the archive's
+      trust boundary, and found six defects — all of them in the arithmetic the
+      two new readings do, and all of them the kind that produce a confident
+      wrong sentence rather than a crash.
+      - `8c36be6` fix: the release line reduced the term to whole years and
+        added them to the filing year, so eighteen months imposed in August
+        2026 printed 2027 (earliest release: February 2028) and any term under
+        a year printed the year of sentencing. Walk the calendar in the units
+        the court spoke in, age by anniversaries, UTC throughout. The
+        no-custody guard's test also asserted against "due out", a phrase the
+        module never emits — it passed with or without the guard.
+      - `41d461c` fix: "Supervised for 1 years". `format.ts` already
+        pluralizes a unit against its amount; export that rather than keep a
+        second, wrong copy of the rule.
+      - `a0e720c` fix: a mandatory minimum equal to the statutory maximum made
+        floor == ceiling, and the ceiling branch reported SEVERE — crediting
+        the judge with a hammer they had no way to avoid; and an exposure of
+        probation/community service alone weighed zero at floor, ceiling and
+        imposed term alike, so every such sentence read as the lightest
+        available, the maximum included.
+      - `27b2be0` fix: `versusOffer` ran on the accepted-plea path, where the
+        imposed term *is* the bargain; and it weighed the imposed sentence
+        (counts of conviction) against an offer covering every charge, with
+        `weigh()` falling back from custody to fines on either side
+        independently — so on a partial acquittal a $5,000 fine came out above
+        a multi-year prison offer.
+      - `cb0b851` fix: the Aftermath prompt asserted the defendant "turned
+        down" a plea they had accepted, interpolated the enum mid-sentence
+        ("the imposed term is matches the offer"), and quoted
+        `shareOfExposure` beside a band read from the share of the room the
+        court had ("lenient, roughly 55% of the statutory maximum"). Both
+        shares are now on the record separately.
+      Design note: the prompt is the reporter's only source, so a false
+      premise in it is a false premise in the published coverage — these were
+      not cosmetic. Nothing here changed a demo docket band: the six-run
+      Playwright docket passes unchanged.
 - [x] Aftermath narrative source — done: the demo docket uses authored
       `aftermathVariants` keyed by outcome, surfaced through the `CaseSource`
       seam (`demoCaseSource`). The BYOK path will call `generateAftermath()`

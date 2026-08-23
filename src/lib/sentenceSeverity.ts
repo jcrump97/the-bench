@@ -17,7 +17,7 @@ import { buildSentences, floorAmountFor, UNIT_DAYS } from './sentenceBounds';
 // of the hammer — the aftermath was handed an amount with no range beside it.
 // This is the deterministic half of that: a pure reading of where the imposed
 // term sits inside the exposure the court was working within, and how it
-// compares to the deal the defendant turned down.
+// compares to plea terms the case did not resolve on.
 //
 // Three bands, not five. The tiers exist to be *written to* — by the demo
 // docket's authored codas and by the aftermath prompt — and leniency,
