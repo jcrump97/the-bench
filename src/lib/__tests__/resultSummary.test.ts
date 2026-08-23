@@ -76,7 +76,8 @@ describe('summarizeRecord', () => {
   it('reports an empty record with no rate to speak of', () => {
     expect(summarizeRecord([])).toEqual({
       casesHeard: 0, pleasAccepted: 0, trialsHeld: 0, convictions: 0,
-      acquittals: 0, splits: 0, countsTried: 0, countsGuilty: 0, guiltyRate: null,
+      acquittals: 0, splits: 0, countsTried: 0, countsGuilty: 0, custodyDays: 0,
+      guiltyRate: null,
     });
   });
 
@@ -105,7 +106,18 @@ describe('summarizeRecord', () => {
       splits: 1,
       countsTried: 4,
       countsGuilty: 2,
+      custodyDays: 4 * 2 * 365,
       guiltyRate: 50,
     });
+  });
+
+  it('adds up every day of custody the judge has ordered, and no fines', () => {
+    const withFine = finish(webbCase, null);
+    const record = summarizeRecord([
+      { ...withFine, imposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 2 }] },
+      { ...withFine, imposedSentence: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }] },
+      { ...withFine, imposedSentence: [{ type: 'FINE', unit: 'DOLLARS', amount: 50_000 }] },
+    ]);
+    expect(record.custodyDays).toBe(2 * 365 + 6 * (365 / 12));
   });
 });

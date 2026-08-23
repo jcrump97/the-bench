@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { clearFinalResults, loadFinalResults } from '../../lib/resultArchive';
 import { describeDisposition, summarizeRecord } from '../../lib/resultSummary';
-import { formatJudgmentDate, formatSentenceList } from '../../lib/format';
+import { formatCustodyTotal, formatJudgmentDate, formatSentenceList } from '../../lib/format';
 
 const RECENT_SHOWN = 5;
 
@@ -55,6 +55,16 @@ export function BenchRecordPanel() {
           </div>
         ))}
       </dl>
+
+      {/* The running total, as a sentence rather than a stat: a career on the
+          bench is measured in the time it has ordered, and a tile with a
+          number in it does not read that way. */}
+      {record.custodyDays > 0 && (
+        <p data-custody-total className="mt-3 text-sm text-(--text-muted)">
+          Custody ordered across this record:{' '}
+          <span className="text-(--text-h)">{formatCustodyTotal(record.custodyDays)}</span>.
+        </p>
+      )}
 
       <ul className="mt-3 space-y-2">
         {results.slice(0, RECENT_SHOWN).map((result) => (

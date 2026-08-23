@@ -58,3 +58,20 @@ export function formatJudgmentDate(iso: string): string {
   if (Number.isNaN(date.getTime())) return 'date unavailable';
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+// A span of custody in the units people actually say. Used for the running
+// total across a docket, where a raw day count means nothing to anybody.
+export function formatCustodyTotal(days: number): string {
+  if (days <= 0) return 'none';
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days - years * 365) / (365 / 12));
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ${pluralizeUnit('YEARS', years)}`);
+  if (months > 0) parts.push(`${months} ${pluralizeUnit('MONTHS', months)}`);
+  // Under a month: report the days rather than rounding a real term to zero.
+  if (parts.length === 0) {
+    const wholeDays = Math.max(1, Math.round(days));
+    return `${wholeDays} ${pluralizeUnit('DAYS', wholeDays)}`;
+  }
+  return parts.join(', ');
+}

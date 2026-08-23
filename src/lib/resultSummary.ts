@@ -1,4 +1,4 @@
-import type { FinalResult } from '../schemas/gameSchemas';
+import { sentenceDayEquivalent, type FinalResult } from '../schemas/gameSchemas';
 import { classifyOutcome, type CaseOutcome } from './outcome';
 
 // Read-side projections of a persisted judgment: how the case came out, in
@@ -51,6 +51,10 @@ export interface BenchRecordSummary {
   splits: number;
   countsTried: number;
   countsGuilty: number;
+  // Every day of custody this judge has ordered, across the whole record.
+  // Fines and probation are real too, but time is the one a career is
+  // measured in.
+  custodyDays: number;
   // Share of tried counts returned guilty, 0-100. Null when nothing has been
   // tried — a docket of accepted pleas has no rate, and reporting 0% for it
   // would read as a judge who acquits everyone.
@@ -67,12 +71,16 @@ export function summarizeRecord(results: FinalResult[]): BenchRecordSummary {
     splits: 0,
     countsTried: 0,
     countsGuilty: 0,
+    custodyDays: 0,
   };
 
   for (const result of results) {
     const { guilty, total } = countsReturned(result);
     tally.countsTried += total;
     tally.countsGuilty += guilty;
+    tally.custodyDays += result.imposedSentence
+      .filter((s) => s.type === 'PRISON' || s.type === 'JAIL')
+      .reduce((days, s) => days + (sentenceDayEquivalent(s) ?? 0), 0);
 
     switch (dispositionOf(result)) {
       case 'PLEA_ACCEPTED': tally.pleasAccepted += 1; break;

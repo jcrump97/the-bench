@@ -291,6 +291,8 @@ const browser = await chromium.launch(
     (await page.locator('[data-bench-record-count]').innerText()).includes('1 case decided') &&
     (await recorded.innerText()).includes('People v. Marcus Webb') &&
     (await recorded.innerText()).includes('Plea accepted'));
+  check('Welcome after a case: bench record totals the custody ordered',
+    (await page.locator('[data-custody-total]').innerText()).includes('Custody ordered across this record'));
   await page.screenshot({ path: path.join(SHOTS, '17-bench-record.png'), fullPage: true });
   await page.close();
 }
