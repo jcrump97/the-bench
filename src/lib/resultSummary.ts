@@ -27,12 +27,65 @@ export function describeDisposition(result: FinalResult): string {
   switch (dispositionOf(result)) {
     case 'PLEA_ACCEPTED':
       return 'Plea accepted';
-    // A single-count case reads as a verdict, not as arithmetic.
+    // A verdict is read out, not tallied: one count reads as the verdict
+    // alone, two as "both counts", and only three or more get a number.
     case 'CONVICTED':
-      return total === 1 ? 'Guilty' : `Guilty on all ${total} counts`;
+      if (total === 1) return 'Guilty';
+      return total === 2 ? 'Guilty on both counts' : `Guilty on all ${total} counts`;
     case 'ACQUITTED':
-      return total === 1 ? 'Not guilty' : `Not guilty on all ${total} counts`;
+      if (total === 1) return 'Not guilty';
+      return total === 2 ? 'Not guilty on either count' : `Not guilty on all ${total} counts`;
     case 'SPLIT':
       return `Guilty on ${guilty} of ${total} counts`;
   }
+}
+
+// ─── The judge's record across cases ─────────────────────────────────────────
+
+export interface BenchRecordSummary {
+  casesHeard: number;
+  pleasAccepted: number;
+  trialsHeld: number;
+  convictions: number;
+  acquittals: number;
+  splits: number;
+  countsTried: number;
+  countsGuilty: number;
+  // Share of tried counts returned guilty, 0-100. Null when nothing has been
+  // tried — a docket of accepted pleas has no rate, and reporting 0% for it
+  // would read as a judge who acquits everyone.
+  guiltyRate: number | null;
+}
+
+export function summarizeRecord(results: FinalResult[]): BenchRecordSummary {
+  const tally = {
+    casesHeard: results.length,
+    pleasAccepted: 0,
+    trialsHeld: 0,
+    convictions: 0,
+    acquittals: 0,
+    splits: 0,
+    countsTried: 0,
+    countsGuilty: 0,
+  };
+
+  for (const result of results) {
+    const { guilty, total } = countsReturned(result);
+    tally.countsTried += total;
+    tally.countsGuilty += guilty;
+
+    switch (dispositionOf(result)) {
+      case 'PLEA_ACCEPTED': tally.pleasAccepted += 1; break;
+      case 'CONVICTED':     tally.trialsHeld += 1; tally.convictions += 1; break;
+      case 'ACQUITTED':     tally.trialsHeld += 1; tally.acquittals += 1; break;
+      case 'SPLIT':         tally.trialsHeld += 1; tally.splits += 1; break;
+    }
+  }
+
+  return {
+    ...tally,
+    guiltyRate: tally.countsTried === 0
+      ? null
+      : Math.round((tally.countsGuilty / tally.countsTried) * 100),
+  };
 }

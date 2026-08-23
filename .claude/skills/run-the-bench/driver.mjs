@@ -174,6 +174,8 @@ const browser = await chromium.launch(
   await gotoWithRetry(page, BASE);
   const docketEntries = await page.locator('button:has-text("People v.")').count();
   check('Welcome: 5 docket entries listed', docketEntries === 5, `got ${docketEntries}`);
+  check('Welcome: no bench record before the first case closes',
+    (await page.locator('[data-bench-record]').count()) === 0);
   check('Welcome: tutorial case leads the docket with the Start here badge',
     (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
@@ -274,6 +276,17 @@ const browser = await chromium.launch(
     (await minuteOrder(page).innerText()).includes('People v. Marcus Webb') &&
     /\d+ (year|month|day)s? in (prison|jail)|\$[\d,]+ fine/.test(await minuteOrder(page).innerText()));
   await page.screenshot({ path: path.join(SHOTS, '04-endstate-plea.png'), fullPage: true });
+
+  // The loop closes here: New Case returns to the docket, where the judgment
+  // just filed is waiting in the persisted bench record.
+  await page.getByRole('button', { name: 'New Case' }).click();
+  const recorded = page.locator('[data-bench-record]');
+  check('Welcome after a case: bench record lists the judgment just filed',
+    (await recorded.count()) === 1 &&
+    (await page.locator('[data-bench-record-count]').innerText()).includes('1 case decided') &&
+    (await recorded.innerText()).includes('People v. Marcus Webb') &&
+    (await recorded.innerText()).includes('Plea accepted'));
+  await page.screenshot({ path: path.join(SHOTS, '17-bench-record.png'), fullPage: true });
   await page.close();
 }
 

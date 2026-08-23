@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dispositionOf, describeDisposition, countsReturned } from '../resultSummary';
+import { dispositionOf, describeDisposition, countsReturned, summarizeRecord } from '../resultSummary';
 import { FinalResultSchema, type ChargeVerdict, type FinalResult } from '../../schemas/gameSchemas';
 import { buildFinalResult } from '../resultGenerator';
 import { webbCase } from '../demoCases/webb';
@@ -64,10 +64,48 @@ describe('describeDisposition', () => {
 
   it('counts the counts on a multi-count verdict', () => {
     expect(describeDisposition(finish(vaughnCase, verdicts(vaughnCase, ['GUILTY', 'GUILTY']))))
-      .toBe('Guilty on all 2 counts');
+      .toBe('Guilty on both counts');
     expect(describeDisposition(finish(vaughnCase, verdicts(vaughnCase, ['NOT_GUILTY', 'NOT_GUILTY']))))
-      .toBe('Not guilty on all 2 counts');
+      .toBe('Not guilty on either count');
     expect(describeDisposition(finish(vaughnCase, verdicts(vaughnCase, ['NOT_GUILTY', 'GUILTY']))))
       .toBe('Guilty on 1 of 2 counts');
+  });
+});
+
+describe('summarizeRecord', () => {
+  it('reports an empty record with no rate to speak of', () => {
+    expect(summarizeRecord([])).toEqual({
+      casesHeard: 0, pleasAccepted: 0, trialsHeld: 0, convictions: 0,
+      acquittals: 0, splits: 0, countsTried: 0, countsGuilty: 0, guiltyRate: null,
+    });
+  });
+
+  it('has no guilty rate on a docket of accepted pleas (0% would libel the judge)', () => {
+    const record = summarizeRecord([finish(webbCase, null), finish(webbCase, null)]);
+    expect(record.casesHeard).toBe(2);
+    expect(record.pleasAccepted).toBe(2);
+    expect(record.trialsHeld).toBe(0);
+    expect(record.guiltyRate).toBeNull();
+  });
+
+  it('tallies dispositions and rates counts, not cases', () => {
+    const record = summarizeRecord([
+      finish(webbCase, null),                                              // plea
+      finish(webbCase, verdicts(webbCase, ['GUILTY'])),                    // 1/1 guilty
+      finish(webbCase, verdicts(webbCase, ['NOT_GUILTY'])),                // 0/1 guilty
+      finish(vaughnCase, verdicts(vaughnCase, ['NOT_GUILTY', 'GUILTY'])),  // 1/2 guilty
+    ]);
+
+    expect(record).toEqual({
+      casesHeard: 4,
+      pleasAccepted: 1,
+      trialsHeld: 3,
+      convictions: 1,
+      acquittals: 1,
+      splits: 1,
+      countsTried: 4,
+      countsGuilty: 2,
+      guiltyRate: 50,
+    });
   });
 });

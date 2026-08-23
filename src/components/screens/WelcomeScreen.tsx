@@ -6,6 +6,7 @@ import { DEMO_CASES, type DemoCaseBundle } from '../../lib/demoCases';
 import { demoCaseSource } from '../../lib/caseSource';
 import { createGameService } from '../../lib/llm/gameService';
 import type { CaseSource } from '../../lib/caseSource';
+import { BenchRecordPanel } from '../result/BenchRecordPanel';
 
 export function WelcomeScreen() {
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -77,6 +78,8 @@ export function WelcomeScreen() {
           You are the judge. Rule on a plea deal, weigh the evidence, and deliver a verdict.
         </p>
       </div>
+
+      <BenchRecordPanel />
 
       <div className="w-full max-w-lg rounded-lg border border-(--border) bg-(--bg-panel) p-5 text-left">
         <h2 className="text-sm font-medium text-(--text-h)">Today&apos;s Docket</h2>
