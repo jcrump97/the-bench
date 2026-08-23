@@ -143,6 +143,16 @@ async function callCharge(page, verdict, label) {
   if (await advanceTo(page, btn, label)) await btn.click();
 }
 
+// The minute order filed under the record when a case closes: the persisted
+// FinalResult rendered back, keyed by the outcome it was classified as.
+const minuteOrder = (page) => page.locator('[data-judgment-summary]');
+async function checkMinuteOrder(page, label, disposition) {
+  const card = minuteOrder(page);
+  check(`${label}: minute order filed as ${disposition}`,
+    (await card.count()) === 1 && (await card.getAttribute('data-disposition')) === disposition,
+    `count=${await card.count()} disposition=${await card.getAttribute('data-disposition')}`);
+}
+
 // Sentencing (or adjournment), then advance through the sentence and
 // aftermath beats to the case-closed actions.
 async function finishCase(page, label, buttonName = 'Impose Sentence') {
@@ -259,6 +269,10 @@ const browser = await chromium.launch(
     JSON.stringify(end));
   check('Webb end(plea): plea-accepted aftermath variant shown',
     (await page.locator('text=never had to board a plane').count()) === 1);
+  await checkMinuteOrder(page, 'Webb end(plea)', 'PLEA_ACCEPTED');
+  check('Webb end(plea): minute order names the defendant and the imposed sentence',
+    (await minuteOrder(page).innerText()).includes('People v. Marcus Webb') &&
+    /\d+ (year|month|day)s? in (prison|jail)|\$[\d,]+ fine/.test(await minuteOrder(page).innerText()));
   await page.screenshot({ path: path.join(SHOTS, '04-endstate-plea.png'), fullPage: true });
   await page.close();
 }
@@ -331,6 +345,7 @@ const browser = await chromium.launch(
     (await page.locator('text=multiple-choice question with one answer in bold').count()) === 1);
   await callCharge(page, 'NOT_GUILTY', 'Boone verdict');
   await finishCase(page, 'Boone acquittal', 'Adjourn');
+  await checkMinuteOrder(page, 'Boone end', 'ACQUITTED');
   check('Boone end: acquittal aftermath variant shown',
     (await page.locator('text=the quiet scandal').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '08-boone-acquittal.png'), fullPage: true });
@@ -391,6 +406,10 @@ const browser = await chromium.launch(
     (await page.locator('text=Verdict of the Court').count()) === 2);
   check('Vaughn end: split-verdict aftermath variant shown',
     (await page.locator('text=down the center line').count()) === 1);
+  await checkMinuteOrder(page, 'Vaughn end', 'SPLIT');
+  check('Vaughn end: minute order counts the split and tallies the rulings',
+    (await minuteOrder(page).innerText()).includes('Guilty on 1 of 2 counts') &&
+    (await minuteOrder(page).innerText()).includes('6 admitted, 0 excluded'));
   await page.screenshot({ path: path.join(SHOTS, '13-vaughn-split-endstate.png'), fullPage: true });
   await page.close();
 }

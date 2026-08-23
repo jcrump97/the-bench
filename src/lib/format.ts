@@ -48,3 +48,13 @@ export function formatSentenceList(sentences: Sentence[]): string {
   if (sentences.length === 0) return 'No sentence recorded';
   return sentences.map(formatSentence).join('; ');
 }
+
+// The filing date on a persisted judgment. Rendered in the reader's own
+// locale — the snapshot stores UTC, the courthouse clock is wherever the
+// player is. A snapshot whose timestamp somehow survived schema validation
+// unparseable still must not render "Invalid Date" on the record.
+export function formatJudgmentDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'date unavailable';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { useUIStore } from '../../store/useUIStore';
+import { useGameStore } from '../../store/useGameStore';
 import { useCourtroomScript } from '../../hooks/useCourtroomScript';
 import { TopBar } from './TopBar';
 import { Ledger } from '../ledger/Ledger';
@@ -8,6 +9,7 @@ import { PanelBackdrop } from './PanelBackdrop';
 import { CaseFilePanel } from '../panels/CaseFilePanel';
 import { EvidenceTestimonyPanel } from '../panels/EvidenceTestimonyPanel';
 import { ModalRoot } from '../modals/ModalRoot';
+import { JudgmentSummary } from '../result/JudgmentSummary';
 
 // Panels behave differently per viewport with the same open/closed boolean:
 // mobile and tablet (< lg) they are fixed drawers sliding off-canvas; desktop (lg:) they
@@ -42,6 +44,11 @@ export function GameShell() {
   const evidencePanelOpen = useUIStore((state) => state.evidencePanelOpen);
   const panelHintActive = useUIStore((state) => state.panelHintActive);
   const { visibleEntries } = useCourtroomScript();
+  // The minute order closes the record once the case is filed. Deliberately
+  // rendered after the transcript rather than inside it: the courtroom script
+  // is spoken beats only, and nobody speaks a minute order aloud.
+  const finalResult = useGameStore((state) => state.finalResult);
+  const currentPhase = useGameStore((state) => state.currentPhase);
 
   // Fire the collapse-affordance hint the first time the courtroom mounts
   // this session; the timeout outlives the longest animation so the classes
@@ -75,7 +82,14 @@ export function GameShell() {
 
         <main className="flex min-w-0 flex-1 flex-col lg:min-h-0">
           <div className="flex-1 overflow-y-auto p-4">
-            <Ledger entries={visibleEntries} />
+            <Ledger
+              entries={visibleEntries}
+              footer={
+                currentPhase === 'END_STATE' && finalResult !== null
+                  ? <JudgmentSummary result={finalResult} />
+                  : undefined
+              }
+            />
           </div>
           <div data-action-bar className="shrink-0 border-t border-(--border) bg-(--bg-panel) p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <ActionBar />
