@@ -26,6 +26,16 @@ function noJury<T extends z.ZodString>(schema: T) {
   });
 }
 
+// Fields the engine owns and the model never writes — initialized by the
+// schema's own transform and mutated only by player action. Marked in the
+// schema metadata so src/lib/llm/geminiSchema.ts can omit them from the Gemini
+// responseSchema it compiles from these schemas: the model is not asked to
+// fill a field the engine will overwrite anyway.
+export const ENGINE_OWNED = 'engineOwned';
+function engineOwned<T extends z.ZodType>(schema: T): T {
+  return schema.meta({ [ENGINE_OWNED]: true });
+}
+
 // How the defendant is named everywhere they are named: the transcript, every
 // pipeline prompt, the dossier modal, and the refinement below that checks a
 // generated field named the right person. Lives here rather than in
@@ -135,22 +145,21 @@ export const ProbationConditionEnum = z.enum([
   'COMMUNITY_SERVICE'
 ]);
 
-// The sentence vocabularies, named so the Gemini responseSchema in
-// src/lib/llm/stages.ts can be built from these members instead of a second
-// hand-typed copy of them. schemaParity.test.ts enforces the correspondence.
+// The sentence vocabularies.
 //
 // Note the units are split by sentence type on purpose: custody is served in
 // years/months/days, probation in years/months, a fine in dollars and
 // community service in hours. Gemini's schema dialect cannot express a
-// discriminated union, so SENTENCE_GEMINI_SCHEMA flattens all five into one
-// `unit` enum — the one divergence schemaParity.test.ts pins with a dedicated
-// assertion instead of the general "never looser than Zod" rule.
+// discriminated union, so the compiled Gemini schema (src/lib/llm/
+// geminiSchema.ts) flattens all five into one `unit` enum — the one
+// divergence schemaParity.test.ts pins with a dedicated assertion instead of
+// the general "never looser than Zod" rule.
 export const SentenceTypeEnum = z.enum(['PRISON', 'JAIL', 'FINE', 'COMMUNITY_SERVICE', 'PROBATION']);
 export const CustodyUnitEnum = z.enum(['YEARS', 'MONTHS', 'DAYS']);
 export const ProbationUnitEnum = z.enum(['YEARS', 'MONTHS']);
-// Every unit any sentence type can carry. This is the flattening itself,
-// declared once: SENTENCE_GEMINI_SCHEMA spreads it, and SENTENCE_UNIT_MAX is
-// keyed by it, so a new unit cannot be added to one and forgotten in the other.
+// Every unit any sentence type can carry — exactly what the flattened Gemini
+// `unit` enum comes out as. SENTENCE_UNIT_MAX is keyed by it, so a new unit
+// cannot be added to a branch and forgotten in the per-unit bound.
 export const SentenceUnitEnum = z.enum([...CustodyUnitEnum.options, 'DOLLARS', 'HOURS']);
 
 const SENTENCE_UNIT_MAX: Record<z.infer<typeof SentenceUnitEnum>, number> = {
@@ -199,7 +208,7 @@ export const BiasIndicatorEnum = z.enum(['PROSECUTION', 'DEFENSE', 'NEUTRAL']);
 export const StatuteElementSchema = z.strictObject({
   id: z.string().min(1).max(40),
   description: z.string().max(500).describe("The specific legal requirement or element of the crime that must be proven."),
-  isProven: z.boolean().optional().transform((): boolean => false),
+  isProven: engineOwned(z.boolean().optional().transform((): boolean => false)),
 });
 
 // Every mandatory minimum must be backed by a same-type maximum penalty at
@@ -288,7 +297,7 @@ function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T)
 
 // Every value in the closed choice set must be reachable through at least one
 // option — a decision the player cannot express is an illegal payload.
-function addChoiceCoverageIssues(
+export function addChoiceCoverageIssues(
   options: readonly { choice: string }[],
   allChoices: readonly string[],
   ctx: z.RefinementCtx,
@@ -302,7 +311,10 @@ function addChoiceCoverageIssues(
 
 // The structural/legal half of a charge — the part the LLM must produce first,
 // before the voiced verdict layer is authored in a separate pipeline stage.
-const ChargeCoreShape = {
+// Exported as a shape (not only as the refined schema) because Zod refuses to
+// .pick() or .extend() a refined object; a stage that needs one field derives
+// it from here rather than re-declaring it and losing a constraint.
+export const ChargeCoreShape = {
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(200),
   classification: ChargeClassificationEnum,
@@ -315,10 +327,10 @@ export const ChargeCoreSchema = z.strictObject(ChargeCoreShape).superRefine((cha
   addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx);
 });
 
-// Charges carry their own statutory range; case-level exposure is derived
-// deterministically from these in src/lib/sentencingExposure.ts.
-export const ChargeSchema = z.strictObject({
-  ...ChargeCoreShape,
+// The voiced half of a charge, authored by the VerdictVoice pipeline stage
+// once the defendant exists. Exported as a shape for the same reason as
+// ChargeCoreShape.
+export const ChargeVoiceShape = {
   // The courtroom's voiced reaction to each possible verdict on this charge,
   // spoken immediately after the verdict enters the record.
   verdictReactions: z.strictObject({
@@ -328,6 +340,13 @@ export const ChargeSchema = z.strictObject({
   // The judge's selectable verdict lines for this charge — what the court
   // actually says from the bench when the player calls the count.
   verdictOptions: z.array(judgeLineOption(VerdictValueSchema)).min(2).max(6),
+};
+
+// Charges carry their own statutory range; case-level exposure is derived
+// deterministically from these in src/lib/sentencingExposure.ts.
+export const ChargeSchema = z.strictObject({
+  ...ChargeCoreShape,
+  ...ChargeVoiceShape,
 }).superRefine((charge, ctx) => {
   addMinimumCeilingIssues(charge.mandatoryMinimums, charge.maximumPenalties, ctx);
   addChoiceCoverageIssues(charge.verdictOptions, VerdictValueSchema.options, ctx);
@@ -367,12 +386,12 @@ export const WitnessSchema = z.strictObject({
   role: WitnessRoleEnum,
   bias: BiasIndicatorEnum,
   statement: noJury(z.string().max(1000)).describe("A summary of their expected testimony."),
-  credibilityScore: z.number().int().min(1).max(10),
+  credibilityScore: z.number().int().min(1).max(10).describe("How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability."),
   // Voiced testimony beats for the trial phase. Which side conducts direct
   // (and which crosses) is derived from `bias` — PROSECUTION/NEUTRAL
   // witnesses are the People's, DEFENSE witnesses are the defense's.
-  directExamination: noJury(z.string().min(1).max(1200)).describe("The witness's testimony on direct examination, first person, as spoken from the stand."),
-  crossExamination: noJury(z.string().min(1).max(1200)).nullable().describe("The witness's testimony under cross-examination, first person; null when opposing counsel declines to cross."),
+  directExamination: noJury(z.string().min(1).max(1200)).describe("The witness's spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel's questions."),
+  crossExamination: noJury(z.string().min(1).max(1200)).nullable().describe("The witness's spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel's questions. Null when opposing counsel declines to cross."),
 });
 
 export const EvidenceSchema = z.strictObject({
@@ -385,10 +404,11 @@ export const EvidenceSchema = z.strictObject({
   // counsel-voiced — the full detail stays hidden until the exhibit is
   // actually offered.
   disclosureSummary: noJury(z.string().min(1).max(400)).describe("Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court."),
-  relevanceScore: z.number().int().min(1).max(10).describe("Scale of 1-10 on impact to the case."),
+  relevanceScore: z.number().int().min(1).max(10).describe("How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability."),
   objectionRisk: ObjectionRiskEnum.describe("Likelihood of opposing counsel objecting."),
   targetElementId: z.string().min(1).max(40).nullable().describe("The ID of the StatuteElement this evidence is meant to prove."),
-  isAdmitted: z.boolean().optional().transform((): boolean => false).describe("Always initialized to false. Mutated by player action during the trial phase."),
+  // Always initialized to false; mutated by player action during the trial phase.
+  isAdmitted: engineOwned(z.boolean().optional().transform((): boolean => false)),
   // Voiced motion-hearing beats: the prosecutor offers the exhibit, defense
   // counsel objects (or waives), and the judge rules on that exchange.
   prosecutionArgument: noJury(z.string().min(1).max(600)).describe("The prosecutor's in-character offer of this exhibit to the court."),
@@ -467,11 +487,11 @@ export const CharacterSchema = z.strictObject({
   pastConvictions: z.array(PastConvictionSchema),
 
   oceanTraits: z.strictObject({
-    openness: z.number().min(1).max(10),
-    conscientiousness: z.number().min(1).max(10),
-    extraversion: z.number().min(1).max(10),
-    agreeableness: z.number().min(1).max(10),
-    neuroticism: z.number().min(1).max(10),
+    openness: z.number().int().min(1).max(10),
+    conscientiousness: z.number().int().min(1).max(10),
+    extraversion: z.number().int().min(1).max(10),
+    agreeableness: z.number().int().min(1).max(10),
+    neuroticism: z.number().int().min(1).max(10),
   }),
 });
 
@@ -528,7 +548,12 @@ export const PleaPostureSchema = z.discriminatedUnion('status', [
 // deterministically by buildPleaPosture. defenseRationale is optional here
 // because WEAK/NO_OFFER cases never use it; the "required-when-offering"
 // constraint is enforced by buildPleaPosture's discriminated PleaPostureInput.
-export const PleaNarrativeSchema = z.strictObject({
+//
+// Split into an unrefined object and the refined schema for the same reason as
+// ChargeCoreShape: the PleaNarrative pipeline stage derives its own stricter
+// schemas from these fields (.pick/.required), which Zod refuses on a refined
+// object. Re-declaring them instead is how the stage once lost `noJury`.
+export const PleaNarrativeFieldsSchema = z.strictObject({
   prosecutionRationale: noJury(z.string().min(1).max(1000)).describe("The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation."),
   defenseRationale:     noJury(z.string().min(1).max(1000)).optional().describe("Defense counsel's plea position as spoken to the court on the record — never privileged advice to the client."),
   // The defendant's own statement to the court on the accepted-plea path,
@@ -546,14 +571,19 @@ export const PleaNarrativeSchema = z.strictObject({
   // The judge's selectable ruling lines on the negotiated plea. Paired with
   // pleaReactions above: authored exactly when an offer reaches the bench.
   pleaRulingOptions: z.array(judgeLineOption(PleaDecisionSchema)).min(2).max(6).optional(),
-}).superRefine((narrative, ctx) => {
+});
+
+export const PleaNarrativeSchema = PleaNarrativeFieldsSchema.superRefine((narrative, ctx) => {
   if (narrative.pleaRulingOptions !== undefined) {
     addChoiceCoverageIssues(narrative.pleaRulingOptions, PleaDecisionSchema.options, ctx);
   }
 });
 
-export const CaseSchema = z.strictObject({
-  caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)"),
+// Exported as a shape for the same reason as ChargeCoreShape: pipeline stages
+// that author a subset of the case (StatuteSelection, the finalize stage)
+// derive their fields from here instead of re-declaring them.
+export const CaseShape = {
+  caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/, "Must be a standard CA format (YY-CR-XXXXX)").describe("Format YY-CR-XXXXX, e.g. 24-CR-00042"),
   defendant: CharacterSchema,
   environment: EnvironmentSchema,
 
@@ -563,7 +593,7 @@ export const CaseSchema = z.strictObject({
   witnesses: z.array(WitnessSchema).min(2),
   evidence: z.array(EvidenceSchema).min(3),
 
-  summary: noJury(z.string().max(1500)).describe("A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts."),
+  summary: noJury(z.string().min(1).max(1500)).describe("A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts."),
 
   // The People's in-character statement of the case, spoken into the record
   // at a dedicated Act 1 beat. Facts always come from a party — the clerk
@@ -598,7 +628,9 @@ export const CaseSchema = z.strictObject({
       }),
     })).optional(),
   }),
-}).superRefine((v, ctx) => {
+};
+
+export const CaseSchema = z.strictObject(CaseShape).superRefine((v, ctx) => {
   const elementIds = new Set<string>();
   const chargeIds = new Set<string>();
   const evidenceIds = new Set<string>();

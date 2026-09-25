@@ -1,39 +1,17 @@
 import { z } from 'zod';
 import {
   ChargeCoreSchema,
+  ChargeCoreShape,
+  ChargeVoiceShape,
+  CaseShape,
   EnvironmentSchema,
   CharacterSchema,
-  WitnessSchema,
-  EvidenceSchema,
   InterrogationSchema,
-  ReactionBeatSchema,
-  PleaDecisionSchema,
   VerdictValueSchema,
-  // Vocabularies shared with the Gemini responseSchemas below. Every `enum:`
-  // in this file spreads one of these rather than restating its members, so
-  // the model is told exactly what the Zod trust boundary will enforce.
-  // schemaParity.test.ts fails if the two ever drift apart.
-  SentenceTypeEnum,
-  SentenceUnitEnum,
-  ProbationConditionEnum,
-  ChargeClassificationEnum,
-  ObjectionRiskEnum,
-  EvidenceTypeEnum,
-  WitnessRoleEnum,
-  BiasIndicatorEnum,
-  ReactionSpeakerEnum,
-  InterrogationSpeakerEnum,
-  InterrogationOutcomeEnum,
-  ChallengeGroundEnum,
-  SubstanceStatusEnum,
-  RelationshipStatusEnum,
-  EmploymentStatusEnum,
-  EducationLevelEnum,
-  LocationTypeEnum,
-  TimeOfDayEnum,
-  WeatherEnum,
-  PleaNarrativeSchema,
+  PleaDecisionSchema,
+  PleaNarrativeFieldsSchema,
   CaseSchema,
+  addChoiceCoverageIssues,
   defendantFullName,
   AftermathNarrativeSchema,
   type Charge,
@@ -48,6 +26,7 @@ import type { AftermathContext } from '../caseSource';
 import { severityOfImposedSentence, type SentenceSeverity } from '../sentenceSeverity';
 import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
 import { callGemini, GeminiError, type GeminiSchema } from './geminiClient';
+import { toGeminiSchema } from './geminiSchema';
 import { reportAttemptFailure } from './generationObserver';
 import { reconcileCrossStageIds } from './reconcileCase';
 
@@ -192,11 +171,6 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   throw new GameServiceError(`[${stageName}] Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}${echoed}`);
 }
 
-function requireChoiceCoverage(options: { choice: string }[], allChoices: readonly string[]): string | null {
-  const missing = allChoices.filter((choice) => !options.some((o) => o.choice === choice));
-  return missing.length > 0 ? `Missing judge-line coverage for: ${missing.join(', ')}` : null;
-}
-
 // Top-level property names of a Gemini responseSchema, when it's an object —
 // null otherwise. Recorded on every failed attempt so the live diagnostic
 // report can surface a wrapped-vs-unwrapped schema divergence (the exact shape
@@ -208,336 +182,26 @@ function schemaShape(schema: GeminiSchema): string[] | null {
 }
 
 // ============================================================================
-// Hand-written Gemini responseSchema building blocks (a constrained subset of
-// OpenAPI Schema). These shape the model's output; Zod schemas above are the
-// actual validation gate, so these only need to be close enough to get
-// mostly-valid JSON on the first try.
+// Response schemas.
+//
+// Each stage's Gemini responseSchema is compiled from the very Zod schema that
+// validates the stage's response (src/lib/llm/geminiSchema.ts), so the model
+// is told exactly what the trust boundary will enforce — never a hand-typed
+// approximation of it. Stage schemas are *derived* from the case schemas in
+// gameSchemas.ts (via the exported shapes) rather than re-declared, which is
+// what keeps a refinement like `noJury` from being dropped on the way.
 // ============================================================================
-export const SENTENCE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    type: { type: 'string', enum: [...SentenceTypeEnum.options] },
-    // Flattened on purpose — Gemini's dialect has no discriminated union, so
-    // the model sees every unit and Zod correlates it to the type on the way in.
-    unit: { type: 'string', enum: [...SentenceUnitEnum.options] },
-    amount: { type: 'integer', minimum: 1 },
-    conditions: {
-      type: 'array',
-      items: {
-        type: 'string',
-        enum: [...ProbationConditionEnum.options],
-      },
-    },
-  },
-  required: ['type', 'unit', 'amount'],
-};
-
-// A stage whose response is one named field wraps its payload schema here.
-// The wrapping is not cosmetic: a stage that passes the *inner* shape by
-// mistake gets a response Zod rejects with a message that names the field as
-// missing rather than the mistake as unwrapping — which is exactly how the
-// InterrogationGen bug below survived, since the unit-test mock returned the
-// wrapped shape and only the live API disagreed.
-function geminiObjectOf(field: string, schema: GeminiSchema): GeminiSchema {
-  return { type: 'object', properties: { [field]: schema }, required: [field] };
-}
-
-function reactionBeatGeminiSchema(): GeminiSchema {
-  return {
-    type: 'array',
-    minItems: 1,
-    maxItems: 4,
-    items: {
-      type: 'object',
-      properties: {
-        speaker: { type: 'string', enum: [...ReactionSpeakerEnum.options] },
-        text: { type: 'string', minLength: 1, maxLength: 600 },
-      },
-      required: ['speaker', 'text'],
-    },
-  };
-}
-
-function judgeLineOptionsGeminiSchema(choices: string[]): GeminiSchema {
-  return {
-    type: 'array',
-    minItems: 2,
-    maxItems: 6,
-    items: {
-      type: 'object',
-      properties: {
-        choice: { type: 'string', enum: choices },
-        lineText: { type: 'string', minLength: 1, maxLength: 300 },
-      },
-      required: ['choice', 'lineText'],
-    },
-  };
-}
-
-export const CHARGE_CORE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string', minLength: 1, maxLength: 40 },
-    name: { type: 'string', minLength: 1, maxLength: 200 },
-    classification: { type: 'string', enum: [...ChargeClassificationEnum.options] },
-    elements: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'object',
-        properties: { id: { type: 'string', minLength: 1, maxLength: 40 }, description: { type: 'string', maxLength: 500 } },
-        required: ['id', 'description'],
-      },
-    },
-    mandatoryMinimums: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
-    maximumPenalties: { type: 'array', minItems: 1, items: SENTENCE_GEMINI_SCHEMA },
-  },
-  required: ['id', 'name', 'classification', 'elements', 'mandatoryMinimums', 'maximumPenalties'],
-};
-
-export const CHARGE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    ...CHARGE_CORE_GEMINI_SCHEMA.properties,
-    verdictReactions: {
-      type: 'object',
-      properties: { GUILTY: reactionBeatGeminiSchema(), NOT_GUILTY: reactionBeatGeminiSchema() },
-      required: ['GUILTY', 'NOT_GUILTY'],
-    },
-    verdictOptions: judgeLineOptionsGeminiSchema(['GUILTY', 'NOT_GUILTY']),
-  },
-  required: [
-    ...(CHARGE_CORE_GEMINI_SCHEMA.required ?? []),
-    'verdictReactions',
-    'verdictOptions',
-  ],
-};
-
-const VERDICT_VOICE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    charges: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', minLength: 1, maxLength: 40 },
-          verdictReactions: {
-            type: 'object',
-            properties: { GUILTY: reactionBeatGeminiSchema(), NOT_GUILTY: reactionBeatGeminiSchema() },
-            required: ['GUILTY', 'NOT_GUILTY'],
-          },
-          verdictOptions: judgeLineOptionsGeminiSchema(['GUILTY', 'NOT_GUILTY']),
-        },
-        required: ['id', 'verdictReactions', 'verdictOptions'],
-      },
-    },
-  },
-  required: ['charges'],
-};
-
-export const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    locationType: { type: 'string', enum: [...LocationTypeEnum.options] },
-    timeOfDay: { type: 'string', enum: [...TimeOfDayEnum.options] },
-    weather: { type: 'string', enum: [...WeatherEnum.options] },
-    description: { type: 'string', maxLength: 500 },
-    establishedFacts: {
-      type: 'array',
-      minItems: 1,
-      maxItems: 6,
-      items: { type: 'string', minLength: 1, maxLength: 200 },
-    },
-    interrogationLocation: { type: 'string', minLength: 1, maxLength: 200 },
-  },
-  required: ['locationType', 'timeOfDay', 'weather', 'description', 'establishedFacts', 'interrogationLocation'],
-};
-
-export const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    firstName: { type: 'string', maxLength: 50 },
-    lastName: { type: 'string', maxLength: 50 },
-    age: { type: 'integer', minimum: 18, maximum: 120 },
-    demographics: {
-      type: 'object',
-      properties: {
-        relationshipStatus: { type: 'string', enum: [...RelationshipStatusEnum.options] },
-        children: { type: 'integer', minimum: 0, maximum: 30 },
-        employmentStatus: { type: 'string', enum: [...EmploymentStatusEnum.options] },
-        educationLevel: {
-          type: 'string',
-          enum: [...EducationLevelEnum.options],
-        },
-        substanceAbuseHistory: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              substance: { type: 'string', maxLength: 100 },
-              status: { type: 'string', enum: [...SubstanceStatusEnum.options] },
-            },
-            required: ['substance', 'status'],
-          },
-        },
-      },
-      required: ['relationshipStatus', 'children', 'employmentStatus', 'educationLevel', 'substanceAbuseHistory'],
-    },
-    pastConvictions: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          chargeName: { type: 'string', maxLength: 200 },
-          year: { type: 'integer', minimum: 1900, maximum: new Date().getFullYear() },
-          sentences: { type: 'array', items: SENTENCE_GEMINI_SCHEMA },
-        },
-        required: ['chargeName', 'year', 'sentences'],
-      },
-    },
-    oceanTraits: {
-      type: 'object',
-      properties: {
-        openness: { type: 'integer', minimum: 1, maximum: 10 },
-        conscientiousness: { type: 'integer', minimum: 1, maximum: 10 },
-        extraversion: { type: 'integer', minimum: 1, maximum: 10 },
-        agreeableness: { type: 'integer', minimum: 1, maximum: 10 },
-        neuroticism: { type: 'integer', minimum: 1, maximum: 10 },
-      },
-      required: ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism'],
-    },
-  },
-  required: ['firstName', 'lastName', 'age', 'demographics', 'pastConvictions', 'oceanTraits'],
-};
-
-export const INTERROGATION_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    detectiveName: { type: 'string', minLength: 1, maxLength: 101 },
-    outcome: { type: 'string', enum: [...InterrogationOutcomeEnum.options] },
-    challengeGround: { type: 'string', enum: [...ChallengeGroundEnum.options] },
-    lines: {
-      type: 'array',
-      minItems: 4,
-      maxItems: 24,
-      items: {
-        type: 'object',
-        properties: {
-          speaker: { type: 'string', enum: [...InterrogationSpeakerEnum.options] },
-          text: { type: 'string', minLength: 1, maxLength: 400 },
-        },
-        required: ['speaker', 'text'],
-      },
-    },
-  },
-  required: ['detectiveName', 'outcome', 'challengeGround', 'lines'],
-};
-
-export const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string', minLength: 1, maxLength: 40 },
-    name: { type: 'string', maxLength: 101 },
-    role: { type: 'string', enum: [...WitnessRoleEnum.options] },
-    bias: { type: 'string', enum: [...BiasIndicatorEnum.options] },
-    statement: { type: 'string', maxLength: 1000 },
-    credibilityScore: {
-      type: 'integer',
-      minimum: 1,
-      maximum: 10,
-      description: 'How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
-    },
-    directExamination: {
-      type: 'string',
-      minLength: 1,
-      maxLength: 1200,
-      description: 'The witness\'s spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel\'s questions.'
-    },
-    crossExamination: { type: 'string', maxLength: 1200, nullable: true, description: 'The witness\'s spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel\'s questions.' },
-  },
-  required: [
-    'id',
-    'name',
-    'role',
-    'bias',
-    'statement',
-    'credibilityScore',
-    'directExamination',
-    'crossExamination',
-  ],
-};
-
-export const EVIDENCE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string', minLength: 1, maxLength: 40 },
-    name: { type: 'string', minLength: 3, maxLength: 100 },
-    type: {
-      type: 'string',
-      enum: [...EvidenceTypeEnum.options],
-    },
-    description: { type: 'string', maxLength: 600 },
-    disclosureSummary: { type: 'string', minLength: 1, maxLength: 400 },
-    relevanceScore: {
-      type: 'integer',
-      minimum: 1,
-      maximum: 10,
-      description: 'How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.',
-    },
-    objectionRisk: { type: 'string', enum: [...ObjectionRiskEnum.options] },
-    targetElementId: { type: 'string', maxLength: 40, nullable: true },
-    prosecutionArgument: { type: 'string', minLength: 1, maxLength: 600 },
-    defenseObjection: { type: 'string', maxLength: 600, nullable: true },
-    rulingReactions: {
-      type: 'object',
-      properties: { ADMITTED: reactionBeatGeminiSchema(), EXCLUDED: reactionBeatGeminiSchema() },
-      required: ['ADMITTED', 'EXCLUDED'],
-    },
-    rulingOptions: judgeLineOptionsGeminiSchema(['ADMITTED', 'EXCLUDED']),
-    interrogation: { ...INTERROGATION_GEMINI_SCHEMA, nullable: true },
-  },
-  required: [
-    'id',
-    'name',
-    'type',
-    'description',
-    'disclosureSummary',
-    'relevanceScore',
-    'objectionRisk',
-    'targetElementId',
-    'prosecutionArgument',
-    'defenseObjection',
-    'rulingReactions',
-    'rulingOptions',
-  ],
-};
 
 // ============================================================================
 // Stage 1 — StatuteSelection
 // ============================================================================
 const StatuteSelectionSchema = z.object({
   charges: z.array(ChargeCoreSchema).min(1),
-  statuteContexts: z.array(z.string().max(500)).min(1),
+  statuteContexts: CaseShape.statuteContexts,
 });
 
-const STATUTE_SELECTION_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    charges: { type: 'array', minItems: 1, items: CHARGE_CORE_GEMINI_SCHEMA },
-    statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
-  },
-  required: ['charges', 'statuteContexts'],
-};
+const STATUTE_SELECTION_GEMINI_SCHEMA = toGeminiSchema(StatuteSelectionSchema);
 
-// A sentence's `conditions` array is valid on a PROBATION sentence only (at
-// least one item) and must be omitted entirely for PRISON/JAIL/FINE/
-// COMMUNITY_SERVICE — the Gemini responseSchema exposes `conditions` as an
-// optional field on every sentence type (Gemini's schema format can't express
-// a discriminated union), so nothing else stops the model from attaching an
-// empty or stray `conditions` array to a non-PROBATION sentence, which the
-// real Zod validation (a strict discriminated union) then rejects.
 // ============================================================================
 // Stage prompts.
 //
@@ -599,9 +263,15 @@ export async function runStatuteSelection(
 // ============================================================================
 // Stage 2 — EnvironmentGen
 // ============================================================================
-const EnvironmentGenSchema = z.object({ environment: EnvironmentSchema });
+// The two anti-drift fields are optional on the case (hand-authored demo cases
+// omit them) but the LLM path always fills them, so this stage requires them —
+// in the gate and, because the Gemini schema is compiled from the gate, in
+// what the model is told.
+const EnvironmentGenSchema = z.object({
+  environment: EnvironmentSchema.required({ establishedFacts: true, interrogationLocation: true }),
+});
 
-const ENVIRONMENT_GEN_GEMINI_SCHEMA = geminiObjectOf('environment', ENVIRONMENT_GEMINI_SCHEMA);
+const ENVIRONMENT_GEN_GEMINI_SCHEMA = toGeminiSchema(EnvironmentGenSchema);
 
 const ENVIRONMENT_GEN_SYSTEM = `ROLE: You are an investigator recording the scene of an alleged offense for a California criminal case.
 
@@ -636,7 +306,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
 // ============================================================================
 const CharacterGenSchema = z.object({ defendant: CharacterSchema });
 
-const CHARACTER_GEN_GEMINI_SCHEMA = geminiObjectOf('defendant', CHARACTER_GEMINI_SCHEMA);
+const CHARACTER_GEN_GEMINI_SCHEMA = toGeminiSchema(CharacterGenSchema);
 
 const CHARACTER_GEN_SYSTEM = `ROLE: You are a probation officer compiling the defendant's background for a California criminal case.
 
@@ -673,15 +343,12 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
 // ============================================================================
 const InterrogationGenSchema = z.object({ interrogation: InterrogationSchema });
 
-// The Gemini responseSchema must mirror the Zod wrapper — a top-level
-// `interrogation` object, not the inner shape directly. INTERROGATION_GEMINI_SCHEMA
-// alone is the unwrapped shape reused as the nested `interrogation` field on
-// EVIDENCE_GEMINI_SCHEMA (line 422), where it is correct; passing it un-wrapped
-// here made the live API return `{ detectiveName, outcome, ... }` and Zod reject
-// it with `interrogation: Invalid input` — every other stage wraps correctly,
-// the unit-test mock returned the wrapped shape so the divergence was invisible
-// until a live run.
-const INTERROGATION_GEN_GEMINI_SCHEMA = geminiObjectOf('interrogation', INTERROGATION_GEMINI_SCHEMA);
+// Compiled from the wrapper, not from InterrogationSchema alone. Passing the
+// unwrapped shape once made the live API return `{ detectiveName, outcome, ...
+// }` and Zod reject it with `interrogation: Invalid input` — the unit-test mock
+// returned the wrapped shape, so the divergence was invisible until a live run.
+// Compiling from the gate itself makes that mismatch unrepresentable.
+const INTERROGATION_GEN_GEMINI_SCHEMA = toGeminiSchema(InterrogationGenSchema);
 
 const INTERROGATION_GEN_SYSTEM = `ROLE: You are dramatizing a recorded police custodial interrogation for a California criminal case.
 
@@ -746,12 +413,12 @@ export async function runInterrogationGen(
 // ============================================================================
 // Stage 5 — EvidenceGen
 // ============================================================================
-// Gemini's structured-output mode materializes an optional-nullable field
-// (interrogation is marked `nullable: true` in the schema below, since
-// there's no way to express "omit this field" in Gemini's response schema)
-// as an explicit `null` on every item that doesn't have one — but
-// EvidenceSchema's `interrogation` is optional (undefined), not nullable.
-// Normalize null → undefined before the real schema validates it.
+// Gemini's structured-output mode has been seen to materialize an absent
+// nested object as an explicit `null` — but EvidenceSchema's `interrogation`
+// is optional (undefined), not nullable. The compiled schema now declares it
+// optional, which the model omits rather than nulls; the normalization stays
+// as a cheap guard against the old behavior. Normalize null → undefined before
+// the real schema validates it.
 function dropNullInterrogation(value: unknown): unknown {
   if (!Array.isArray(value)) return value;
   return value.map((item) => {
@@ -775,8 +442,8 @@ function dropNullInterrogation(value: unknown): unknown {
 function buildEvidenceGenSchema(interrogationRequired: boolean) {
   return z
     .object({
-      evidence: z.preprocess(dropNullInterrogation, z.array(EvidenceSchema).min(3)),
-      witnesses: z.array(WitnessSchema).min(2),
+      evidence: z.preprocess(dropNullInterrogation, CaseShape.evidence),
+      witnesses: CaseShape.witnesses,
     })
     .superRefine((data, ctx) => {
       const hasInterrogation = data.evidence.some((item) => item.type === 'INTERROGATION');
@@ -796,23 +463,12 @@ function buildEvidenceGenSchema(interrogationRequired: boolean) {
     });
 }
 
-const EVIDENCE_GEN_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    // No minItems here, deliberately: Gemini rejects the whole request with a
-    // bare 400 INVALID_ARGUMENT when minItems is set on an array whose item
-    // schema contains the nullable nested `interrogation` object. Verified by
-    // bisection against the live API — the identical schema is accepted with
-    // this one constraint removed, and accepted with minItems restored once
-    // `interrogation` is dropped from the item. `witnesses` below keeps its
-    // minItems (its items have no nested nullable object), as do `charges`,
-    // `elements`, and `maximumPenalties`. Zod's `.min(3)` still enforces the
-    // count, and EVIDENCE_GEN_SYSTEM states it in the prompt.
-    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
-    witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
-  },
-  required: ['evidence', 'witnesses'],
-};
+// The same fields the gate validates. The gate adds a null-normalizing
+// preprocess and the INTERROGATION presence refinement on top; neither is
+// something the model is asked to produce, and the prompt states the latter.
+const EVIDENCE_GEN_GEMINI_SCHEMA = toGeminiSchema(
+  z.object({ evidence: CaseShape.evidence, witnesses: CaseShape.witnesses }),
+);
 
 const EVIDENCE_GEN_SYSTEM = `ROLE: You are building the exhibit and witness list for a California criminal case, together with the voiced material the motion hearing and the trial will use.
 
@@ -887,115 +543,26 @@ export async function runEvidenceGen(
 // ============================================================================
 // Stage 6 — finalizeCasePayload (final assembly + cross-stage refinements)
 // ============================================================================
-const ClosingExhibitPointFieldSchema = z.object({
-  evidenceId: z.string().min(1).max(40),
-  ifAdmitted: z.object({ prosecution: z.string().max(400).nullable(), defense: z.string().max(400).nullable() }),
-  ifExcluded: z.object({ prosecution: z.string().max(400).nullable(), defense: z.string().max(400).nullable() }),
-});
-
+// The narrative fields this stage authors, derived from the case schema — so
+// they carry the same caps and the same `noJury` refinement the assembled case
+// is held to. Declared separately, they once lacked it: a jury reference in a
+// closing passed this gate and failed CaseSchema, which sent the whole case
+// through the repair round (the pipeline's largest, most truncation-prone
+// response) for a defect this stage could have retried on its own.
+// exhibitPoints is optional on the case but always authored on this path.
 const CaseFinalizationFieldsSchema = z.object({
-  caseId: z.string().regex(/^[0-9]{2}-CR-[0-9]{5}$/),
-  summary: z.string().min(1).max(1500),
-  statementOfFacts: z.string().min(1).max(1500),
-  closingArguments: z.object({
-    prosecution: z.string().min(1).max(1200),
-    defense: z.string().min(1).max(1200),
-    exhibitPoints: z.array(ClosingExhibitPointFieldSchema).optional(),
-  }),
+  caseId: CaseShape.caseId,
+  summary: CaseShape.summary,
+  statementOfFacts: CaseShape.statementOfFacts,
+  closingArguments: CaseShape.closingArguments.required({ exhibitPoints: true }),
 });
 
-function closingExhibitPointGeminiSchema(): GeminiSchema {
-  return {
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        evidenceId: { type: 'string', minLength: 1, maxLength: 40 },
-        ifAdmitted: {
-          type: 'object',
-          properties: {
-            prosecution: { type: 'string', maxLength: 400, nullable: true },
-            defense: { type: 'string', maxLength: 400, nullable: true },
-          },
-          required: ['prosecution', 'defense'],
-        },
-        ifExcluded: {
-          type: 'object',
-          properties: {
-            prosecution: { type: 'string', maxLength: 400, nullable: true },
-            defense: { type: 'string', maxLength: 400, nullable: true },
-          },
-          required: ['prosecution', 'defense'],
-        },
-      },
-      required: ['evidenceId', 'ifAdmitted', 'ifExcluded'],
-    },
-  };
-}
+const FINALIZE_GEMINI_SCHEMA = toGeminiSchema(CaseFinalizationFieldsSchema);
 
-const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    caseId: { type: 'string', description: 'Format YY-CR-XXXXX, e.g. 24-CR-00042', pattern: '^[0-9]{2}-CR-[0-9]{5}$' },
-    summary: { type: 'string', minLength: 1, maxLength: 1500 },
-    statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
-    closingArguments: {
-      type: 'object',
-      properties: {
-        prosecution: { type: 'string', minLength: 1, maxLength: 1200 },
-        defense: { type: 'string', minLength: 1, maxLength: 1200 },
-        exhibitPoints: closingExhibitPointGeminiSchema(),
-      },
-      required: ['prosecution', 'defense', 'exhibitPoints'],
-    },
-  },
-  required: ['caseId', 'summary', 'statementOfFacts', 'closingArguments'],
-};
-
-const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    caseId: { type: 'string', pattern: '^[0-9]{2}-CR-[0-9]{5}$' },
-    defendant: CHARACTER_GEMINI_SCHEMA,
-    environment: ENVIRONMENT_GEMINI_SCHEMA,
-    charges: { type: 'array', minItems: 1, items: CHARGE_GEMINI_SCHEMA },
-    statuteContexts: { type: 'array', minItems: 1, items: { type: 'string', maxLength: 500 } },
-    witnesses: { type: 'array', minItems: 2, items: WITNESS_GEMINI_SCHEMA },
-    // No minItems here, deliberately: Gemini rejects the whole request with a
-    // bare 400 INVALID_ARGUMENT when minItems is set on an array whose item
-    // schema contains the nullable nested `interrogation` object. Verified by
-    // bisection against the live API — the identical schema is accepted with
-    // this one constraint removed, and accepted with minItems restored once
-    // `interrogation` is dropped from the item. `witnesses` below keeps its
-    // minItems (its items have no nested nullable object), as do `charges`,
-    // `elements`, and `maximumPenalties`. Zod's `.min(3)` still enforces the
-    // count, and EVIDENCE_GEN_SYSTEM states it in the prompt.
-    evidence: { type: 'array', items: EVIDENCE_GEMINI_SCHEMA },
-    summary: { type: 'string', minLength: 1, maxLength: 1500 },
-    statementOfFacts: { type: 'string', minLength: 1, maxLength: 1500 },
-    closingArguments: {
-      type: 'object',
-      properties: {
-        prosecution: { type: 'string', minLength: 1, maxLength: 1200 },
-        defense: { type: 'string', minLength: 1, maxLength: 1200 },
-        exhibitPoints: closingExhibitPointGeminiSchema(),
-      },
-      required: ['prosecution', 'defense', 'exhibitPoints'],
-    },
-  },
-  required: [
-    'caseId',
-    'defendant',
-    'environment',
-    'charges',
-    'statuteContexts',
-    'witnesses',
-    'evidence',
-    'summary',
-    'statementOfFacts',
-    'closingArguments',
-  ],
-};
+// The repair round regenerates the whole case against the real gate. The live
+// API currently rejects this schema outright (R13 in TODO.md — the hand-written
+// version was rejected too); responseSchemas.live.test.ts tracks it.
+const FULL_CASE_GEMINI_SCHEMA = toGeminiSchema(CaseSchema);
 
 const FINALIZE_SYSTEM = `ROLE: You are assembling the narrative face of a California criminal case file.
 
@@ -1165,24 +732,18 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
 // the defendant exists so the lines can name the defendant and reach for
 // their circumstances).
 // ============================================================================
+// Each entry is the charge's voiced half plus the id that matches it back —
+// derived from the charge schema's own fields, so the lines are held to the
+// same `noJury` rule here that CaseSchema applies two stages later.
 const VerdictVoiceShape = z.object({
   charges: z.array(
-    z.strictObject({
-      id: z.string().min(1).max(40),
-      verdictReactions: z.strictObject({
-        GUILTY: ReactionBeatSchema,
-        NOT_GUILTY: ReactionBeatSchema,
-      }),
-      verdictOptions: z.array(z.strictObject({
-        choice: VerdictValueSchema,
-        lineText: z.string().min(1).max(300),
-      })).min(2).max(6),
-    }).superRefine((charge, ctx) => {
-      const missing = requireChoiceCoverage(charge.verdictOptions, VerdictValueSchema.options);
-      if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
+    z.strictObject({ id: ChargeCoreShape.id, ...ChargeVoiceShape }).superRefine((charge, ctx) => {
+      addChoiceCoverageIssues(charge.verdictOptions, VerdictValueSchema.options, ctx);
     }),
   ).min(1),
 });
+
+const VERDICT_VOICE_GEMINI_SCHEMA = toGeminiSchema(VerdictVoiceShape);
 
 // Built per call against the charge ids actually requested. A wrong or missing
 // id used to validate fine here — `id` accepted any 1-40 char string — and then
@@ -1287,43 +848,20 @@ export async function runVerdictVoice(
 // authored demo cases also omit for NO_OFFER cases; defineDemoCase's pairing
 // invariant is mirrored here rather than re-derived).
 // ============================================================================
-const WeakPleaNarrativeSchema = z.object({
-  prosecutionRationale: z.string().min(1).max(1000),
+// Both derived from PleaNarrativeSchema's own fields. Re-declared, they once
+// dropped `noJury` — and because the result was re-parsed through
+// PleaNarrativeSchema *outside* the retry loop, a jury reference in a plea
+// rationale skipped the repair entirely and went straight to the Mistrial
+// screen with no stage prefix. Held to the full rule here, it gets the same
+// retry-with-feedback as every other stage.
+const WeakPleaNarrativeSchema = PleaNarrativeFieldsSchema.pick({ prosecutionRationale: true });
+
+const OfferPleaNarrativeSchema = PleaNarrativeFieldsSchema.required().superRefine((narrative, ctx) => {
+  addChoiceCoverageIssues(narrative.pleaRulingOptions, PleaDecisionSchema.options, ctx);
 });
 
-const OfferPleaNarrativeSchema = z
-  .object({
-    prosecutionRationale: z.string().min(1).max(1000),
-    defenseRationale: z.string().min(1).max(1000),
-    allocution: z.string().min(1).max(800),
-    pleaReactions: z.object({ ACCEPT: ReactionBeatSchema, REJECT: ReactionBeatSchema }),
-    pleaRulingOptions: z
-      .array(z.object({ choice: PleaDecisionSchema, lineText: z.string().min(1).max(300) }))
-      .min(2)
-      .max(6),
-  })
-  .superRefine((narrative, ctx) => {
-    const missing = requireChoiceCoverage(narrative.pleaRulingOptions, PleaDecisionSchema.options);
-    if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
-  });
-
-const WEAK_PLEA_GEMINI_SCHEMA = geminiObjectOf('prosecutionRationale', { type: 'string', minLength: 1, maxLength: 1000 });
-
-const OFFER_PLEA_GEMINI_SCHEMA: GeminiSchema = {
-  type: 'object',
-  properties: {
-    prosecutionRationale: { type: 'string', minLength: 1, maxLength: 1000 },
-    defenseRationale: { type: 'string', minLength: 1, maxLength: 1000 },
-    allocution: { type: 'string', minLength: 1, maxLength: 800 },
-    pleaReactions: {
-      type: 'object',
-      properties: { ACCEPT: reactionBeatGeminiSchema(), REJECT: reactionBeatGeminiSchema() },
-      required: ['ACCEPT', 'REJECT'],
-    },
-    pleaRulingOptions: judgeLineOptionsGeminiSchema(['ACCEPT', 'REJECT']),
-  },
-  required: ['prosecutionRationale', 'defenseRationale', 'allocution', 'pleaReactions', 'pleaRulingOptions'],
-};
+const WEAK_PLEA_GEMINI_SCHEMA = toGeminiSchema(WeakPleaNarrativeSchema);
+const OFFER_PLEA_GEMINI_SCHEMA = toGeminiSchema(OfferPleaNarrativeSchema);
 
 const PLEA_NARRATIVE_SYSTEM = `ROLE: You are counsel for both sides, stating your plea positions on the record.
 
@@ -1385,7 +923,7 @@ export async function runPleaNarrative(
       WEAK_PLEA_GEMINI_SCHEMA,
       WeakPleaNarrativeSchema,
     );
-    return PleaNarrativeSchema.parse({ prosecutionRationale: data.prosecutionRationale });
+    return { prosecutionRationale: data.prosecutionRationale };
   }
 
   const data = await generateValidated(
@@ -1397,13 +935,7 @@ export async function runPleaNarrative(
     OFFER_PLEA_GEMINI_SCHEMA,
     OfferPleaNarrativeSchema,
   );
-  return PleaNarrativeSchema.parse({
-    prosecutionRationale: data.prosecutionRationale,
-    defenseRationale: data.defenseRationale,
-    allocution: data.allocution,
-    pleaReactions: data.pleaReactions,
-    pleaRulingOptions: data.pleaRulingOptions,
-  });
+  return data;
 }
 
 // ============================================================================
@@ -1411,7 +943,7 @@ export async function runPleaNarrative(
 // ============================================================================
 const AftermathFieldSchema = z.object({ narrative: AftermathNarrativeSchema });
 
-const AFTERMATH_GEMINI_SCHEMA = geminiObjectOf('narrative', { type: 'string', minLength: 1, maxLength: 4000 });
+const AFTERMATH_GEMINI_SCHEMA = toGeminiSchema(AftermathFieldSchema);
 
 const AFTERMATH_SYSTEM = `ROLE: You are a court reporter writing the follow-up story once a California criminal case has closed.
 
@@ -1498,3 +1030,24 @@ export async function runAftermath(apiKey: string, model: string, ctx: Aftermath
   );
   return data.narrative;
 }
+
+// Every stage's response contract: the Zod gate and the Gemini schema compiled
+// from it. Exported for tests only — schemaParity.test.ts cross-checks the
+// compiler against Zod's own internals, and geminiSchema.test.ts snapshots the
+// compiled output so any change to what the model is sent shows up in review.
+// That matters because a responseSchema change is the one kind of change a
+// mocked test cannot vouch for: `minItems` in the wrong place is a bare 400
+// from the live API. See CLAUDE.md.
+export const STAGE_RESPONSE_SCHEMAS: Record<string, { zod: z.ZodType; gemini: GeminiSchema }> = {
+  StatuteSelection: { zod: StatuteSelectionSchema, gemini: STATUTE_SELECTION_GEMINI_SCHEMA },
+  EnvironmentGen: { zod: EnvironmentGenSchema, gemini: ENVIRONMENT_GEN_GEMINI_SCHEMA },
+  CharacterGen: { zod: CharacterGenSchema, gemini: CHARACTER_GEN_GEMINI_SCHEMA },
+  InterrogationGen: { zod: InterrogationGenSchema, gemini: INTERROGATION_GEN_GEMINI_SCHEMA },
+  EvidenceGen: { zod: buildEvidenceGenSchema(false), gemini: EVIDENCE_GEN_GEMINI_SCHEMA },
+  VerdictVoice: { zod: VerdictVoiceShape, gemini: VERDICT_VOICE_GEMINI_SCHEMA },
+  FinalizeCasePayload: { zod: CaseFinalizationFieldsSchema, gemini: FINALIZE_GEMINI_SCHEMA },
+  'FinalizeCasePayload.repair': { zod: CaseSchema, gemini: FULL_CASE_GEMINI_SCHEMA },
+  'PleaNarrative.weak': { zod: WeakPleaNarrativeSchema, gemini: WEAK_PLEA_GEMINI_SCHEMA },
+  'PleaNarrative.offer': { zod: OfferPleaNarrativeSchema, gemini: OFFER_PLEA_GEMINI_SCHEMA },
+  Aftermath: { zod: AftermathFieldSchema, gemini: AFTERMATH_GEMINI_SCHEMA },
+};

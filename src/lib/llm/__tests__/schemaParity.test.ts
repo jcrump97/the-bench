@@ -1,37 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import type { GeminiSchema } from '../geminiClient';
-import {
-  SENTENCE_GEMINI_SCHEMA,
-  CHARGE_CORE_GEMINI_SCHEMA,
-  CHARGE_GEMINI_SCHEMA,
-  ENVIRONMENT_GEMINI_SCHEMA,
-  CHARACTER_GEMINI_SCHEMA,
-  INTERROGATION_GEMINI_SCHEMA,
-  WITNESS_GEMINI_SCHEMA,
-  EVIDENCE_GEMINI_SCHEMA,
-} from '../stages';
-import {
-  ChargeCoreSchema,
-  ChargeSchema,
-  EnvironmentSchema,
-  CharacterSchema,
-  InterrogationSchema,
-  WitnessSchema,
-  EvidenceSchema,
-  SentenceTypeEnum,
-  SentenceUnitEnum,
-} from '../../../schemas/gameSchemas';
+import { STAGE_RESPONSE_SCHEMAS } from '../stages';
+import { SentenceTypeEnum, SentenceUnitEnum } from '../../../schemas/gameSchemas';
 
 // ===========================================================================
 // Zod <-> Gemini schema parity
 //
-// These are two hand-maintained descriptions of the same data. Zod is the
-// trust boundary that decides what the game accepts; the Gemini
-// `responseSchema` is what the model is *told* to produce. Nothing forced
-// them to agree, and when they silently disagreed it cost a live debugging
-// session: `relevanceScore` was 1-10 in Zod and a bare `number` in the Gemini
-// schema, so the model kept answering with a 0-1 confidence score, Zod kept
-// rejecting it, and the player saw "Mistrial" with no explanation.
+// Zod is the trust boundary that decides what the game accepts; the Gemini
+// `responseSchema` is what the model is *told* to produce. They used to be two
+// hand-maintained descriptions of the same data, and when they silently
+// disagreed it cost a live debugging session: `relevanceScore` was 1-10 in Zod
+// and a bare `number` in the Gemini schema, so the model kept answering with a
+// 0-1 confidence score, Zod kept rejecting it, and the player saw "Mistrial"
+// with no explanation.
+//
+// The Gemini side is now compiled from Zod (src/lib/llm/geminiSchema.ts), so
+// this file has a different job: it is an independent check on the compiler.
+// The compiler reads Zod through `z.toJSONSchema()`; this walker reads Zod's
+// own internals. Two implementations that must agree catch a bug in either.
 //
 // THE INVARIANT: the Gemini schema must never be *looser* than Zod.
 //
@@ -79,13 +65,17 @@ function unwrap(schema: unknown): Unwrapped {
       current = def.innerType as ZodLike;
       continue;
     }
-    if (type === 'optional' || type === 'default' || type === 'readonly') {
+    // `nonoptional` is what Zod 4's `.required()` wraps an optional field in.
+    if (type === 'optional' || type === 'nonoptional' || type === 'default' || type === 'readonly') {
       current = def.innerType as ZodLike;
       continue;
     }
     // `.transform()` produces a pipe; the input side is what the model sends.
+    // A `z.preprocess` is the reverse — a transform *into* the schema — and
+    // its input side is unknown, so the schema being validated is the output.
     if (type === 'pipe') {
-      current = (def.in ?? def.out) as ZodLike;
+      const input = def.in as ZodLike | undefined;
+      current = (input?._zod?.def?.type === 'transform' ? def.out : (input ?? def.out)) as ZodLike;
       continue;
     }
     return { schema: current ?? null, nullable };
@@ -126,9 +116,10 @@ function findLoosenings(gemini: GeminiSchema, zod: unknown, path: string): Findi
   // flattened Gemini counterpart is pinned by its own test below — so rather
   // than skip silently, prove that is the union we actually hit.
   if (UNION_TYPES.has(zodType(target) ?? '')) {
-    if (gemini !== SENTENCE_GEMINI_SCHEMA) {
+    const typeEnum = gemini.properties?.type?.enum;
+    if (typeEnum === undefined || typeEnum.join() !== SentenceTypeEnum.options.join()) {
       findings.push(
-        `${path}: Zod is a union but the Gemini schema is not SENTENCE_GEMINI_SCHEMA — ` +
+        `${path}: Zod is a union but the Gemini schema is not the flattened sentence — ` +
           'an unchecked union has appeared and needs its own parity assertion',
       );
     }
@@ -214,21 +205,12 @@ function findLoosenings(gemini: GeminiSchema, zod: unknown, path: string): Findi
   return findings;
 }
 
-// The building blocks that describe the same entity on both sides.
-// SentenceSchema is absent on purpose — it is a discriminated union, checked
-// separately below.
-const PAIRS: [name: string, gemini: GeminiSchema, zod: unknown][] = [
-  ['ChargeCore', CHARGE_CORE_GEMINI_SCHEMA, ChargeCoreSchema],
-  ['Charge', CHARGE_GEMINI_SCHEMA, ChargeSchema],
-  ['Environment', ENVIRONMENT_GEMINI_SCHEMA, EnvironmentSchema],
-  ['Character', CHARACTER_GEMINI_SCHEMA, CharacterSchema],
-  ['Interrogation', INTERROGATION_GEMINI_SCHEMA, InterrogationSchema],
-  ['Witness', WITNESS_GEMINI_SCHEMA, WitnessSchema],
-  ['Evidence', EVIDENCE_GEMINI_SCHEMA, EvidenceSchema],
-];
+// The compiled sentence schema, as the model sees it inside a charge.
+const SENTENCE = STAGE_RESPONSE_SCHEMAS.StatuteSelection!.gemini.properties!.charges!.items!.properties!
+  .maximumPenalties!.items!;
 
 describe('Zod <-> Gemini schema parity', () => {
-  for (const [name, gemini, zod] of PAIRS) {
+  for (const [name, { gemini, zod }] of Object.entries(STAGE_RESPONSE_SCHEMAS)) {
     it(`${name}: the Gemini schema is no looser than Zod`, () => {
       expect(findLoosenings(gemini, zod, name)).toEqual([]);
     });
@@ -236,22 +218,19 @@ describe('Zod <-> Gemini schema parity', () => {
 
   // SentenceSchema is a discriminated union: PRISON/JAIL take YEARS|MONTHS|DAYS,
   // PROBATION takes YEARS|MONTHS, FINE takes DOLLARS, COMMUNITY_SERVICE takes
-  // HOURS. Gemini's dialect cannot express that correlation, so the Gemini
-  // schema flattens every unit into one enum and lets Zod re-correlate them on
-  // the way in. That is the one place the "no looser than Zod" rule is broken
-  // on purpose, so it is pinned explicitly instead.
+  // HOURS. Gemini's dialect cannot express that correlation, so the compiler
+  // flattens every unit into one enum and lets Zod re-correlate them on the way
+  // in. That is the one place the "no looser than Zod" rule is broken on
+  // purpose, so it is pinned explicitly instead.
   it('Sentence: the flattened union offers exactly the declared vocabularies', () => {
-    const props = SENTENCE_GEMINI_SCHEMA.properties!;
-    expect(props.type!.enum).toEqual([...SentenceTypeEnum.options]);
-    expect(props.unit!.enum).toEqual([...SentenceUnitEnum.options]);
+    expect(SENTENCE.properties!.type!.enum).toEqual([...SentenceTypeEnum.options]);
+    expect(SENTENCE.properties!.unit!.enum).toEqual([...SentenceUnitEnum.options]);
   });
 
-  it('Sentence: every unit the model may send is one Zod knows how to bound', () => {
-    // SENTENCE_UNIT_MAX is keyed by SentenceUnitEnum, so this holds by
-    // construction — the assertion is here to fail loudly if that key type is
-    // ever widened independently of the enum the model is shown.
-    expect(new Set(SENTENCE_GEMINI_SCHEMA.properties!.unit!.enum)).toEqual(
-      new Set(SentenceUnitEnum.options),
-    );
+  it('Sentence: only fields every sentence type carries are required', () => {
+    // `conditions` belongs to PROBATION alone; requiring it would make every
+    // prison term carry probation conditions the strict Zod branch rejects.
+    expect(SENTENCE.required).toEqual(['type', 'unit', 'amount']);
+    expect(SENTENCE.properties!.conditions).toBeDefined();
   });
 });

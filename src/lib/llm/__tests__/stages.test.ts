@@ -172,10 +172,29 @@ describe('runStatuteSelection', () => {
 });
 
 describe('runEnvironmentGen', () => {
+  // Hand-authored demo environments omit the two anti-drift fields; the LLM
+  // path always fills them.
+  const generatedEnvironment = {
+    ...environment,
+    establishedFacts: ['the rear service door was found unlocked'],
+    interrogationLocation: 'Central Division, interview room 2',
+  };
+
   it('returns the validated environment', async () => {
-    mockCallsWith(JSON.stringify({ environment }));
+    mockCallsWith(JSON.stringify({ environment: generatedEnvironment }));
     const result = await runEnvironmentGen(API_KEY, MODEL, [charge]);
-    expect(result).toEqual(environment);
+    expect(result).toEqual(generatedEnvironment);
+  });
+
+  it('retries a response that omits the established facts every later stage quotes', async () => {
+    // Optional on the case, but InterrogationGen, EvidenceGen and the finalize
+    // stage are all handed these verbatim. Accepting an environment without
+    // them would quietly switch every downstream stage back to paraphrasing
+    // `description` — the drift the field exists to stop.
+    mockCallsWith(JSON.stringify({ environment }), JSON.stringify({ environment: generatedEnvironment }));
+    const result = await runEnvironmentGen(API_KEY, MODEL, [charge]);
+    expect(result).toEqual(generatedEnvironment);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -328,7 +347,9 @@ describe('finalizeCasePayload', () => {
         caseId: rawValidCase.caseId,
         summary: rawValidCase.summary,
         statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
+        // Optional on the case, always authored on the LLM path — the stage
+        // gate requires it.
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [] },
       }),
     );
 
@@ -348,7 +369,9 @@ describe('finalizeCasePayload', () => {
         caseId: rawValidCase.caseId,
         summary: rawValidCase.summary,
         statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
+        // Optional on the case, always authored on the LLM path — the stage
+        // gate requires it.
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [] },
       }),
     );
 
@@ -393,7 +416,9 @@ describe('finalizeCasePayload', () => {
         caseId: rawValidCase.caseId,
         summary: rawValidCase.summary,
         statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
+        // Optional on the case, always authored on the LLM path — the stage
+        // gate requires it.
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [] },
       }),
     );
 
@@ -419,7 +444,9 @@ describe('finalizeCasePayload', () => {
         caseId: rawValidCase.caseId,
         summary: rawValidCase.summary,
         statementOfFacts: rawValidCase.statementOfFacts,
-        closingArguments: rawValidCase.closingArguments,
+        // Optional on the case, always authored on the LLM path — the stage
+        // gate requires it.
+        closingArguments: { ...rawValidCase.closingArguments, exhibitPoints: [] },
       }),
     );
 
@@ -588,6 +615,23 @@ describe('runPleaNarrative', () => {
     expect(result.allocution).toBeTruthy();
     expect(result.pleaReactions).toBeDefined();
     expect(result.pleaRulingOptions).toBeDefined();
+  });
+
+  it('retries a jury reference instead of letting it reach the Mistrial screen', async () => {
+    // The stage schemas used to re-declare these fields without `noJury`, and
+    // the result was re-parsed through PleaNarrativeSchema outside the retry
+    // loop — so this exact response ended the whole generation, unretried and
+    // with no stage prefix. Derived from the real fields, it is repaired like
+    // any other validation failure.
+    mockCallsWith(
+      JSON.stringify({ prosecutionRationale: 'The jury will hear how thin this proof is.' }),
+      JSON.stringify({ prosecutionRationale: 'The People decline to offer given the thin proof.' }),
+    );
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
+    expect(result.prosecutionRationale).toBe('The People decline to offer given the thin proof.');
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
   });
 
   it('retries when pleaRulingOptions is missing coverage of a choice', async () => {
