@@ -1,0 +1,2203 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compiled stage response schemas > Aftermath 1`] = `
+{
+  "properties": {
+    "narrative": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "narrative",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > CharacterGen 1`] = `
+{
+  "properties": {
+    "defendant": {
+      "properties": {
+        "age": {
+          "maximum": 120,
+          "minimum": 18,
+          "type": "integer",
+        },
+        "demographics": {
+          "properties": {
+            "children": {
+              "maximum": 30,
+              "minimum": 0,
+              "type": "integer",
+            },
+            "educationLevel": {
+              "enum": [
+                "SOME_HIGH_SCHOOL",
+                "HIGH_SCHOOL",
+                "COLLEGE",
+                "ADVANCED_DEGREE",
+              ],
+              "type": "string",
+            },
+            "employmentStatus": {
+              "enum": [
+                "EMPLOYED",
+                "UNEMPLOYED",
+                "STUDENT",
+                "RETIRED",
+              ],
+              "type": "string",
+            },
+            "relationshipStatus": {
+              "enum": [
+                "SINGLE",
+                "MARRIED",
+                "DIVORCED",
+                "WIDOWED",
+              ],
+              "type": "string",
+            },
+            "substanceAbuseHistory": {
+              "items": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "ACTIVE",
+                      "IN_RECOVERY",
+                      "NONE_REPORTED",
+                    ],
+                    "type": "string",
+                  },
+                  "substance": {
+                    "maxLength": 100,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "substance",
+                  "status",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "relationshipStatus",
+            "children",
+            "employmentStatus",
+            "educationLevel",
+            "substanceAbuseHistory",
+          ],
+          "type": "object",
+        },
+        "firstName": {
+          "maxLength": 50,
+          "type": "string",
+        },
+        "lastName": {
+          "maxLength": 50,
+          "type": "string",
+        },
+        "oceanTraits": {
+          "properties": {
+            "agreeableness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "conscientiousness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "extraversion": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "neuroticism": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "openness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          "required": [
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "neuroticism",
+          ],
+          "type": "object",
+        },
+        "pastConvictions": {
+          "items": {
+            "properties": {
+              "chargeName": {
+                "maxLength": 200,
+                "type": "string",
+              },
+              "sentences": {
+                "items": {
+                  "properties": {
+                    "amount": {
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "conditions": {
+                      "items": {
+                        "enum": [
+                          "SUBSTANCE_ABUSE_TREATMENT",
+                          "ANGER_MANAGEMENT",
+                          "RANDOM_DRUG_TESTING",
+                          "NO_CONTACT_ORDER",
+                          "ELECTRONIC_MONITORING",
+                          "COMMUNITY_SERVICE",
+                        ],
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                    "type": {
+                      "enum": [
+                        "PRISON",
+                        "JAIL",
+                        "FINE",
+                        "COMMUNITY_SERVICE",
+                        "PROBATION",
+                      ],
+                      "type": "string",
+                    },
+                    "unit": {
+                      "enum": [
+                        "YEARS",
+                        "MONTHS",
+                        "DAYS",
+                        "DOLLARS",
+                        "HOURS",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "unit",
+                    "amount",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "year": {
+                "maximum": 2026,
+                "minimum": 1900,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "chargeName",
+              "year",
+              "sentences",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "firstName",
+        "lastName",
+        "age",
+        "demographics",
+        "pastConvictions",
+        "oceanTraits",
+      ],
+      "type": "object",
+    },
+  },
+  "required": [
+    "defendant",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > EnvironmentGen 1`] = `
+{
+  "properties": {
+    "environment": {
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "type": "string",
+        },
+        "establishedFacts": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "type": "array",
+        },
+        "interrogationLocation": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+        },
+        "locationType": {
+          "enum": [
+            "RESIDENTIAL",
+            "COMMERCIAL",
+            "PUBLIC_SPACE",
+            "VEHICLE",
+            "DIGITAL",
+          ],
+          "type": "string",
+        },
+        "timeOfDay": {
+          "enum": [
+            "MORNING",
+            "AFTERNOON",
+            "EVENING",
+            "NIGHT",
+          ],
+          "type": "string",
+        },
+        "weather": {
+          "enum": [
+            "CLEAR",
+            "RAIN",
+            "FOG",
+            "SNOW",
+            "N/A",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "locationType",
+        "timeOfDay",
+        "weather",
+        "description",
+        "establishedFacts",
+        "interrogationLocation",
+      ],
+      "type": "object",
+    },
+  },
+  "required": [
+    "environment",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > EvidenceGen 1`] = `
+{
+  "properties": {
+    "evidence": {
+      "items": {
+        "properties": {
+          "defenseObjection": {
+            "description": "Defense counsel's in-character objection to this exhibit; null when the defense waives objection.",
+            "maxLength": 600,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "description": {
+            "description": "A purely factual, objective description of the item.",
+            "maxLength": 600,
+            "type": "string",
+          },
+          "disclosureSummary": {
+            "description": "Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court.",
+            "maxLength": 400,
+            "minLength": 1,
+            "type": "string",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "interrogation": {
+            "properties": {
+              "challengeGround": {
+                "description": "Echo of the derived profile: the ground on which the defense moves to suppress the tape.",
+                "enum": [
+                  "MIRANDA",
+                  "VOLUNTARINESS",
+                ],
+                "type": "string",
+              },
+              "detectiveName": {
+                "description": "The interviewing detective — must match the case's INVESTIGATOR witness when one exists.",
+                "maxLength": 101,
+                "minLength": 1,
+                "type": "string",
+              },
+              "lines": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "DETECTIVE",
+                        "DEFENDANT",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 400,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 24,
+                "minItems": 4,
+                "type": "array",
+              },
+              "outcome": {
+                "description": "Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome.",
+                "enum": [
+                  "FULL_CONFESSION",
+                  "PARTIAL_ADMISSION",
+                  "DENIAL",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "detectiveName",
+              "outcome",
+              "challengeGround",
+              "lines",
+            ],
+            "type": "object",
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 3,
+            "type": "string",
+          },
+          "objectionRisk": {
+            "description": "Likelihood of opposing counsel objecting.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+            ],
+            "type": "string",
+          },
+          "prosecutionArgument": {
+            "description": "The prosecutor's in-character offer of this exhibit to the court.",
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string",
+          },
+          "relevanceScore": {
+            "description": "How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "rulingOptions": {
+            "items": {
+              "properties": {
+                "choice": {
+                  "enum": [
+                    "ADMITTED",
+                    "EXCLUDED",
+                  ],
+                  "type": "string",
+                },
+                "lineText": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "choice",
+                "lineText",
+              ],
+              "type": "object",
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array",
+          },
+          "rulingReactions": {
+            "properties": {
+              "ADMITTED": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+              "EXCLUDED": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+            },
+            "required": [
+              "ADMITTED",
+              "EXCLUDED",
+            ],
+            "type": "object",
+          },
+          "targetElementId": {
+            "description": "The ID of the StatuteElement this evidence is meant to prove.",
+            "maxLength": 40,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "type": {
+            "enum": [
+              "DOCUMENTARY",
+              "PHYSICAL",
+              "DIGITAL",
+              "FORENSIC",
+              "CIRCUMSTANTIAL",
+              "INTERROGATION",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "description",
+          "disclosureSummary",
+          "relevanceScore",
+          "objectionRisk",
+          "targetElementId",
+          "prosecutionArgument",
+          "defenseObjection",
+          "rulingReactions",
+          "rulingOptions",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "witnesses": {
+      "items": {
+        "properties": {
+          "bias": {
+            "enum": [
+              "PROSECUTION",
+              "DEFENSE",
+              "NEUTRAL",
+            ],
+            "type": "string",
+          },
+          "credibilityScore": {
+            "description": "How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "crossExamination": {
+            "description": "The witness's spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel's questions. Null when opposing counsel declines to cross.",
+            "maxLength": 1200,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "directExamination": {
+            "description": "The witness's spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel's questions.",
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "name": {
+            "description": "Full fictional name. Do not include race or protected demographics.",
+            "maxLength": 101,
+            "type": "string",
+          },
+          "role": {
+            "enum": [
+              "EYEWITNESS",
+              "EXPERT",
+              "CHARACTER",
+              "VICTIM",
+              "INVESTIGATOR",
+            ],
+            "type": "string",
+          },
+          "statement": {
+            "description": "A summary of their expected testimony.",
+            "maxLength": 1000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "bias",
+          "statement",
+          "credibilityScore",
+          "directExamination",
+          "crossExamination",
+        ],
+        "type": "object",
+      },
+      "minItems": 2,
+      "type": "array",
+    },
+  },
+  "required": [
+    "evidence",
+    "witnesses",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > FinalizeCasePayload 1`] = `
+{
+  "properties": {
+    "caseId": {
+      "description": "Format YY-CR-XXXXX, e.g. 24-CR-00042",
+      "pattern": "^[0-9]{2}-CR-[0-9]{5}$",
+      "type": "string",
+    },
+    "closingArguments": {
+      "properties": {
+        "defense": {
+          "description": "The defense's closing argument, in character.",
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string",
+        },
+        "exhibitPoints": {
+          "items": {
+            "properties": {
+              "evidenceId": {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string",
+              },
+              "ifAdmitted": {
+                "properties": {
+                  "defense": {
+                    "description": "What the defense adds about this exhibit when it was admitted; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "prosecution": {
+                    "description": "What the People add about this exhibit when it was admitted; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "prosecution",
+                  "defense",
+                ],
+                "type": "object",
+              },
+              "ifExcluded": {
+                "properties": {
+                  "defense": {
+                    "description": "What the defense adds about this exhibit when it was excluded; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "prosecution": {
+                    "description": "What the People add about this exhibit when it was excluded; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "prosecution",
+                  "defense",
+                ],
+                "type": "object",
+              },
+            },
+            "required": [
+              "evidenceId",
+              "ifAdmitted",
+              "ifExcluded",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "prosecution": {
+          "description": "The People's closing argument, in character.",
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "prosecution",
+        "defense",
+        "exhibitPoints",
+      ],
+      "type": "object",
+    },
+    "statementOfFacts": {
+      "description": "The People's statement of the case as spoken to the court on the record, in character.",
+      "maxLength": 1500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "summary": {
+      "description": "A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts.",
+      "maxLength": 1500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "caseId",
+    "summary",
+    "statementOfFacts",
+    "closingArguments",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
+{
+  "properties": {
+    "caseId": {
+      "description": "Format YY-CR-XXXXX, e.g. 24-CR-00042",
+      "pattern": "^[0-9]{2}-CR-[0-9]{5}$",
+      "type": "string",
+    },
+    "charges": {
+      "items": {
+        "properties": {
+          "classification": {
+            "enum": [
+              "FELONY",
+              "MISDEMEANOR",
+              "INFRACTION",
+            ],
+            "type": "string",
+          },
+          "elements": {
+            "items": {
+              "properties": {
+                "description": {
+                  "description": "The specific legal requirement or element of the crime that must be proven.",
+                  "maxLength": 500,
+                  "type": "string",
+                },
+                "id": {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "description",
+              ],
+              "type": "object",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "mandatoryMinimums": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "conditions": {
+                  "items": {
+                    "enum": [
+                      "SUBSTANCE_ABUSE_TREATMENT",
+                      "ANGER_MANAGEMENT",
+                      "RANDOM_DRUG_TESTING",
+                      "NO_CONTACT_ORDER",
+                      "ELECTRONIC_MONITORING",
+                      "COMMUNITY_SERVICE",
+                    ],
+                    "type": "string",
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                },
+                "type": {
+                  "enum": [
+                    "PRISON",
+                    "JAIL",
+                    "FINE",
+                    "COMMUNITY_SERVICE",
+                    "PROBATION",
+                  ],
+                  "type": "string",
+                },
+                "unit": {
+                  "enum": [
+                    "YEARS",
+                    "MONTHS",
+                    "DAYS",
+                    "DOLLARS",
+                    "HOURS",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "type",
+                "unit",
+                "amount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "maximumPenalties": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "conditions": {
+                  "items": {
+                    "enum": [
+                      "SUBSTANCE_ABUSE_TREATMENT",
+                      "ANGER_MANAGEMENT",
+                      "RANDOM_DRUG_TESTING",
+                      "NO_CONTACT_ORDER",
+                      "ELECTRONIC_MONITORING",
+                      "COMMUNITY_SERVICE",
+                    ],
+                    "type": "string",
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                },
+                "type": {
+                  "enum": [
+                    "PRISON",
+                    "JAIL",
+                    "FINE",
+                    "COMMUNITY_SERVICE",
+                    "PROBATION",
+                  ],
+                  "type": "string",
+                },
+                "unit": {
+                  "enum": [
+                    "YEARS",
+                    "MONTHS",
+                    "DAYS",
+                    "DOLLARS",
+                    "HOURS",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "type",
+                "unit",
+                "amount",
+              ],
+              "type": "object",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "verdictOptions": {
+            "items": {
+              "properties": {
+                "choice": {
+                  "enum": [
+                    "GUILTY",
+                    "NOT_GUILTY",
+                  ],
+                  "type": "string",
+                },
+                "lineText": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "choice",
+                "lineText",
+              ],
+              "type": "object",
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array",
+          },
+          "verdictReactions": {
+            "properties": {
+              "GUILTY": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+              "NOT_GUILTY": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+            },
+            "required": [
+              "GUILTY",
+              "NOT_GUILTY",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "classification",
+          "elements",
+          "mandatoryMinimums",
+          "maximumPenalties",
+          "verdictReactions",
+          "verdictOptions",
+        ],
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+    "closingArguments": {
+      "properties": {
+        "defense": {
+          "description": "The defense's closing argument, in character.",
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string",
+        },
+        "exhibitPoints": {
+          "items": {
+            "properties": {
+              "evidenceId": {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string",
+              },
+              "ifAdmitted": {
+                "properties": {
+                  "defense": {
+                    "description": "What the defense adds about this exhibit when it was admitted; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "prosecution": {
+                    "description": "What the People add about this exhibit when it was admitted; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "prosecution",
+                  "defense",
+                ],
+                "type": "object",
+              },
+              "ifExcluded": {
+                "properties": {
+                  "defense": {
+                    "description": "What the defense adds about this exhibit when it was excluded; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "prosecution": {
+                    "description": "What the People add about this exhibit when it was excluded; null to add nothing.",
+                    "maxLength": 400,
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "prosecution",
+                  "defense",
+                ],
+                "type": "object",
+              },
+            },
+            "required": [
+              "evidenceId",
+              "ifAdmitted",
+              "ifExcluded",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "prosecution": {
+          "description": "The People's closing argument, in character.",
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "prosecution",
+        "defense",
+      ],
+      "type": "object",
+    },
+    "defendant": {
+      "properties": {
+        "age": {
+          "maximum": 120,
+          "minimum": 18,
+          "type": "integer",
+        },
+        "demographics": {
+          "properties": {
+            "children": {
+              "maximum": 30,
+              "minimum": 0,
+              "type": "integer",
+            },
+            "educationLevel": {
+              "enum": [
+                "SOME_HIGH_SCHOOL",
+                "HIGH_SCHOOL",
+                "COLLEGE",
+                "ADVANCED_DEGREE",
+              ],
+              "type": "string",
+            },
+            "employmentStatus": {
+              "enum": [
+                "EMPLOYED",
+                "UNEMPLOYED",
+                "STUDENT",
+                "RETIRED",
+              ],
+              "type": "string",
+            },
+            "relationshipStatus": {
+              "enum": [
+                "SINGLE",
+                "MARRIED",
+                "DIVORCED",
+                "WIDOWED",
+              ],
+              "type": "string",
+            },
+            "substanceAbuseHistory": {
+              "items": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "ACTIVE",
+                      "IN_RECOVERY",
+                      "NONE_REPORTED",
+                    ],
+                    "type": "string",
+                  },
+                  "substance": {
+                    "maxLength": 100,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "substance",
+                  "status",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "relationshipStatus",
+            "children",
+            "employmentStatus",
+            "educationLevel",
+            "substanceAbuseHistory",
+          ],
+          "type": "object",
+        },
+        "firstName": {
+          "maxLength": 50,
+          "type": "string",
+        },
+        "lastName": {
+          "maxLength": 50,
+          "type": "string",
+        },
+        "oceanTraits": {
+          "properties": {
+            "agreeableness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "conscientiousness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "extraversion": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "neuroticism": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "openness": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          "required": [
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "neuroticism",
+          ],
+          "type": "object",
+        },
+        "pastConvictions": {
+          "items": {
+            "properties": {
+              "chargeName": {
+                "maxLength": 200,
+                "type": "string",
+              },
+              "sentences": {
+                "items": {
+                  "properties": {
+                    "amount": {
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "conditions": {
+                      "items": {
+                        "enum": [
+                          "SUBSTANCE_ABUSE_TREATMENT",
+                          "ANGER_MANAGEMENT",
+                          "RANDOM_DRUG_TESTING",
+                          "NO_CONTACT_ORDER",
+                          "ELECTRONIC_MONITORING",
+                          "COMMUNITY_SERVICE",
+                        ],
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                    "type": {
+                      "enum": [
+                        "PRISON",
+                        "JAIL",
+                        "FINE",
+                        "COMMUNITY_SERVICE",
+                        "PROBATION",
+                      ],
+                      "type": "string",
+                    },
+                    "unit": {
+                      "enum": [
+                        "YEARS",
+                        "MONTHS",
+                        "DAYS",
+                        "DOLLARS",
+                        "HOURS",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "unit",
+                    "amount",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "year": {
+                "maximum": 2026,
+                "minimum": 1900,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "chargeName",
+              "year",
+              "sentences",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "firstName",
+        "lastName",
+        "age",
+        "demographics",
+        "pastConvictions",
+        "oceanTraits",
+      ],
+      "type": "object",
+    },
+    "environment": {
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "type": "string",
+        },
+        "establishedFacts": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "type": "array",
+        },
+        "interrogationLocation": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+        },
+        "locationType": {
+          "enum": [
+            "RESIDENTIAL",
+            "COMMERCIAL",
+            "PUBLIC_SPACE",
+            "VEHICLE",
+            "DIGITAL",
+          ],
+          "type": "string",
+        },
+        "timeOfDay": {
+          "enum": [
+            "MORNING",
+            "AFTERNOON",
+            "EVENING",
+            "NIGHT",
+          ],
+          "type": "string",
+        },
+        "weather": {
+          "enum": [
+            "CLEAR",
+            "RAIN",
+            "FOG",
+            "SNOW",
+            "N/A",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "locationType",
+        "timeOfDay",
+        "weather",
+        "description",
+      ],
+      "type": "object",
+    },
+    "evidence": {
+      "items": {
+        "properties": {
+          "defenseObjection": {
+            "description": "Defense counsel's in-character objection to this exhibit; null when the defense waives objection.",
+            "maxLength": 600,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "description": {
+            "description": "A purely factual, objective description of the item.",
+            "maxLength": 600,
+            "type": "string",
+          },
+          "disclosureSummary": {
+            "description": "Counsel's brief, unverified summary of the item as disclosed in discovery, spoken to the court.",
+            "maxLength": 400,
+            "minLength": 1,
+            "type": "string",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "interrogation": {
+            "properties": {
+              "challengeGround": {
+                "description": "Echo of the derived profile: the ground on which the defense moves to suppress the tape.",
+                "enum": [
+                  "MIRANDA",
+                  "VOLUNTARINESS",
+                ],
+                "type": "string",
+              },
+              "detectiveName": {
+                "description": "The interviewing detective — must match the case's INVESTIGATOR witness when one exists.",
+                "maxLength": 101,
+                "minLength": 1,
+                "type": "string",
+              },
+              "lines": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "DETECTIVE",
+                        "DEFENDANT",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 400,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 24,
+                "minItems": 4,
+                "type": "array",
+              },
+              "outcome": {
+                "description": "Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome.",
+                "enum": [
+                  "FULL_CONFESSION",
+                  "PARTIAL_ADMISSION",
+                  "DENIAL",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "detectiveName",
+              "outcome",
+              "challengeGround",
+              "lines",
+            ],
+            "type": "object",
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 3,
+            "type": "string",
+          },
+          "objectionRisk": {
+            "description": "Likelihood of opposing counsel objecting.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+            ],
+            "type": "string",
+          },
+          "prosecutionArgument": {
+            "description": "The prosecutor's in-character offer of this exhibit to the court.",
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string",
+          },
+          "relevanceScore": {
+            "description": "How much this exhibit matters to the case, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "rulingOptions": {
+            "items": {
+              "properties": {
+                "choice": {
+                  "enum": [
+                    "ADMITTED",
+                    "EXCLUDED",
+                  ],
+                  "type": "string",
+                },
+                "lineText": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "choice",
+                "lineText",
+              ],
+              "type": "object",
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array",
+          },
+          "rulingReactions": {
+            "properties": {
+              "ADMITTED": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+              "EXCLUDED": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+            },
+            "required": [
+              "ADMITTED",
+              "EXCLUDED",
+            ],
+            "type": "object",
+          },
+          "targetElementId": {
+            "description": "The ID of the StatuteElement this evidence is meant to prove.",
+            "maxLength": 40,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "type": {
+            "enum": [
+              "DOCUMENTARY",
+              "PHYSICAL",
+              "DIGITAL",
+              "FORENSIC",
+              "CIRCUMSTANTIAL",
+              "INTERROGATION",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "description",
+          "disclosureSummary",
+          "relevanceScore",
+          "objectionRisk",
+          "targetElementId",
+          "prosecutionArgument",
+          "defenseObjection",
+          "rulingReactions",
+          "rulingOptions",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "statementOfFacts": {
+      "description": "The People's statement of the case as spoken to the court on the record, in character.",
+      "maxLength": 1500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "statuteContexts": {
+      "items": {
+        "maxLength": 500,
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+    "summary": {
+      "description": "A dry, allegations-only docket synopsis for the case file — no narrative color, no party's framing. The People's version of events belongs in statementOfFacts.",
+      "maxLength": 1500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "witnesses": {
+      "items": {
+        "properties": {
+          "bias": {
+            "enum": [
+              "PROSECUTION",
+              "DEFENSE",
+              "NEUTRAL",
+            ],
+            "type": "string",
+          },
+          "credibilityScore": {
+            "description": "How credible this witness is, as a whole number from 1 (least) to 10 (most). Never a 0-1 probability.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "crossExamination": {
+            "description": "The witness's spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel's questions. Null when opposing counsel declines to cross.",
+            "maxLength": 1200,
+            "minLength": 1,
+            "nullable": true,
+            "type": "string",
+          },
+          "directExamination": {
+            "description": "The witness's spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel's questions.",
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "name": {
+            "description": "Full fictional name. Do not include race or protected demographics.",
+            "maxLength": 101,
+            "type": "string",
+          },
+          "role": {
+            "enum": [
+              "EYEWITNESS",
+              "EXPERT",
+              "CHARACTER",
+              "VICTIM",
+              "INVESTIGATOR",
+            ],
+            "type": "string",
+          },
+          "statement": {
+            "description": "A summary of their expected testimony.",
+            "maxLength": 1000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "bias",
+          "statement",
+          "credibilityScore",
+          "directExamination",
+          "crossExamination",
+        ],
+        "type": "object",
+      },
+      "minItems": 2,
+      "type": "array",
+    },
+  },
+  "required": [
+    "caseId",
+    "defendant",
+    "environment",
+    "charges",
+    "statuteContexts",
+    "witnesses",
+    "evidence",
+    "summary",
+    "statementOfFacts",
+    "closingArguments",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > InterrogationGen 1`] = `
+{
+  "properties": {
+    "interrogation": {
+      "properties": {
+        "challengeGround": {
+          "description": "Echo of the derived profile: the ground on which the defense moves to suppress the tape.",
+          "enum": [
+            "MIRANDA",
+            "VOLUNTARINESS",
+          ],
+          "type": "string",
+        },
+        "detectiveName": {
+          "description": "The interviewing detective — must match the case's INVESTIGATOR witness when one exists.",
+          "maxLength": 101,
+          "minLength": 1,
+          "type": "string",
+        },
+        "lines": {
+          "items": {
+            "properties": {
+              "speaker": {
+                "enum": [
+                  "DETECTIVE",
+                  "DEFENDANT",
+                ],
+                "type": "string",
+              },
+              "text": {
+                "maxLength": 400,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "speaker",
+              "text",
+            ],
+            "type": "object",
+          },
+          "maxItems": 24,
+          "minItems": 4,
+          "type": "array",
+        },
+        "outcome": {
+          "description": "Echo of the derived interrogation profile; the transcript must dramatize exactly this outcome.",
+          "enum": [
+            "FULL_CONFESSION",
+            "PARTIAL_ADMISSION",
+            "DENIAL",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "detectiveName",
+        "outcome",
+        "challengeGround",
+        "lines",
+      ],
+      "type": "object",
+    },
+  },
+  "required": [
+    "interrogation",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > PleaNarrative.offer 1`] = `
+{
+  "properties": {
+    "allocution": {
+      "maxLength": 800,
+      "minLength": 1,
+      "type": "string",
+    },
+    "defenseRationale": {
+      "description": "Defense counsel's plea position as spoken to the court on the record — never privileged advice to the client.",
+      "maxLength": 1000,
+      "minLength": 1,
+      "type": "string",
+    },
+    "pleaReactions": {
+      "properties": {
+        "ACCEPT": {
+          "items": {
+            "properties": {
+              "speaker": {
+                "enum": [
+                  "PROSECUTION",
+                  "DEFENSE",
+                  "CLERK",
+                ],
+                "type": "string",
+              },
+              "text": {
+                "maxLength": 600,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "speaker",
+              "text",
+            ],
+            "type": "object",
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array",
+        },
+        "REJECT": {
+          "items": {
+            "properties": {
+              "speaker": {
+                "enum": [
+                  "PROSECUTION",
+                  "DEFENSE",
+                  "CLERK",
+                ],
+                "type": "string",
+              },
+              "text": {
+                "maxLength": 600,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "speaker",
+              "text",
+            ],
+            "type": "object",
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array",
+        },
+      },
+      "required": [
+        "ACCEPT",
+        "REJECT",
+      ],
+      "type": "object",
+    },
+    "pleaRulingOptions": {
+      "items": {
+        "properties": {
+          "choice": {
+            "enum": [
+              "ACCEPT",
+              "REJECT",
+            ],
+            "type": "string",
+          },
+          "lineText": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "choice",
+          "lineText",
+        ],
+        "type": "object",
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "type": "array",
+    },
+    "prosecutionRationale": {
+      "description": "The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation.",
+      "maxLength": 1000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "prosecutionRationale",
+    "defenseRationale",
+    "allocution",
+    "pleaReactions",
+    "pleaRulingOptions",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > PleaNarrative.weak 1`] = `
+{
+  "properties": {
+    "prosecutionRationale": {
+      "description": "The People's plea position as spoken to the court on the record — never privileged strategy or internal deliberation.",
+      "maxLength": 1000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "prosecutionRationale",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > StatuteSelection 1`] = `
+{
+  "properties": {
+    "charges": {
+      "items": {
+        "properties": {
+          "classification": {
+            "enum": [
+              "FELONY",
+              "MISDEMEANOR",
+              "INFRACTION",
+            ],
+            "type": "string",
+          },
+          "elements": {
+            "items": {
+              "properties": {
+                "description": {
+                  "description": "The specific legal requirement or element of the crime that must be proven.",
+                  "maxLength": 500,
+                  "type": "string",
+                },
+                "id": {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "description",
+              ],
+              "type": "object",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "mandatoryMinimums": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "conditions": {
+                  "items": {
+                    "enum": [
+                      "SUBSTANCE_ABUSE_TREATMENT",
+                      "ANGER_MANAGEMENT",
+                      "RANDOM_DRUG_TESTING",
+                      "NO_CONTACT_ORDER",
+                      "ELECTRONIC_MONITORING",
+                      "COMMUNITY_SERVICE",
+                    ],
+                    "type": "string",
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                },
+                "type": {
+                  "enum": [
+                    "PRISON",
+                    "JAIL",
+                    "FINE",
+                    "COMMUNITY_SERVICE",
+                    "PROBATION",
+                  ],
+                  "type": "string",
+                },
+                "unit": {
+                  "enum": [
+                    "YEARS",
+                    "MONTHS",
+                    "DAYS",
+                    "DOLLARS",
+                    "HOURS",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "type",
+                "unit",
+                "amount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "maximumPenalties": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "conditions": {
+                  "items": {
+                    "enum": [
+                      "SUBSTANCE_ABUSE_TREATMENT",
+                      "ANGER_MANAGEMENT",
+                      "RANDOM_DRUG_TESTING",
+                      "NO_CONTACT_ORDER",
+                      "ELECTRONIC_MONITORING",
+                      "COMMUNITY_SERVICE",
+                    ],
+                    "type": "string",
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                },
+                "type": {
+                  "enum": [
+                    "PRISON",
+                    "JAIL",
+                    "FINE",
+                    "COMMUNITY_SERVICE",
+                    "PROBATION",
+                  ],
+                  "type": "string",
+                },
+                "unit": {
+                  "enum": [
+                    "YEARS",
+                    "MONTHS",
+                    "DAYS",
+                    "DOLLARS",
+                    "HOURS",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "type",
+                "unit",
+                "amount",
+              ],
+              "type": "object",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "classification",
+          "elements",
+          "mandatoryMinimums",
+          "maximumPenalties",
+        ],
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+    "statuteContexts": {
+      "items": {
+        "maxLength": 500,
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "charges",
+    "statuteContexts",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`compiled stage response schemas > VerdictVoice 1`] = `
+{
+  "properties": {
+    "charges": {
+      "items": {
+        "properties": {
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string",
+          },
+          "verdictOptions": {
+            "items": {
+              "properties": {
+                "choice": {
+                  "enum": [
+                    "GUILTY",
+                    "NOT_GUILTY",
+                  ],
+                  "type": "string",
+                },
+                "lineText": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "choice",
+                "lineText",
+              ],
+              "type": "object",
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array",
+          },
+          "verdictReactions": {
+            "properties": {
+              "GUILTY": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+              "NOT_GUILTY": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "enum": [
+                        "PROSECUTION",
+                        "DEFENSE",
+                        "CLERK",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 600,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "speaker",
+                    "text",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array",
+              },
+            },
+            "required": [
+              "GUILTY",
+              "NOT_GUILTY",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "id",
+          "verdictReactions",
+          "verdictOptions",
+        ],
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "charges",
+  ],
+  "type": "object",
+}
+`;
