@@ -101,7 +101,7 @@ It is free and deterministic, and it reads **fixed demo data**. The separate `qa
 - Security vault: `src/store/useSecurityStore.ts`; view state: `src/store/useUIStore.ts`
 - Demo docket (five cases + registry): `src/lib/demoCases/`
 - Case source seam (demo vs. LLM pipeline — both implemented): `src/lib/caseSource.ts`
-- LLM generation pipeline: `src/lib/llm/` — `gameService.ts` (orchestration), `stages.ts` (one function per stage + its Gemini `responseSchema`), `geminiClient.ts` (transport), `modelSelection.ts` (runtime model discovery), `reconcileCase.ts` (deterministic cross-stage id repair)
+- LLM generation pipeline: `src/lib/llm/` — `gameService.ts` (orchestration), `stages.ts` (one function per stage + its Zod gate), `geminiSchema.ts` (compiles each gate into the Gemini `responseSchema`), `geminiClient.ts` (transport), `modelSelection.ts` (runtime model discovery), `reconcileCase.ts` (deterministic cross-stage id repair)
 - Deterministic derivations (plea, sentencing, modifiers): `src/lib/pleaAssessment.ts`, `src/lib/sentencingExposure.ts`, `src/lib/sentenceBounds.ts`
 - Courtroom script projection (beats + decisions): `src/lib/courtroomScript.ts`
 - End-of-game result: `src/lib/resultGenerator.ts` (assembly), `src/lib/recordJudgment.ts` (wiring), `src/lib/resultArchive.ts` (persistence), `src/lib/resultSummary.ts` (read-side wording), `src/components/result/`

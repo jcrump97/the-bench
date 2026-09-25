@@ -24,6 +24,35 @@ the PRISON/JAIL collapse. One modelling gap is deliberately left open.
       both options stay reachable. Until then PRISON governs — the safe
       direction — and `sentencingExposure.test.ts` guards the invariant so the
       shortcut cannot be reintroduced by accident.
+- **California law check (2026-09-25), for S1/S2 together.** The author's
+  instinct — "under a year is jail, not both" — holds at the bottom of the
+  range and matches the aggregation rule, but custody *location* follows the
+  offense, not the length:
+  - A misdemeanor is county jail, capped at **364 days** (PC 18.5).
+  - A felony is state prison — default triad **16 months / 2 / 3 years**
+    (PC 18), so a prison term is never under 16 months — *unless* it is a
+    realigned felony under **PC 1170(h)** (non-serious, non-violent,
+    non-registrable), which is served in **county jail at felony length**,
+    often as a split sentence ending in mandatory supervision. A prior
+    serious/violent felony or a registrable offense sends it back to prison
+    (1170(h)(3)).
+  - A felony *probation* grant may carry county jail as a condition
+    (PC 1203.1).
+  - A wobbler (PC 17(b)) becomes a misdemeanor when the court imposes a
+    non-prison sentence or declares it one — which is exactly the election
+    S1 is missing.
+  - Aggregation: if any count draws prison, the whole aggregate term is
+    served in prison, even counts that alone would be 1170(h) jail (PC
+    1170.1(a)). One custody type per case is correct.
+  - Jail also holds pretrial detainees; those days are credited against the
+    sentence (PC 2900.5).
+  **Design implication:** the court should not *pick* PRISON or JAIL at
+  all. It picks a term (in days, the finest unit — which is S2's fix), and
+  the type is derived: term ≤ 364 days on a wobbler/misdemeanor → JAIL;
+  a felony term → PRISON unless every count is 1170(h)-eligible and no
+  disqualifying prior exists, in which case JAIL. That needs one new charge
+  field (1170(h) eligibility) and makes the prison/jail choice fall out of
+  law instead of the picker.
 - [ ] **S2 — a converted minimum keeps its own unit, so a negotiated plea
       sentence can be unimposable.** Pre-existing on `main` (predates the
       verdict-scoping and clamp fixes; neither causes it). The JAIL→PRISON
@@ -77,7 +106,7 @@ instance and is now closed; the rest cluster in that same gap.
       `git clone`. *(Fixed: `verify.yml` runs lint + unit tests + build + E2E on
       every PR, `deploy.yml` calls it and ships only the artifact the E2E passed
       against, Node pinned via `.nvmrc` + `engines`.)*
-- [ ] **A2 — generate the Gemini `responseSchema` from Zod instead of
+- [x] **A2 — generate the Gemini `responseSchema` from Zod instead of
       transcribing it by hand.** ~500 lines of `GeminiSchema` in `stages.ts`
       mirror the Zod schemas, and `CLAUDE.md` concedes each stage "transcribes
       its Zod caps onto the matching field". R3 and R5 are both instances, so
@@ -90,7 +119,18 @@ instance and is now closed; the rest cluster in that same gap.
       R3 and R5, and answers R11's drift-guard concern structurally.
       **Requires a `npm run test:live` sweep either side** — this is a
       `responseSchema` change and C5a is the precedent for measuring one.
-- [ ] **A3 — stale in-code comments.** `caseSource.ts:33-36` still reads "Until
+      *(Done: `src/lib/llm/geminiSchema.ts`. Measured before at 5/5, 1 failed
+      attempt. The first compiled version went **0/5** — every run a bare 400
+      at EvidenceGen. Live bisection pinned it on `evidence.minItems` alone:
+      the accurate translation of `interrogation` (optional, not nullable)
+      no longer tripped the "nullable nested object" carve-out, and the API
+      rejects `minItems` above *any* absentable nested object, not only a
+      nullable one. The carve-out now says so, with a unit test for both
+      forms. The same probe found R13 below. A new live test
+      (`responseSchemas.live.test.ts`) sends every compiled stage schema to
+      the API so neither can hide again, and `geminiSchema.test.ts` snapshots
+      what the model is sent. Measured after: **5/5, zero failed attempts**.)*
+- [ ] **A3 — stale in-code comments.** *(`caseSource.ts` half fixed; `gameService.ts:19` "five-stage" remains.)* `caseSource.ts:33-36` still reads "Until
       then, `demoCaseSource` is the only implementation" and carries `[LLM-FILL]`
       tags after GameService shipped; `gameService.ts:19` says "five-stage"
       above a six-stage list, and the pipeline is seven LLM stages now that
@@ -107,7 +147,9 @@ instance and is now closed; the rest cluster in that same gap.
       `src/components/actionbar/`. (d) The `minItems`/nullable-nested comment is
       verbatim at `stages.ts:774` and `:936`, and the second copy says
       "witnesses below" when `witnesses` is above it. (e) Orphaned comment at
-      `stages.ts:494-500`, attached to no code. Distinct from the
+      `stages.ts:494-500`, attached to no code. *((b), (d), (e) closed by A2:
+      `requireChoiceCoverage` is gone, and the hand-written schemas the two
+      comments were attached to no longer exist.)* Distinct from the
       `LedgerEntryRow` `<li>`-wrapper duplication already tracked below.
 - [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes seven
       strictly sequential LLM round trips where the dependency graph allows five
@@ -445,7 +487,7 @@ the session transcript; this is the consolidated action list.
 
 **Minor**
 
-- [ ] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
+- [x] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
       that their Zod counterparts enforce.** `crossExamination`
       (`stages.ts:381` vs `gameSchemas.ts:290`), `defenseObjection`
       (`stages.ts:415` vs `gameSchemas.ts:310`), and `directExamination`
@@ -460,12 +502,14 @@ the session transcript; this is the consolidated action list.
       two schema languages transcribed by hand — so patching individual
       fields keeps the generator of these bugs intact. See A2 for the
       structural fix, which closes this item as a side effect.
+      *(Closed by A2; the live probe confirmed the API accepts `minLength`
+      on a nullable string.)*
 - [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
       /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
       name passes both gates and renders as an empty speaker line in
       `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
       `.min(1)` in both layers for all three fields.
-- [ ] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
+- [x] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
       fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
       `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
       schema but fails the downstream `CaseSchema`/`PleaNarrativeSchema`
@@ -488,6 +532,12 @@ the session transcript; this is the consolidated action list.
       `ChargeSchema.pick({ id: true, verdictReactions: true,
       verdictOptions: true })`) instead of re-declaring their fields, which
       is how the refinement was dropped in the first place. See A2.
+      *(Closed by A2, the minimal way: both stages derive their schemas from
+      `ChargeVoiceShape` / `PleaNarrativeFieldsSchema`, and the unguarded
+      re-parse is gone. A third instance turned up on the way —
+      `CaseFinalizationFieldsSchema` re-declared the closings without `noJury`
+      — and is derived from `CaseShape` now. Regression test in
+      `stages.test.ts`.)*
 - [x] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
       VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
       failure carries a `[StageName]` prefix; this one reports as
@@ -528,9 +578,24 @@ the session transcript; this is the consolidated action list.
       `Charge extends ChargeCore` compile assertion, or a test that
       `ChargeSchema` parses every `ChargeCoreSchema`-valid input plus the
       voiced fields.
-- [ ] **R12 — `CHARGE_GEMINI_SCHEMA` is now repair-only.** `stages.ts:228-
+- [x] **R12 — `CHARGE_GEMINI_SCHEMA` is now repair-only.** *(Moot: A2 deleted it.)* `stages.ts:228-
       244` survives only inside `FULL_CASE_GEMINI_SCHEMA`. A comment noting
       "repair-round only" would prevent someone simplifying it away.
+
+- [ ] **R13 — the repair round's response schema is rejected by the live
+      API, and always has been.** Found by A2's live probe. The full-case
+      schema `finalizeCasePayload` sends when deterministic repair is not
+      enough returns a bare 400 — with the *old hand-written* schema too, so
+      this predates A2. No sweep ever saw it: `reconcileCrossStageIds` fixes
+      the common failures first, so the repair call is rarely reached, and
+      when it is, the player gets a Mistrial. Dropping any one of `defendant`,
+      `charges` or `evidence` makes it acceptable, so it reads as a
+      size/complexity limit, not a bad keyword. What can still reach it after
+      the stage gates tightened is essentially `addDefendantNameIssues` (a
+      wrong "defendant <Name>" in any voiced field). Likely fix: repair only
+      the sections the issues point at, each against its own (small) schema,
+      rather than regenerating the case. `responseSchemas.live.test.ts`
+      carries it as `it.fails` so the fix announces itself.
 
 **Open questions for the author**
 
