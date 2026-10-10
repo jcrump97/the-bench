@@ -1,5 +1,91 @@
 # TODO
 
+## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — ACTIVE)
+
+**Goal.** Bring the game to a finished state that is enjoyable for three very
+different players without bending the architecture's mandate (*LLM provides
+color, deterministic code provides structure*, every trust boundary Zod-gated):
+
+| Player | What makes it enjoyable | What would ruin it |
+|---|---|---|
+| **Attorney** | Procedure that tracks real California practice; the law cited where it is modeled; honesty about where it is simplified | A confident legal error, or a simplification passed off as the real rule |
+| **AI architect** | Seeing the pipeline work: which stages are model calls, which are deterministic, how long each took, how it fails | A spinner that hides all of it; a key leaked into URLs; a hung request with no way out |
+| **High schooler** | Knowing where they are (which act, why it matters) and what the jargon means without leaving the game | Walls of unexplained legalese; no sense of progress |
+
+**Plan review (before any code).** Checked against the project's own rules and
+the open items above, the first draft had five deficiencies, each corrected
+below rather than discovered in review:
+
+1. *It reached for dependencies* (testing-library for the new UI). The stack is
+   locked and Tier 2/3 still await approval — new UI is covered by pure-function
+   unit tests plus the existing E2E driver, which is extended rather than
+   replaced.
+2. *It changed the live pipeline without a way to measure it.* No
+   `GEMINI_API_KEY` is available to this session, and the house rule is to
+   probe every `responseSchema`/`generationConfig` change live. So **A2** (the
+   Zod→Gemini schema compiler) stays deferred; schema edits are limited to
+   `minLength: 1`, a keyword C5 already verified live on ~60 fields; and stage
+   parallelization (**A5a**) is flagged as needing a `test:live` sweep before
+   it is trusted under free-tier rate limits.
+3. *Title cards as courtroom beats* would put an omniscient narrator in the
+   record. They are UI chrome over the record, never a beat, non-blocking
+   (the E2E driver and impatient players click straight through), and honor
+   `prefers-reduced-motion`.
+4. *Cancellation threaded through every stage signature* would churn ~50 call
+   sites for little gain. Split instead: the transport bounds a hung request
+   with a per-attempt timeout, and the orchestrator checks a cancel signal
+   between stages; the UI drops a cancelled run's late result.
+5. *Decisions that belong to the human* (S1 custody-election UI, S2 rounding
+   direction, A7a reject-vs-vacate) were scheduled as if settled. They stay
+   open with a recommendation, not an implementation.
+
+### Phase 1 — trust & correctness (every audience, architect first)
+
+- [ ] **P1 — A8:** the API key travels in the `x-goog-api-key` header, never the URL.
+- [ ] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
+      `addChoiceCoverageIssues` / `PleaNarrativeSchema`, so a jury reference in
+      plea or verdict lines is a retried repair, not an unretried Mistrial.
+- [ ] **P3 — R3/R4:** names and nullable prose fields require `minLength: 1`
+      in both schema languages.
+- [ ] **P4 — A5b:** per-attempt request timeout in the transport.
+- [ ] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline.
+
+### Phase 2 — the pipeline, made visible (architect)
+
+- [ ] **P6 — progress + cancel seam:** `generateCase({ onProgress, signal })`
+      reports each stage and each deterministic derivation as it runs.
+- [ ] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
+- [ ] **P8 — generation progress UI:** a live stage checklist (model call vs.
+      computed, elapsed time), with a Cancel that returns to the docket.
+- [ ] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
+
+### Phase 3 — the courtroom, made legible (high schooler + attorney)
+
+- [ ] **P10 — act title cards** (open since 2026-07-12): UI chrome on each
+      phase transition saying what the act decides.
+- [ ] **P11 — the Bench Book:** an always-available reference — plain-English
+      definitions of every term the record uses, each with the California
+      authority it rests on, plus "how this court is modeled": what is real
+      procedure, what is simplified (S1, bench trial only, exposure collapse),
+      and what the model writes versus what code decides.
+
+### Phase 4 — documentation
+
+- [ ] **P12 — docs sync:** README (who it is for, a readable status, both
+      Mermaid diagrams updated for parallel stages, progress and the lazy
+      chunk), CLAUDE.md and AGENTS.md together, this plan checked off.
+
+### Deliberately not in this plan
+
+- **A2** — needs a live sweep either side (see review point 2).
+- **S1 / S2 / A7a** — design decisions for the author. Recommendations:
+  S1, a per-count `custodyElection` field defaulting to PRISON plus a picker
+  toggle; S2, exposure kept in day-equivalents with the picker presenting the
+  finest unit; A7a, reject the single write and keep the game, reserving
+  `ERROR_STATE` for case hydration.
+- **Tier 2/3 test dependencies** — still awaiting approval.
+
+
 ## Sentencing exposure follow-ups (code review, 2026-08-07 — OPEN)
 
 Opened alongside the `fix/sentencing-exposure-and-stage-context` branch, which
