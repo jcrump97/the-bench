@@ -66,26 +66,37 @@ export function createGameService(apiKey: string): CaseSource {
       const model = await step('MODEL_SELECTION', () => getOrSelectModel(apiKey));
 
       const { charges, statuteContexts } = await step('STATUTES', () => runStatuteSelection(apiKey, model));
-      const environment = await step('SCENE', () => runEnvironmentGen(apiKey, model, charges));
-      const defendant = await step('DEFENDANT', () => runCharacterGen(apiKey, model, charges));
+      // Two pairs of stages share no inputs with each other, so each pair runs
+      // concurrently: the scene and the defendant both need only the charges,
+      // and the verdict voice needs only the charges and the defendant — not
+      // the interview or the evidence. Seven sequential round trips become
+      // five on the critical path. Every stage still validates independently;
+      // if one fails, the run fails, and its sibling's result is discarded.
+      const [environment, defendant] = await Promise.all([
+        step('SCENE', () => runEnvironmentGen(apiKey, model, charges)),
+        step('DEFENDANT', () => runCharacterGen(apiKey, model, charges)),
+      ]);
 
-      const interrogationProfile = await step('INTERROGATION_PROFILE', () => deriveInterrogationProfile(defendant));
-      // No tape exists when the defendant invoked counsel, so there is nothing
-      // to write: the step is reported as skipped rather than run.
-      let interrogation: Interrogation | null = null;
-      if (interrogationProfile.outcome === 'INVOKED_COUNSEL') {
-        skip('INTERROGATION');
-      } else {
-        interrogation = await step('INTERROGATION', () =>
-          runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile),
-        );
-      }
+      const writeEvidence = async () => {
+        const interrogationProfile = await step('INTERROGATION_PROFILE', () => deriveInterrogationProfile(defendant));
+        // No tape exists when the defendant invoked counsel, so there is
+        // nothing to write: the step is reported as skipped rather than run.
+        let interrogation: Interrogation | null = null;
+        if (interrogationProfile.outcome === 'INVOKED_COUNSEL') {
+          skip('INTERROGATION');
+        } else {
+          interrogation = await step('INTERROGATION', () =>
+            runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile),
+          );
+        }
+        return step('EVIDENCE', () => runEvidenceGen(apiKey, model, charges, environment, defendant, interrogation));
+      };
 
-      const { evidence, witnesses } = await step('EVIDENCE', () =>
-        runEvidenceGen(apiKey, model, charges, environment, defendant, interrogation),
-      );
+      const [{ evidence, witnesses }, chargeVoices] = await Promise.all([
+        writeEvidence(),
+        step('VERDICT_VOICE', () => runVerdictVoice(apiKey, model, charges, defendant)),
+      ]);
 
-      const chargeVoices = await step('VERDICT_VOICE', () => runVerdictVoice(apiKey, model, charges, defendant));
       const chargesWithVoice: Charge[] = charges.map((charge) => {
         const voice = chargeVoices.find((c) => c.id === charge.id);
         // runVerdictVoice's schema now requires an entry for every requested

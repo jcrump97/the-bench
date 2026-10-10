@@ -117,21 +117,59 @@ describe('createGameService().generateCase', () => {
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
   });
 
-  it('reports every step as it starts and finishes, in pipeline order', async () => {
+  it('reports every step as it starts and finishes', async () => {
     const events: string[] = [];
     await createGameService(API_KEY).generateCase({
       onProgress: (event) => events.push(`${event.stepId}:${event.status}`),
     });
 
     const finished = events.filter((e) => e.endsWith(':DONE')).map((e) => e.split(':')[0]);
-    expect(finished).toEqual([
-      'MODEL_SELECTION', 'STATUTES', 'SCENE', 'DEFENDANT', 'INTERROGATION_PROFILE', 'INTERROGATION',
-      'EVIDENCE', 'VERDICT_VOICE', 'FINALIZE', 'PLEA_STRUCTURE', 'PLEA_NARRATIVE',
+    expect([...finished].sort()).toEqual([
+      'DEFENDANT', 'EVIDENCE', 'FINALIZE', 'INTERROGATION', 'INTERROGATION_PROFILE', 'MODEL_SELECTION',
+      'PLEA_NARRATIVE', 'PLEA_STRUCTURE', 'SCENE', 'STATUTES', 'VERDICT_VOICE',
     ]);
-    // Every step that finished was first reported as started.
     for (const step of finished) {
       expect(events.indexOf(`${step}:STARTED`)).toBeLessThan(events.indexOf(`${step}:DONE`));
     }
+    // The dependency edges hold whatever runs concurrently.
+    const doneAt = (step: string) => events.indexOf(`${step}:DONE`);
+    const startedAt = (step: string) => events.indexOf(`${step}:STARTED`);
+    expect(doneAt('STATUTES')).toBeLessThan(startedAt('SCENE'));
+    expect(doneAt('SCENE')).toBeLessThan(startedAt('INTERROGATION'));
+    expect(doneAt('DEFENDANT')).toBeLessThan(startedAt('VERDICT_VOICE'));
+    expect(doneAt('INTERROGATION')).toBeLessThan(startedAt('EVIDENCE'));
+    expect(Math.max(doneAt('EVIDENCE'), doneAt('VERDICT_VOICE'))).toBeLessThan(startedAt('FINALIZE'));
+    expect(doneAt('PLEA_STRUCTURE')).toBeLessThan(startedAt('PLEA_NARRATIVE'));
+  });
+
+  // A5: stages that share no inputs overlap rather than queue. Proved with
+  // stages that cannot finish until released: if the pipeline awaited them
+  // one at a time, the second would never start while the first was held.
+  it('runs the scene and the defendant concurrently', async () => {
+    let releaseScene!: () => void;
+    vi.mocked(runEnvironmentGen).mockImplementation(
+      () => new Promise((resolve) => { releaseScene = () => resolve(validCase.environment); }),
+    );
+    const run = createGameService(API_KEY).generateCase();
+    await vi.waitFor(() => expect(runCharacterGen).toHaveBeenCalled());
+    releaseScene();
+    await run;
+  });
+
+  it('runs the verdict voice concurrently with the evidence', async () => {
+    let releaseEvidence!: () => void;
+    vi.mocked(runEvidenceGen).mockImplementation(
+      () => new Promise((resolve) => {
+        releaseEvidence = () => resolve({ evidence: validCase.evidence, witnesses: validCase.witnesses });
+      }),
+    );
+    const run = createGameService(API_KEY).generateCase();
+    await vi.waitFor(() => {
+      expect(runEvidenceGen).toHaveBeenCalled();
+      expect(runVerdictVoice).toHaveBeenCalled();
+    });
+    releaseEvidence();
+    await run;
   });
 
   it('skips the interview recording, without a call, when the defendant invoked counsel', async () => {

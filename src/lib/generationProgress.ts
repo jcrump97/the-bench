@@ -33,7 +33,9 @@ export interface GenerationStep {
   detail: string;
 }
 
-// In the order the pipeline starts them.
+// In the order the pipeline starts them. Steps that run concurrently in
+// gameService.ts (scene ∥ defendant; verdict voice ∥ interview → evidence)
+// simply show as running at the same time.
 export const GENERATION_STEPS: readonly GenerationStep[] = [
   { id: 'MODEL_SELECTION', kind: 'MODEL', label: 'Model selection', detail: 'Ask Gemini which models this key can use, and pick the cheapest capable one' },
   { id: 'STATUTES', kind: 'MODEL', label: 'Statute selection', detail: 'The charges, their elements, and each statutory sentencing range' },

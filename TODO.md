@@ -60,7 +60,8 @@ below rather than discovered in review:
 
 - [x] **P6 — progress + cancel seam:** `generateCase({ onProgress, signal })`
       reports each stage and each deterministic derivation as it runs.
-- [ ] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
+- [x] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
+      Needs a `test:live` diagnostic sweep before it is trusted on a free-tier key.
 - [ ] **P8 — generation progress UI:** a live stage checklist (model call vs.
       computed, elapsed time), with a Cancel that returns to the docket.
 - [ ] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
