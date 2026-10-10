@@ -64,7 +64,9 @@ below rather than discovered in review:
       Needs a `test:live` diagnostic sweep before it is trusted on a free-tier key.
 - [x] **P8 — generation progress UI:** a live stage checklist (model call vs.
       computed, elapsed time), with a Cancel that returns to the docket.
-- [ ] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
+- [x] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
+      Main chunk 526 → 494 kB (Vite's 500 kB warning gone); the pipeline is a
+      40 kB chunk fetched on first use.
 
 ### Phase 3 — the courtroom, made legible (high schooler + attorney)
 
@@ -242,7 +244,11 @@ instance and is now closed; the rest cluster in that same gap.
       `x-goog-api-key` header; two-line change, and it keeps the key out of any
       URL-logging surface. *(Fixed in P1: one `authHeaders` helper serves both
       endpoints, and a test asserts neither URL carries the key.)*
-- [ ] **A9 — demo-case data ships in the eager chunk.** ~1,660 lines across five
+- [ ] **A9 — demo-case data ships in the eager chunk.** *(Partly done in P9:
+      the LLM pipeline, not the demo data, was split out first — it is needed
+      by fewer players and splits with no change to any synchronous lookup.
+      The demo bundles remain eager because `findDemoCaseById` is read
+      synchronously during render; splitting them needs a docket manifest.)* ~1,660 lines across five
       hand-authored bundles land in the main bundle for every visitor; the build
       is 505 kB / 149 kB gzip and Vite already warns past its 500 kB threshold.
       `import()` per bundle behind the docket click.

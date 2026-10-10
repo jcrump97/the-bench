@@ -4,7 +4,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
 import { DEMO_CASES, type DemoCaseBundle } from '../../lib/demoCases';
 import { demoCaseSource } from '../../lib/caseSource';
-import { createGameService } from '../../lib/llm/gameService';
+import { createLazyGameService } from '../../lib/llm/lazyGameService';
 import type { CaseSource } from '../../lib/caseSource';
 import {
   applyGenerationProgress,
@@ -90,7 +90,7 @@ export function WelcomeScreen() {
     if (generating || vault === null || vault.isDemo) return;
     const controller = new AbortController();
     setRun({ controller, startedAt: Date.now(), progress: initialGenerationProgress() });
-    startCase(createGameService(vault.apiKey), {
+    startCase(createLazyGameService(vault.apiKey), {
       signal: controller.signal,
       onProgress: (event) =>
         setRun((current) =>
