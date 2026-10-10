@@ -12,13 +12,23 @@ const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 15_000;
 
+// How long one attempt may take before it is abandoned. Without a bound, a
+// connection that stalls mid-response parks the player on "Generating your
+// case…" forever. Generous on purpose: the largest stage (EvidenceGen) writes
+// thousands of tokens, and cutting a slow-but-healthy call short would turn
+// latency into failures. A timed-out attempt is not retried here — a call that
+// was slow once is likely slow again, and every stage already owns a retry
+// budget of its own in generateValidated.
+const REQUEST_TIMEOUT_MS = 120_000;
+
 // Why a call produced no usable text, when the HTTP request itself succeeded.
 // A 200 with no content used to surface as one generic "no candidate text",
 // which is three very different problems wearing the same message: the model
 // ran out of output budget mid-JSON, a safety filter stopped it, or the
 // prompt itself was blocked before generation. They need different responses
-// and, from the Mistrial screen, they need to be told apart.
-export type GeminiFailureReason = 'MAX_TOKENS' | 'SAFETY' | 'NO_CANDIDATE';
+// and, from the Mistrial screen, they need to be told apart. TIMEOUT is the
+// one transport-level reason: the request never completed at all.
+export type GeminiFailureReason = 'MAX_TOKENS' | 'SAFETY' | 'NO_CANDIDATE' | 'TIMEOUT';
 
 export class GeminiError extends Error {
   readonly status: number | null;
@@ -120,7 +130,7 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
     nextDelayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt * jitter, MAX_BACKOFF_MS);
 
     try {
-      const response = await fetch(url, init);
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (response.ok) return response;
       if (!isRetryableStatus(response.status) || attempt === MAX_ATTEMPTS - 1) {
         const body = await response.text().catch(() => '');
@@ -134,6 +144,9 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
       lastError = new GeminiError(`Gemini request failed with status ${response.status}`, response.status);
     } catch (err) {
       if (err instanceof GeminiError) throw err;
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw new GeminiError(`Gemini request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`, null, 'TIMEOUT');
+      }
       lastError = err;
       if (attempt === MAX_ATTEMPTS - 1) {
         throw new GeminiError(

@@ -51,7 +51,8 @@ below rather than discovered in review:
       exempt: Gemini cannot say "null, or at least one character", so a
       `minLength` there would forbid the null the field permits. An earlier
       decision outranks a later review that did not see it.
-- [ ] **P4 — A5b:** per-attempt request timeout in the transport.
+- [x] **P4 — A5b:** per-attempt request timeout in the transport (120 s,
+      surfaced as `GeminiError` reason `TIMEOUT`, not retried in the transport).
 - [ ] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline.
 
 ### Phase 2 — the pipeline, made visible (architect)

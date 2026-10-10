@@ -139,6 +139,35 @@ describe('callGemini', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('bounds every attempt with a timeout signal', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('surfaces a timed-out attempt as reason TIMEOUT without retrying it', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT', status: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws immediately on a 4xx without retrying', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(textResponse('bad key', 400));
