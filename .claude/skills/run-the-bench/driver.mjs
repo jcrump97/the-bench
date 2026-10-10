@@ -546,6 +546,11 @@ const browser = await chromium.launch(
   await page.locator('[data-step="STATUTES"][data-status="RUNNING"]').waitFor();
   check('BYOK: model selection reported done before the first stage runs',
     (await page.locator('[data-step="MODEL_SELECTION"]').getAttribute('data-status')) === 'DONE');
+  check('BYOK: the step list is not a live region, so its ticking timers stay silent',
+    (await panel.locator('ol[aria-live]').count()) === 0);
+  const announced = (await page.locator('[data-generation-status][aria-live="polite"]').textContent()) ?? '';
+  check('BYOK: progress is announced through the step counter instead',
+    /of \d+ steps\. Now: Statute selection/.test(announced), announced);
   check('BYOK: computed steps are labelled apart from model calls',
     (await page.locator('[data-step="PLEA_STRUCTURE"]', { hasText: 'computed' }).count()) === 1);
   check('BYOK: the docket is locked while a case is generating',

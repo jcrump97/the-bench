@@ -71,7 +71,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       docket closes any modal left open by the screen that came before it.
       No E2E check: the only path to it is a failed BYOK aftermath call, which
       the demo docket cannot reach and Run 7's held-open routes do not cover.
-- [ ] **F8 — screen-reader noise** (review 2 #4): the step list is no longer a
+- [x] **F8 — screen-reader noise** (review 2 #4): the step list is no longer a
       live region. A step counter announces progress instead, and the timers
       tick silently.
 - [ ] **F9 — model selection is computed** (review 2 #8, the true half).

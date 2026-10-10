@@ -64,6 +64,7 @@ export function GenerationProgressPanel({ progress, startedAt, onCancel }: Gener
     const { status } = progress[step.id];
     return status === 'DONE' || status === 'SKIPPED';
   }).length;
+  const running = GENERATION_STEPS.filter((step) => progress[step.id].status === 'RUNNING').map((step) => step.label);
 
   return (
     <section data-generation-progress className="mt-3 space-y-3" aria-label="Case generation progress">
@@ -75,7 +76,10 @@ export function GenerationProgressPanel({ progress, startedAt, onCancel }: Gener
         Model calls write the people and their words. Computed steps decide the structure — the model never writes those.
       </p>
 
-      <ol className="space-y-1.5" aria-live="polite" aria-relevant="text">
+      {/* Not a live region: the elapsed times below tick four times a second,
+          and a screen reader would read every tick. The counter at the foot
+          announces what actually changes — a step starting or finishing. */}
+      <ol className="space-y-1.5">
         {GENERATION_STEPS.map((step) => {
           const state = progress[step.id];
           const time = stepTime(state, now);
@@ -99,8 +103,9 @@ export function GenerationProgressPanel({ progress, startedAt, onCancel }: Gener
       </ol>
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-(--text-muted)">
+        <p className="text-xs text-(--text-muted)" aria-live="polite" data-generation-status>
           {finished} of {GENERATION_STEPS.length} steps
+          {running.length > 0 && <span className="sr-only">. Now: {running.join(', ')}.</span>}
         </p>
         <button
           type="button"
