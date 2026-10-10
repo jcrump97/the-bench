@@ -70,7 +70,7 @@ below rather than discovered in review:
 
 ### Phase 3 — the courtroom, made legible (high schooler + attorney)
 
-- [ ] **P10 — act title cards** (open since 2026-07-12): UI chrome on each
+- [x] **P10 — act title cards** (open since 2026-07-12): UI chrome on each
       phase transition saying what the act decides.
 - [ ] **P11 — the Bench Book:** an always-available reference — plain-English
       definitions of every term the record uses, each with the California
@@ -887,7 +887,8 @@ view-layer polish:
       `entry.speaker` (new `--speaker-*` tokens in `index.css`, chosen apart
       from the status hues), heavier headings for the verdict/sentence outcome
       beats, and the press Aftermath rendered as a clipping.
-- [ ] **Act title cards on phase transition** — brief interstitial overlay
+- [x] **Act title cards on phase transition** *(P10: `ActTitleCard` +
+      `lib/actTitles.ts`, which also titles the top bar)* — brief interstitial overlay
       ("Act 2 — Evidentiary Motions · The parties will be heard on
       admissibility"), rendered as UI chrome, not a courtroom beat, so the
       record stays a pure projection. **Tier: lower-tier.**

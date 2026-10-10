@@ -183,6 +183,11 @@ const browser = await chromium.launch(
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
 
   await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
+  check('Webb: Act 1 title card opens the proceeding',
+    (await page.locator('[data-act-card="ACT_1_INTAKE"]').count()) === 1);
+  check('Webb: the title card never blocks the record (pointer events pass through)',
+    await page.locator('[data-act-card="ACT_1_INTAKE"]')
+      .evaluate((el) => getComputedStyle(el.parentElement).pointerEvents) === 'none');
   check('Webb: record starts empty, court seated',
     (await page.locator('text=The courtroom is seated').count()) === 1);
   check('Webb: accent button label wears --bg (cascade-layer regression guard)',
@@ -307,6 +312,9 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Webb plea ruling');
   await choiceButton(page, 'REJECT').click();
+  check('Webb trial: Act 2 title card names what the motions decide',
+    (await page.locator('[data-act-card="ACT_2_MOTIONS"]', { hasText: 'Only what you admit' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '04b-act2-title-card-mobile.png') });
   // 5 exhibits; excludeLast suppresses the interrogation tape.
   await ruleAllMotions(page, 5, 'Webb Act2', { excludeLast: true });
   check('Webb Act2: LOW-risk exhibit drew the derived waiver line',

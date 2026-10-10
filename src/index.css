@@ -190,4 +190,17 @@
     animation: toggle-pop 550ms ease-in-out 2;
     animation-delay: 900ms;
   }
+
+  /* Act title card: settles in, holds, and fades before it unmounts (the
+     component removes it at 3200ms). Reduced-motion users get the card
+     without the movement or the fade. */
+  @keyframes act-card {
+    0% { opacity: 0; transform: translateY(-0.5rem); }
+    10%, 85% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(0); }
+  }
+
+  .act-card {
+    animation: act-card 3200ms ease-out forwards;
+  }
 }

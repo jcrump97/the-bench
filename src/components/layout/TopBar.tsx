@@ -3,17 +3,12 @@ import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { PanelToggleButton } from './PanelToggleButton';
 import { enumLabel } from '../../lib/format';
-
-const PHASE_LABELS: Partial<Record<string, string>> = {
-  ACT_1_INTAKE: 'Act 1 — Intake & Plea',
-  ACT_2_MOTIONS: 'Act 2 — Evidentiary Motions',
-  ACT_3_VERDICT: 'Act 3 — Verdict & Sentencing',
-  END_STATE: 'Aftermath',
-};
+import { actTitleFor } from '../../lib/actTitles';
 
 export function TopBar() {
   const currentPhase = useGameStore((state) => state.currentPhase);
   const activeCase = useGameStore((state) => state.activeCase);
+  const pleaDecision = useGameStore((state) => state.pleaDecision);
   const casePanelOpen = useUIStore((state) => state.casePanelOpen);
   const evidencePanelOpen = useUIStore((state) => state.evidencePanelOpen);
   const toggleCasePanel = useUIStore((state) => state.toggleCasePanel);
@@ -31,7 +26,7 @@ export function TopBar() {
           {activeCase ? `People v. ${activeCase.defendant.lastName}` : 'The Bench'}
         </p>
         <p className="truncate text-sm text-(--text-muted)">
-          {PHASE_LABELS[currentPhase] ?? enumLabel(currentPhase)}
+          {actTitleFor(currentPhase, pleaDecision)?.label ?? enumLabel(currentPhase)}
         </p>
       </div>
 
