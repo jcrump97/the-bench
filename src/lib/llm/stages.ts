@@ -7,7 +7,6 @@ import {
   EvidenceSchema,
   InterrogationSchema,
   ReactionBeatSchema,
-  PleaDecisionSchema,
   VerdictValueSchema,
   // Vocabularies shared with the Gemini responseSchemas below. Every `enum:`
   // in this file spreads one of these rather than restating its members, so
@@ -33,6 +32,8 @@ import {
   TimeOfDayEnum,
   WeatherEnum,
   PleaNarrativeSchema,
+  judgeLineOption,
+  addChoiceCoverageIssues,
   CaseSchema,
   defendantFullName,
   AftermathNarrativeSchema,
@@ -190,11 +191,6 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
     ? ''
     : `\nLast response (truncated): ${lastRawResponse.length > MAX_ECHOED_RESPONSE_CHARS ? `${lastRawResponse.slice(0, MAX_ECHOED_RESPONSE_CHARS)}...[truncated]` : lastRawResponse}`;
   throw new GameServiceError(`[${stageName}] Failed to produce valid output after ${maxRetries + 1} attempt(s): ${lastError}${echoed}`);
-}
-
-function requireChoiceCoverage(options: { choice: string }[], allChoices: readonly string[]): string | null {
-  const missing = allChoices.filter((choice) => !options.some((o) => o.choice === choice));
-  return missing.length > 0 ? `Missing judge-line coverage for: ${missing.join(', ')}` : null;
 }
 
 // Top-level property names of a Gemini responseSchema, when it's an object —
@@ -1173,13 +1169,12 @@ const VerdictVoiceShape = z.object({
         GUILTY: ReactionBeatSchema,
         NOT_GUILTY: ReactionBeatSchema,
       }),
-      verdictOptions: z.array(z.strictObject({
-        choice: VerdictValueSchema,
-        lineText: z.string().min(1).max(300),
-      })).min(2).max(6),
+      // The same option ChargeSchema carries, bench-trial refinement and all:
+      // a re-declared copy once dropped `noJury`, so a jury reference passed
+      // this stage and failed the case gate two stages later.
+      verdictOptions: z.array(judgeLineOption(VerdictValueSchema)).min(2).max(6),
     }).superRefine((charge, ctx) => {
-      const missing = requireChoiceCoverage(charge.verdictOptions, VerdictValueSchema.options);
-      if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
+      addChoiceCoverageIssues(charge.verdictOptions, VerdictValueSchema.options, ctx);
     }),
   ).min(1),
 });
@@ -1287,25 +1282,33 @@ export async function runVerdictVoice(
 // authored demo cases also omit for NO_OFFER cases; defineDemoCase's pairing
 // invariant is mirrored here rather than re-derived).
 // ============================================================================
-const WeakPleaNarrativeSchema = z.object({
-  prosecutionRationale: z.string().min(1).max(1000),
+// Both band schemas are the real PleaNarrativeSchema — the gate a demo case
+// crosses — narrowed per band, never a re-declaration of its fields. A copy
+// once dropped the bench-trial refinement, and because the real schema was
+// then applied *outside* the retry loop, a jury reference in a plea rationale
+// was the one failure in the pipeline that reached the Mistrial screen with no
+// repair round and no stage name. Validating against the real schema inside
+// generateValidated makes it an ordinary, repaired validation failure.
+const OFFER_ONLY_FIELDS = ['defenseRationale', 'allocution', 'pleaReactions', 'pleaRulingOptions'] as const;
+
+// WEAK: no offer reaches the bench, so only the People's rationale exists —
+// the same pairing defineDemoCase enforces for authored NO_OFFER cases.
+const WeakPleaNarrativeSchema = PleaNarrativeSchema.superRefine((narrative, ctx) => {
+  for (const field of OFFER_ONLY_FIELDS) {
+    if (narrative[field] !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} must be omitted when no offer is extended` });
+    }
+  }
 });
 
-const OfferPleaNarrativeSchema = z
-  .object({
-    prosecutionRationale: z.string().min(1).max(1000),
-    defenseRationale: z.string().min(1).max(1000),
-    allocution: z.string().min(1).max(800),
-    pleaReactions: z.object({ ACCEPT: ReactionBeatSchema, REJECT: ReactionBeatSchema }),
-    pleaRulingOptions: z
-      .array(z.object({ choice: PleaDecisionSchema, lineText: z.string().min(1).max(300) }))
-      .min(2)
-      .max(6),
-  })
-  .superRefine((narrative, ctx) => {
-    const missing = requireChoiceCoverage(narrative.pleaRulingOptions, PleaDecisionSchema.options);
-    if (missing !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: missing });
-  });
+// MODERATE/STRONG: an offer reaches the bench, so every offer field is owed.
+const OfferPleaNarrativeSchema = PleaNarrativeSchema.superRefine((narrative, ctx) => {
+  for (const field of OFFER_ONLY_FIELDS) {
+    if (narrative[field] === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} is required when the case carries an offer` });
+    }
+  }
+});
 
 const WEAK_PLEA_GEMINI_SCHEMA = geminiObjectOf('prosecutionRationale', { type: 'string', minLength: 1, maxLength: 1000 });
 
@@ -1376,7 +1379,7 @@ export async function runPleaNarrative(
   defensePosture: 'ACCEPT' | 'REJECT',
 ): Promise<PleaNarrative> {
   if (band === 'WEAK') {
-    const data = await generateValidated(
+    return generateValidated(
       apiKey,
       model,
       'PleaNarrative.weak',
@@ -1385,10 +1388,9 @@ export async function runPleaNarrative(
       WEAK_PLEA_GEMINI_SCHEMA,
       WeakPleaNarrativeSchema,
     );
-    return PleaNarrativeSchema.parse({ prosecutionRationale: data.prosecutionRationale });
   }
 
-  const data = await generateValidated(
+  return generateValidated(
     apiKey,
     model,
     'PleaNarrative.offer',
@@ -1397,13 +1399,6 @@ export async function runPleaNarrative(
     OFFER_PLEA_GEMINI_SCHEMA,
     OfferPleaNarrativeSchema,
   );
-  return PleaNarrativeSchema.parse({
-    prosecutionRationale: data.prosecutionRationale,
-    defenseRationale: data.defenseRationale,
-    allocution: data.allocution,
-    pleaReactions: data.pleaReactions,
-    pleaRulingOptions: data.pleaRulingOptions,
-  });
 }
 
 // ============================================================================

@@ -42,7 +42,7 @@ below rather than discovered in review:
 ### Phase 1 — trust & correctness (every audience, architect first)
 
 - [x] **P1 — A8:** the API key travels in the `x-goog-api-key` header, never the URL.
-- [ ] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
+- [x] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
       `addChoiceCoverageIssues` / `PleaNarrativeSchema`, so a jury reference in
       plea or verdict lines is a retried repair, not an unretried Mistrial.
 - [ ] **P3 — R3/R4:** names and nullable prose fields require `minLength: 1`
@@ -186,9 +186,10 @@ instance and is now closed; the rest cluster in that same gap.
       `{choice, lineText}[]` → `recordSpokenJudgeLine` → commit the structural
       decision → `advanceBeat`. Extract a `<JudgeLineChoice>` presentational
       component plus three thin adapters, preserving the `data-choice`
-      attributes the E2E driver selects on. (b) `requireChoiceCoverage`
+      attributes the E2E driver selects on. (b) ~~`requireChoiceCoverage`
       (`stages.ts:160`) reimplements `addChoiceCoverageIssues`
-      (`gameSchemas.ts:246`) — export the latter, delete the former.
+      (`gameSchemas.ts:246`) — export the latter, delete the former.~~
+      *(Done in P2.)*
       (c) Button class constants copy-pasted across four files in
       `src/components/actionbar/`. (d) The `minItems`/nullable-nested comment is
       verbatim at `stages.ts:774` and `:936`, and the second copy says
@@ -552,7 +553,7 @@ the session transcript; this is the consolidated action list.
       name passes both gates and renders as an empty speaker line in
       `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
       `.min(1)` in both layers for all three fields.
-- [ ] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
+- [x] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
       fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
       `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
       schema but fails the downstream `CaseSchema`/`PleaNarrativeSchema`
@@ -575,6 +576,11 @@ the session transcript; this is the consolidated action list.
       `ChargeSchema.pick({ id: true, verdictReactions: true,
       verdictOptions: true })`) instead of re-declaring their fields, which
       is how the refinement was dropped in the first place. See A2.
+      *(Fixed in P2. Zod 4 refuses `.pick()` on a refined object, so the
+      plea schemas are the real `PleaNarrativeSchema` narrowed per band by a
+      `superRefine`, and VerdictVoice builds its options with the exported
+      `judgeLineOption`/`addChoiceCoverageIssues`. Both now fail inside
+      `generateValidated`, so they are repaired and stage-named.)*
 - [x] **R6 — `gameService.ts:50` throws a bare `Error` for a missing
       VerdictVoice, not a stage-prefixed `GameServiceError`.** Every other
       failure carries a `[StageName]` prefix; this one reports as

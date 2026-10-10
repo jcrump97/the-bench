@@ -279,7 +279,9 @@ export const ReactionBeatSchema = z.array(ReactionLineSchema).min(1).max(4);
 // One selectable judge line: the words the court speaks when the player picks
 // it, bound to a choice from a closed decision vocabulary. Multiple options
 // may share a choice — variants multiply voice, never the state space.
-function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
+// Exported so the pipeline's stage schemas build the same option (bench-trial
+// refinement included) instead of re-declaring a weaker copy of it.
+export function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
   return z.strictObject({
     choice,
     lineText: noJury(z.string().min(1).max(300)),
@@ -288,7 +290,7 @@ function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T)
 
 // Every value in the closed choice set must be reachable through at least one
 // option — a decision the player cannot express is an illegal payload.
-function addChoiceCoverageIssues(
+export function addChoiceCoverageIssues(
   options: readonly { choice: string }[],
   allChoices: readonly string[],
   ctx: z.RefinementCtx,
