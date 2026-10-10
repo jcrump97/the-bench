@@ -1,6 +1,6 @@
 # TODO
 
-## Road to 1.0 follow-ups (two code-review passes, 2026-10-10 — OPEN)
+## Road to 1.0 follow-ups (two code-review passes, 2026-10-10 — DONE)
 
 Two independent `/code-review` passes over the Road to 1.0 branch returned 18
 findings. They collapse to 14 distinct defects: both passes flagged the same
@@ -81,6 +81,14 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       § 1170(h) citations, which the game does not model. A test pins that no
       cited term calls itself "not modeled".
 
+**Stopping point.** F1–F11 each landed as one commit. Every commit passes
+lint, unit tests and build; every commit that changes behaviour also passes
+the E2E driver (now eight runs). Every new test and E2E check was confirmed to
+fail against the code it fixes before the fix went in. The `test:live` sweep
+for P4/P7 is still owed. F2 and F3 change what that sweep would measure: a
+timeout now fails the run, and a cancel ends it. Read its table with that in
+mind.
+
 ## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — DONE)
 
 **Goal.** Bring the game to a finished state that is enjoyable for three very
@@ -113,7 +121,8 @@ below rather than discovered in review:
    (the E2E driver and impatient players click straight through), and honor
    `prefers-reduced-motion`.
 4. *Cancellation threaded through every stage signature* would churn ~50 call
-   sites for little gain. Split instead: the transport bounds a hung request
+   sites for little gain. *(Reversed by the follow-ups above: the code
+   review showed what the deferral cost the player.)* Split instead: the transport bounds a hung request
    with a per-attempt timeout, and the orchestrator checks a cancel signal
    between stages; the UI drops a cancelled run's late result.
 5. *Decisions that belong to the human* (S1 custody-election UI, S2 rounding
