@@ -83,6 +83,16 @@ interface RawModel {
   supportedGenerationMethods?: string[];
 }
 
+// The key rides in a request header, never the query string. A `?key=` URL is
+// written into every surface that logs URLs — browser history and devtools,
+// proxies, extensions, crash reports — and the security store promises the key
+// never touches one (see CLAUDE.md, BYOKVault). Gemini accepts the same
+// credential as `x-goog-api-key`; both endpoints build their headers here so
+// neither can drift back to the URL on its own.
+function authHeaders(apiKey: string, extra: Record<string, string> = {}): Record<string, string> {
+  return { ...extra, 'x-goog-api-key': apiKey };
+}
+
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
@@ -143,10 +153,10 @@ export async function callGemini(
   model: string,
   options: GeminiCallOptions,
 ): Promise<string> {
-  const url = `${API_ROOT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `${API_ROOT}/models/${model}:generateContent`;
   const response = await fetchWithRetry(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: options.contents }] }],
@@ -220,8 +230,10 @@ export async function callGemini(
 
 // Lists models available to this key, for dynamic model selection.
 export async function listModels(apiKey: string): Promise<RawModel[]> {
-  const url = `${API_ROOT}/models?key=${encodeURIComponent(apiKey)}`;
-  const response = await fetchWithRetry(url, { method: 'GET' });
+  const response = await fetchWithRetry(`${API_ROOT}/models`, {
+    method: 'GET',
+    headers: authHeaders(apiKey),
+  });
   const data = (await response.json()) as { models?: RawModel[] };
   return data.models ?? [];
 }

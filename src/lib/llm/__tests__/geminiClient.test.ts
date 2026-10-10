@@ -42,6 +42,24 @@ describe('callGemini', () => {
     expect(String(call?.[0])).toContain('gemini-flash-latest:generateContent');
   });
 
+  it('sends the key in the x-goog-api-key header and never in the URL', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).not.toContain('AIzaTestKey1234567890123456789');
+    expect(String(url)).not.toContain('key=');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'AIzaTestKey1234567890123456789' });
+  });
+
   it('sets a moderate temperature for schema-compliant-but-varied output', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
@@ -275,6 +293,9 @@ describe('listModels', () => {
     expect(models).toEqual([
       { name: 'models/gemini-flash-latest', supportedGenerationMethods: ['generateContent'] },
     ]);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).not.toContain('key=');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'AIzaTestKey1234567890123456789' });
   });
 
   it('returns an empty array when the response omits models', async () => {

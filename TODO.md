@@ -41,7 +41,7 @@ below rather than discovered in review:
 
 ### Phase 1 — trust & correctness (every audience, architect first)
 
-- [ ] **P1 — A8:** the API key travels in the `x-goog-api-key` header, never the URL.
+- [x] **P1 — A8:** the API key travels in the `x-goog-api-key` header, never the URL.
 - [ ] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
       `addChoiceCoverageIssues` / `PleaNarrativeSchema`, so a jury reference in
       plea or verdict lines is a retried repair, not an unretried Mistrial.
@@ -227,12 +227,13 @@ instance and is now closed; the rest cluster in that same gap.
       (`WelcomeScreen.tsx:36`), and the Mistrial screen's technical-details
       rendering. Both are cheapest as vitest store tests plus a rejecting
       `CaseSource` stub — not E2E.
-- [ ] **A8 — the API key travels in the URL query string.**
+- [x] **A8 — the API key travels in the URL query string.**
       `geminiClient.ts:146` and `:223` interpolate `?key=…`, while
       `.cursor/rules/security.mdc:12` states the key must never touch the URL —
       the code contradicts the project's own stated invariant. Gemini accepts an
       `x-goog-api-key` header; two-line change, and it keeps the key out of any
-      URL-logging surface.
+      URL-logging surface. *(Fixed in P1: one `authHeaders` helper serves both
+      endpoints, and a test asserts neither URL carries the key.)*
 - [ ] **A9 — demo-case data ships in the eager chunk.** ~1,660 lines across five
       hand-authored bundles land in the main bundle for every visitor; the build
       is 505 kB / 149 kB gzip and Vite already warns past its 500 kB threshold.

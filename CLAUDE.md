@@ -127,7 +127,7 @@ Isolated Zustand slice holding the user's Gemini API key **in memory only**. Key
 - `isAuthenticated()` returns true if any vault passed `BYOKSchema.safeParse()`, or if `isDemo === true`.
 - `setVault()` runs `BYOKSchema.safeParse()` and silently nulls the vault on failure.
 
-**The URL half of that first invariant is currently violated by the transport, and the rule stands — the code is wrong, not the rule.** `geminiClient.ts:146` and `:223` interpolate the key as `?key=…` on both endpoints, contradicting this file and `.cursor/rules/security.mdc:12`, and putting the key on every URL-logging surface between here and Google. Gemini accepts an `x-goog-api-key` header instead; the swap is two lines and is tracked as A8 in `TODO.md`. Documented here rather than quietly relaxed, so nobody reads the store's guarantee as covering the whole key path.
+**The transport honors the URL half too.** `geminiClient.ts` sends the key as the `x-goog-api-key` request header on both endpoints, built in one `authHeaders` helper, so it never appears in a URL that browser history, devtools, proxies or crash reports might log. It used to travel as `?key=…`, contradicting this rule and `.cursor/rules/security.mdc:12` (A8 in `TODO.md`); a unit test now asserts the URL carries no key on either endpoint.
 
 ### UI Store (`useUIStore`)
 
