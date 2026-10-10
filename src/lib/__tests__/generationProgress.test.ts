@@ -17,6 +17,24 @@ describe('generation progress', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  // The panel teaches the architecture's split, so the labels must be true to
+  // it: a step is a model call only where the model writes the output.
+  // FINALIZE is one (it always writes the summary, statement of facts and
+  // closings); model selection is not (code ranks what ListModels reports).
+  it('labels as model calls exactly the steps where the model writes', () => {
+    const modelCalls = GENERATION_STEPS.filter((step) => step.kind === 'MODEL').map((step) => step.id);
+    expect(modelCalls).toEqual([
+      'STATUTES',
+      'SCENE',
+      'DEFENDANT',
+      'INTERROGATION',
+      'EVIDENCE',
+      'VERDICT_VOICE',
+      'FINALIZE',
+      'PLEA_NARRATIVE',
+    ]);
+  });
+
   it('records when a step started and when it finished', () => {
     let progress = initialGenerationProgress();
     progress = applyGenerationProgress(progress, { stepId: 'SCENE', status: 'STARTED', at: 100 });

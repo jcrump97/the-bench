@@ -7,9 +7,9 @@
 // built. It lives in lib/ rather than lib/llm/ so the UI can import it without
 // pulling the pipeline into the main bundle.
 
-// A step is either a Gemini call or a deterministic derivation the pipeline
-// runs between calls. Showing both is the point: the computed steps are where
-// the game's structure comes from, and the model never writes them.
+// A step is either a model call — Gemini writes its output — or a step code
+// decides. Showing both is the point: the computed steps are where the game's
+// structure comes from, and the model never writes them.
 export type GenerationStepKind = 'MODEL' | 'COMPUTED';
 
 export type GenerationStepId =
@@ -37,7 +37,10 @@ export interface GenerationStep {
 // gameService.ts (scene ∥ defendant; verdict voice ∥ interview → evidence)
 // simply show as running at the same time.
 export const GENERATION_STEPS: readonly GenerationStep[] = [
-  { id: 'MODEL_SELECTION', kind: 'MODEL', label: 'Model selection', detail: 'Ask Gemini which models this key can use, and pick the cheapest capable one' },
+  // COMPUTED, though it makes a request: ListModels only reports what this
+  // key can use, and code ranks the list and decides. No model writes here —
+  // and after the first case the answer is remembered, so it takes no time.
+  { id: 'MODEL_SELECTION', kind: 'COMPUTED', label: 'Model selection', detail: 'Rank the models this key can use and pick the cheapest capable one — remembered after the first case' },
   { id: 'STATUTES', kind: 'MODEL', label: 'Statute selection', detail: 'The charges, their elements, and each statutory sentencing range' },
   { id: 'SCENE', kind: 'MODEL', label: 'Scene', detail: 'Where it happened, and the facts every later stage must agree with' },
   { id: 'DEFENDANT', kind: 'MODEL', label: 'Defendant', detail: 'A life: family, work, history, temperament' },
