@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { BookOpen } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -39,6 +39,16 @@ export function WelcomeScreen() {
   const setLastGenerationError = useUIStore((state) => state.setLastGenerationError);
   const clearLastGenerationError = useUIStore((state) => state.clearLastGenerationError);
   const openModal = useUIStore((state) => state.openModal);
+  const closeModal = useUIStore((state) => state.closeModal);
+
+  // The docket opens with nothing over it. The Bench Book is the one modal
+  // that renders without a case, so one left open in the courtroom — say,
+  // opened while an aftermath call was running, which then failed into the
+  // Mistrial screen (which renders no modals) — would otherwise pop back up
+  // over the docket the moment the player returned, unasked.
+  useEffect(() => {
+    closeModal();
+  }, [closeModal]);
 
   const vault = useSecurityStore((state) => state.vault);
   const setVault = useSecurityStore((state) => state.setVault);
