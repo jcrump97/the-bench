@@ -1,5 +1,80 @@
 # TODO
 
+## Road to 1.0 follow-ups (two code-review passes, 2026-10-10 — OPEN)
+
+Two independent `/code-review` passes over the Road to 1.0 branch returned 18
+findings. They collapse to 14 distinct defects: both passes flagged the same
+four LLM issues (cancel never reaches the network, an orphaned concurrent
+sibling, a body-read timeout escaping classification, the strict plea schema).
+Most of them trace to one root cause: plan-review point 4 below, which deferred
+threading a cancel signal through the stages. The code review shows what that
+deferral cost. A cancelled or failed run kept spending the player's real
+Gemini quota for minutes, and a second run could stack on top of it. That is a
+cost to the player, not a matter of style, so the point is reversed. The churn
+it feared is avoided: `signal` is a trailing optional parameter, so no
+existing call site or test changes.
+
+**Plan review (before any code).** The first draft had four deficiencies,
+each corrected below:
+
+1. *It used `AbortSignal.any` unguarded.* That API only became Baseline
+   "widely available" this autumn, and Safari before 17.4 lacks it. A missing
+   method there would break every BYOK generation, not just Cancel. The
+   transport combines signals through a small helper that falls back to manual
+   wiring.
+2. *It cancelled model selection too.* `getOrSelectModel` caches the promise
+   per key, so an aborted lookup would poison the cache for the rest of the
+   session. `ListModels` is a free metadata call, so it stays unsignalled, and
+   the step boundary straight after it catches the cancel.
+3. *It took every finding at face value.* Finding 8 ("FINALIZE is labelled a
+   model call") is half wrong: finalize always makes a model call to write the
+   summary, the statement of facts and the closings. Only model selection is
+   mislabelled, so FINALIZE stays as it is.
+4. *It "fixed" the plea schema by loosening the gate.* Making
+   `PleaNarrativeSchema` non-strict would weaken the boundary demo cases cross.
+   Instead, each band projects the response onto the fields that band asks
+   for before the real strict schema runs. That restores exactly the tolerance
+   the pre-R5 code had. A `null` in a field the offer requires is still a
+   defect, and still goes to a repair round.
+
+No `responseSchema` or `generationConfig` changes, so the live-probe rule is
+not triggered. The `test:live` sweep owed for P4/P7 is still owed.
+
+- [ ] **F1 — timeout classification** (review 1 #3, #4; review 2 #5): read the
+      body inside the timed, classified scope on both endpoints, and detect a
+      timeout by the timer's own signal or the error's `name`, never by
+      `instanceof DOMException`, which is realm-bound.
+- [ ] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
+      treats `TIMEOUT` like a non-retryable 4xx, so a stalled connection costs
+      one 120 s wait, not 3 × 120 s per stage. The stage name is preserved.
+- [ ] **F3 — cancel reaches the request** (review 1 #1, #7; review 2 #2):
+      `callGemini` takes the signal, combines it with the per-attempt timeout,
+      and makes the backoff sleep abortable. `generateValidated` rethrows an
+      abort rather than retrying it, and every stage passes its signal through.
+      Cancel now ends the in-flight request at once, so the docket can safely
+      unlock straight away (review 1 #7 needs no UI change).
+- [ ] **F4 — a failed run stops its siblings** (review 1 #2, #8; review 2 #3):
+      `generateCase` owns an internal `AbortController`, aborted on any
+      failure, and combined with the caller's signal. A failure inside one
+      `Promise.all` branch aborts the other, and no progress event is emitted
+      after the run has ended. The rejection is the terminal event, and the
+      contract says so.
+- [ ] **F5 — plea projection** (review 1 #6; review 2 #10): see review point 4.
+- [ ] **F6 — Bench Book chunk failure** (review 2 #1): a rejected lazy import
+      renders a "reload to fetch it" modal instead of unmounting the app.
+      This is covered by an E2E check that blocks the chunk.
+- [ ] **F7 — stale Bench Book on the docket** (review 2 #7): arriving at the
+      docket closes any modal left open by the screen that came before it.
+- [ ] **F8 — screen-reader noise** (review 2 #4): the step list is no longer a
+      live region. A step counter announces progress instead, and the timers
+      tick silently.
+- [ ] **F9 — model selection is computed** (review 2 #8, the true half).
+- [ ] **F10 — one card duration** (review 2 #9): `CARD_MS` drives the CSS
+      animation through an inline `animationDuration`.
+- [ ] **F11 — cite only modeled rules** (review 2 #6): drop the § 17(b) and
+      § 1170(h) citations, which the game does not model. A test pins that no
+      cited term calls itself "not modeled".
+
 ## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — DONE)
 
 **Goal.** Bring the game to a finished state that is enjoyable for three very
