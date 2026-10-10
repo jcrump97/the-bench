@@ -41,20 +41,28 @@ look at them — a blank frame means the app didn't render. Other knobs:
 `BASE_URL` (default `http://localhost:5173/the-bench/`), `PLAYWRIGHT_PREFIX`
 (default `/tmp/bench-playwright`).
 
-What it drives: six runs across the five docket cases —
-1. **Webb** accepted plea at 1280px (reveal gating, transcript
+What it drives: six runs across the five docket cases, plus one over the
+BYOK generating screen —
+1. **Webb** accepted plea at 1280px (the Bench Book from the docket, the
+   Act 1 title card and its pointer transparency, reveal gating, transcript
    click-through, dossier + charge modals, allocution beat, demeanor notes,
    plea-accepted ending)
-2. **Webb** forced trial at 375px (5 per-exhibit rulings incl. a derived
+2. **Webb** forced trial at 375px (the Act 2 title card, 5 per-exhibit rulings incl. a derived
    waiver line and the interrogation tape played line by line,
    witness/cross/closing beats, convicted ending)
-3. **Boone** (WEAK → no offer): trial-only path, voiced suppression
+3. **Boone** (WEAK → no offer): the Bench Book opened and closed mid-case, trial-only path, voiced suppression
    objection, adjournment on full acquittal
 4. **Reyes** (STRONG → offer rejected): rejected-offer beats, the
    Skip-to-Next-Decision affordance, convicted ending
 5. **Vaughn** (multi-charge): one verdict beat per charge, SPLIT ending
 6. **Navarro** (guided tutorial): decision explainers above the controls,
    plea-accepted ending
+7. **BYOK generating screen** at 1280px: every Gemini request is answered
+   inside the browser by `page.route` (model discovery fulfilled, generation
+   held open), so it needs no key and spends no quota. Asserts the progress
+   panel, the locked docket, the key travelling only in the
+   `x-goog-api-key` header, and Cancel returning to the docket without a
+   mistrial
 
 Each ending is asserted by a phrase unique to that case's aftermath variant,
 which is what proves the outcome-conditioned branching end to end.

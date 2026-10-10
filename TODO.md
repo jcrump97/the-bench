@@ -1,6 +1,6 @@
 # TODO
 
-## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — ACTIVE)
+## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — DONE)
 
 **Goal.** Bring the game to a finished state that is enjoyable for three very
 different players without bending the architecture's mandate (*LLM provides
@@ -80,9 +80,16 @@ below rather than discovered in review:
 
 ### Phase 4 — documentation
 
-- [ ] **P12 — docs sync:** README (who it is for, a readable status, both
+- [x] **P12 — docs sync:** README (who it is for, a readable status, both
       Mermaid diagrams updated for parallel stages, progress and the lazy
       chunk), CLAUDE.md and AGENTS.md together, this plan checked off.
+
+**Stopping point (2026-10-10).** P1–P12 landed as one commit each on
+`ccr-1d2f862f-1dzsgw`, every one passing lint, unit tests and build, and every
+UI commit the E2E driver (now seven runs, 83 checks). **Next step for whoever
+picks this up:** run `npm run test:live`'s diagnostic sweep once with a real
+key, to measure the concurrent pipeline (P7) and the per-attempt timeout (P4)
+against the live API before calling them proven.
 
 ### Deliberately not in this plan
 
