@@ -58,7 +58,7 @@ below rather than discovered in review:
 
 ### Phase 2 — the pipeline, made visible (architect)
 
-- [ ] **P6 — progress + cancel seam:** `generateCase({ onProgress, signal })`
+- [x] **P6 — progress + cancel seam:** `generateCase({ onProgress, signal })`
       reports each stage and each deterministic derivation as it runs.
 - [ ] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
 - [ ] **P8 — generation progress UI:** a live stage checklist (model call vs.

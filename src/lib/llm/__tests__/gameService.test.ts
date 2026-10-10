@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGameService } from '../gameService';
 import { validCase } from '../../__tests__/fixtures';
 import { CaseSchema, PleaNarrativeSchema } from '../../../schemas/gameSchemas';
+import { GenerationCancelledError } from '../../generationProgress';
 
 vi.mock('../modelSelection', () => ({ getOrSelectModel: vi.fn() }));
 vi.mock('../stages', () => ({
@@ -114,6 +115,61 @@ describe('createGameService().generateCase', () => {
     });
 
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
+  });
+
+  it('reports every step as it starts and finishes, in pipeline order', async () => {
+    const events: string[] = [];
+    await createGameService(API_KEY).generateCase({
+      onProgress: (event) => events.push(`${event.stepId}:${event.status}`),
+    });
+
+    const finished = events.filter((e) => e.endsWith(':DONE')).map((e) => e.split(':')[0]);
+    expect(finished).toEqual([
+      'MODEL_SELECTION', 'STATUTES', 'SCENE', 'DEFENDANT', 'INTERROGATION_PROFILE', 'INTERROGATION',
+      'EVIDENCE', 'VERDICT_VOICE', 'FINALIZE', 'PLEA_STRUCTURE', 'PLEA_NARRATIVE',
+    ]);
+    // Every step that finished was first reported as started.
+    for (const step of finished) {
+      expect(events.indexOf(`${step}:STARTED`)).toBeLessThan(events.indexOf(`${step}:DONE`));
+    }
+  });
+
+  it('skips the interview recording, without a call, when the defendant invoked counsel', async () => {
+    // Three priors and an unremarkable temperament derives INVOKED_COUNSEL
+    // (deriveInterrogationProfile): the defendant asks for a lawyer at once.
+    const prior = { chargeName: 'Petty theft', year: 2015, sentences: [] };
+    vi.mocked(runCharacterGen).mockResolvedValue({
+      ...validCase.defendant,
+      pastConvictions: [prior, { ...prior, year: 2017 }, { ...prior, year: 2019 }],
+    });
+    const events: string[] = [];
+    await createGameService(API_KEY).generateCase({ onProgress: (e) => events.push(`${e.stepId}:${e.status}`) });
+
+    expect(events).toContain('INTERROGATION:SKIPPED');
+    expect(events).not.toContain('INTERROGATION:STARTED');
+    expect(runInterrogationGen).not.toHaveBeenCalled();
+  });
+
+  it('stops at the next step boundary once cancelled, with a cancellation rather than a failure', async () => {
+    const controller = new AbortController();
+    vi.mocked(runEnvironmentGen).mockImplementation(async () => {
+      controller.abort();
+      return validCase.environment;
+    });
+
+    await expect(createGameService(API_KEY).generateCase({ signal: controller.signal })).rejects.toBeInstanceOf(
+      GenerationCancelledError,
+    );
+    expect(runCharacterGen).not.toHaveBeenCalled();
+  });
+
+  it('cannot be failed by a progress listener that throws', async () => {
+    const result = await createGameService(API_KEY).generateCase({
+      onProgress: () => {
+        throw new Error('listener bug');
+      },
+    });
+    expect(CaseSchema.safeParse(result.payload).success).toBe(true);
   });
 
   it('propagates a stage failure without swallowing it', async () => {

@@ -1,7 +1,12 @@
 import { assessProsecution, derivePleaOfferTerms, assessDefense } from '../pleaAssessment';
 import { deriveInterrogationProfile } from '../interrogation';
 import type { CaseSource, GeneratedCase, AftermathContext } from '../caseSource';
-import type { Charge } from '../../schemas/gameSchemas';
+import {
+  GenerationCancelledError,
+  type GenerateCaseOptions,
+  type GenerationStepId,
+} from '../generationProgress';
+import type { Charge, Interrogation } from '../../schemas/gameSchemas';
 import { getOrSelectModel } from './modelSelection';
 import {
   GameServiceError,
@@ -16,6 +21,34 @@ import {
   runAftermath,
 } from './stages';
 
+// Wraps each pipeline step with the two observational concerns, so the
+// orchestration below reads as the pipeline and nothing else: a cancel check
+// before the step starts, and STARTED/DONE progress events around it. A
+// listener that throws is contained here — watching a generation must never
+// be able to fail one.
+function createStepRunner({ onProgress, signal }: GenerateCaseOptions) {
+  const emit = (stepId: GenerationStepId, status: 'STARTED' | 'DONE' | 'SKIPPED') => {
+    try {
+      onProgress?.({ stepId, status, at: Date.now() });
+    } catch {
+      // Display only; ignore.
+    }
+  };
+
+  return {
+    async step<T>(stepId: GenerationStepId, run: () => T | Promise<T>): Promise<T> {
+      if (signal?.aborted) throw new GenerationCancelledError();
+      emit(stepId, 'STARTED');
+      const result = await run();
+      emit(stepId, 'DONE');
+      return result;
+    },
+    skip(stepId: GenerationStepId): void {
+      emit(stepId, 'SKIPPED');
+    },
+  };
+}
+
 // The real CaseSource behind BYOK: orchestrates the seven-stage generation
 // pipeline (StatuteSelection → EnvironmentGen → CharacterGen →
 // InterrogationGen → EvidenceGen → VerdictVoice → PleaNarrative, with
@@ -27,26 +60,32 @@ import {
 // that lives in stages.ts.
 export function createGameService(apiKey: string): CaseSource {
   return {
-    async generateCase(): Promise<GeneratedCase> {
-      const model = await getOrSelectModel(apiKey);
+    async generateCase(options: GenerateCaseOptions = {}): Promise<GeneratedCase> {
+      const { step, skip } = createStepRunner(options);
 
-      const { charges, statuteContexts } = await runStatuteSelection(apiKey, model);
-      const environment = await runEnvironmentGen(apiKey, model, charges);
-      const defendant = await runCharacterGen(apiKey, model, charges);
+      const model = await step('MODEL_SELECTION', () => getOrSelectModel(apiKey));
 
-      const interrogationProfile = deriveInterrogationProfile(defendant);
-      const interrogation = await runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile);
+      const { charges, statuteContexts } = await step('STATUTES', () => runStatuteSelection(apiKey, model));
+      const environment = await step('SCENE', () => runEnvironmentGen(apiKey, model, charges));
+      const defendant = await step('DEFENDANT', () => runCharacterGen(apiKey, model, charges));
 
-      const { evidence, witnesses } = await runEvidenceGen(
-        apiKey,
-        model,
-        charges,
-        environment,
-        defendant,
-        interrogation,
+      const interrogationProfile = await step('INTERROGATION_PROFILE', () => deriveInterrogationProfile(defendant));
+      // No tape exists when the defendant invoked counsel, so there is nothing
+      // to write: the step is reported as skipped rather than run.
+      let interrogation: Interrogation | null = null;
+      if (interrogationProfile.outcome === 'INVOKED_COUNSEL') {
+        skip('INTERROGATION');
+      } else {
+        interrogation = await step('INTERROGATION', () =>
+          runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile),
+        );
+      }
+
+      const { evidence, witnesses } = await step('EVIDENCE', () =>
+        runEvidenceGen(apiKey, model, charges, environment, defendant, interrogation),
       );
 
-      const chargeVoices = await runVerdictVoice(apiKey, model, charges, defendant);
+      const chargeVoices = await step('VERDICT_VOICE', () => runVerdictVoice(apiKey, model, charges, defendant));
       const chargesWithVoice: Charge[] = charges.map((charge) => {
         const voice = chargeVoices.find((c) => c.id === charge.id);
         // runVerdictVoice's schema now requires an entry for every requested
@@ -58,19 +97,27 @@ export function createGameService(apiKey: string): CaseSource {
         return { ...charge, ...voice };
       });
 
-      const payload = await finalizeCasePayload(apiKey, model, {
-        charges: chargesWithVoice,
-        statuteContexts,
-        environment,
-        defendant,
-        witnesses,
-        evidence,
-      });
+      const payload = await step('FINALIZE', () =>
+        finalizeCasePayload(apiKey, model, {
+          charges: chargesWithVoice,
+          statuteContexts,
+          environment,
+          defendant,
+          witnesses,
+          evidence,
+        }),
+      );
 
-      const { band } = assessProsecution(payload);
-      const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
-      const defensePosture = offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
-      const pleaNarrative = await runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture);
+      const { band, offerTerms, defensePosture } = await step('PLEA_STRUCTURE', () => {
+        const { band } = assessProsecution(payload);
+        const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
+        const defensePosture =
+          offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
+        return { band, offerTerms, defensePosture } as const;
+      });
+      const pleaNarrative = await step('PLEA_NARRATIVE', () =>
+        runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture),
+      );
 
       return { payload, pleaNarrative };
     },
