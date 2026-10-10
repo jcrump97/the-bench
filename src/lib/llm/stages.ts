@@ -1333,24 +1333,38 @@ export async function runVerdictVoice(
 // generateValidated makes it an ordinary, repaired validation failure.
 const OFFER_ONLY_FIELDS = ['defenseRationale', 'allocution', 'pleaReactions', 'pleaRulingOptions'] as const;
 
+// Keeps only the fields a band asked the model for. Structured output can
+// return a key the request never named, or an optional one materialized as an
+// explicit null — the same habit `interrogation` showed on evidence. The real
+// schema is strict, so either would burn a retry on an answer whose requested
+// fields were fine. Projecting first restores exactly the tolerance the
+// pre-R5 stage schemas had, without loosening the gate demo cases cross.
+function projectOnto(fields: readonly string[]) {
+  return (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    const response = value as Record<string, unknown>;
+    return Object.fromEntries(fields.filter((field) => field in response).map((field) => [field, response[field]]));
+  };
+}
+
 // WEAK: no offer reaches the bench, so only the People's rationale exists —
-// the same pairing defineDemoCase enforces for authored NO_OFFER cases.
-const WeakPleaNarrativeSchema = PleaNarrativeSchema.superRefine((narrative, ctx) => {
-  for (const field of OFFER_ONLY_FIELDS) {
-    if (narrative[field] !== undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} must be omitted when no offer is extended` });
-    }
-  }
-});
+// the same pairing defineDemoCase enforces for authored NO_OFFER cases. The
+// projection leaves nothing else to forbid.
+const WeakPleaNarrativeSchema = z.preprocess(projectOnto(['prosecutionRationale']), PleaNarrativeSchema);
 
 // MODERATE/STRONG: an offer reaches the bench, so every offer field is owed.
-const OfferPleaNarrativeSchema = PleaNarrativeSchema.superRefine((narrative, ctx) => {
-  for (const field of OFFER_ONLY_FIELDS) {
-    if (narrative[field] === undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} is required when the case carries an offer` });
+// A null in one of them survives the projection and is repaired, not dropped:
+// the field was asked for, and null is not an answer.
+const OfferPleaNarrativeSchema = z.preprocess(
+  projectOnto(['prosecutionRationale', ...OFFER_ONLY_FIELDS]),
+  PleaNarrativeSchema.superRefine((narrative, ctx) => {
+    for (const field of OFFER_ONLY_FIELDS) {
+      if (narrative[field] === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} is required when the case carries an offer` });
+      }
     }
-  }
-});
+  }),
+);
 
 const WEAK_PLEA_GEMINI_SCHEMA = geminiObjectOf('prosecutionRationale', { type: 'string', minLength: 1, maxLength: 1000 });
 

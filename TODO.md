@@ -63,7 +63,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       `Promise.all` branch aborts the other, and no progress event is emitted
       after the run has ended. The rejection is the terminal event, and the
       contract says so.
-- [ ] **F5 — plea projection** (review 1 #6; review 2 #10): see review point 4.
+- [x] **F5 — plea projection** (review 1 #6; review 2 #10): see review point 4.
 - [ ] **F6 — Bench Book chunk failure** (review 2 #1): a rejected lazy import
       renders a "reload to fetch it" modal instead of unmounting the app.
       This is covered by an E2E check that blocks the chunk.

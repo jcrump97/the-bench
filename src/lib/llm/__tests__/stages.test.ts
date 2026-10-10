@@ -596,6 +596,20 @@ describe('runVerdictVoice', () => {
   });
 });
 
+const completeOffer = {
+  prosecutionRationale: 'The People offer a negotiated plea.',
+  defenseRationale: 'The defense recommends acceptance.',
+  allocution: 'I take responsibility for my actions, Your Honor.',
+  pleaReactions: {
+    ACCEPT: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }],
+    REJECT: [{ speaker: 'PROSECUTION', text: 'The People will proceed to trial.' }],
+  },
+  pleaRulingOptions: [
+    { choice: 'ACCEPT', lineText: 'The court accepts the negotiated plea.' },
+    { choice: 'REJECT', lineText: 'The court rejects the negotiated plea.' },
+  ],
+};
+
 describe('runPleaNarrative', () => {
   it('requests only prosecutionRationale for a WEAK band', async () => {
     mockCallsWith(JSON.stringify({ prosecutionRationale: 'The People decline to offer given the thin proof.' }));
@@ -676,6 +690,47 @@ describe('runPleaNarrative', () => {
     const parsedCase = CaseSchema.parse(rawValidCase);
     const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
     expect(result.prosecutionRationale).toContain('before this court');
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
+
+  // Structured output can add a key or null-fill an optional one. Neither may
+  // cost a retry when every field the band asked for is valid.
+  it('accepts a WEAK response carrying keys it was never asked for', async () => {
+    mockCallsWith(
+      JSON.stringify({
+        prosecutionRationale: 'The People decline to offer given the thin proof.',
+        defenseRationale: null,
+        commentary: 'an extra key',
+      }),
+    );
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
+    expect(result).toEqual({ prosecutionRationale: 'The People decline to offer given the thin proof.' });
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts an offer response carrying a key it was never asked for', async () => {
+    mockCallsWith(JSON.stringify({ ...completeOffer, commentary: 'an extra key' }));
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'ACCEPT');
+    expect(result).toEqual(completeOffer);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+  });
+
+  it('repairs a null in a field the offer owes rather than dropping it', async () => {
+    mockCallsWith(JSON.stringify({ ...completeOffer, allocution: null }), JSON.stringify(completeOffer));
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'ACCEPT');
+    expect(result.allocution).toBe(completeOffer.allocution);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
   });
 
