@@ -88,7 +88,10 @@ export function applyGenerationProgress(
 
 export interface GenerateCaseOptions {
   // Called as each step starts and finishes. Display only — never awaited,
-  // and a throwing listener must not be able to fail the generation.
+  // and a throwing listener must not be able to fail the generation. Nothing
+  // is reported once the run is cancelled or fails: generateCase settling is
+  // the terminal event, so a step that was running when the run failed is
+  // left RUNNING here and its outcome is the rejection itself.
   onProgress?: (event: GenerationProgressEvent) => void;
   // Aborting cancels the run: the request in flight ends at once, no further
   // attempt or step starts, and generateCase rejects with

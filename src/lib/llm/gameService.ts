@@ -7,6 +7,7 @@ import {
   type GenerationStepId,
 } from '../generationProgress';
 import type { Charge, Interrogation } from '../../schemas/gameSchemas';
+import { anySignal } from './anySignal';
 import { getOrSelectModel } from './modelSelection';
 import {
   GameServiceError,
@@ -22,12 +23,15 @@ import {
 } from './stages';
 
 // Wraps each pipeline step with the two observational concerns, so the
-// orchestration below reads as the pipeline and nothing else: a cancel check
+// orchestration below reads as the pipeline and nothing else: an abort check
 // before the step starts, and STARTED/DONE progress events around it. A
 // listener that throws is contained here — watching a generation must never
-// be able to fail one.
-function createStepRunner(onProgress: GenerateCaseOptions['onProgress'], signal: AbortSignal | undefined) {
+// be able to fail one. Once the run is aborted — cancelled, or failed —
+// nothing more is reported: a sibling still unwinding must not announce
+// progress on a case that no longer exists.
+function createStepRunner(onProgress: GenerateCaseOptions['onProgress'], signal: AbortSignal) {
   const emit = (stepId: GenerationStepId, status: 'STARTED' | 'DONE' | 'SKIPPED') => {
+    if (signal.aborted) return;
     try {
       onProgress?.({ stepId, status, at: Date.now() });
     } catch {
@@ -37,7 +41,7 @@ function createStepRunner(onProgress: GenerateCaseOptions['onProgress'], signal:
 
   return {
     async step<T>(stepId: GenerationStepId, run: () => T | Promise<T>): Promise<T> {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       emit(stepId, 'STARTED');
       const result = await run();
       emit(stepId, 'DONE');
@@ -53,11 +57,7 @@ type StepRunner = ReturnType<typeof createStepRunner>;
 
 // The pipeline itself, in dependency order. Every stage receives the run's
 // signal, so a cancel ends the call in flight rather than waiting for it.
-async function writeCase(
-  apiKey: string,
-  { step, skip }: StepRunner,
-  signal: AbortSignal | undefined,
-): Promise<GeneratedCase> {
+async function writeCase(apiKey: string, { step, skip }: StepRunner, signal: AbortSignal): Promise<GeneratedCase> {
   // The one call left unsignalled. Model selection is cached per key as a
   // promise, so an aborted lookup would poison the cache for every later run
   // this session; it is a free metadata call, and the next step boundary
@@ -70,7 +70,8 @@ async function writeCase(
   // and the verdict voice needs only the charges and the defendant — not
   // the interview or the evidence. Seven sequential round trips become
   // five on the critical path. Every stage still validates independently;
-  // if one fails, the run fails, and its sibling's result is discarded.
+  // if one fails, the run fails and generateCase aborts the sibling still in
+  // flight — a lost case must not keep spending the player's quota.
   const [environment, defendant] = await Promise.all([
     step('SCENE', () => runEnvironmentGen(apiKey, model, charges, signal)),
     step('DEFENDANT', () => runCharacterGen(apiKey, model, charges, signal)),
@@ -143,13 +144,21 @@ async function writeCase(
 // that lives in stages.ts.
 export function createGameService(apiKey: string): CaseSource {
   return {
-    async generateCase({ onProgress, signal }: GenerateCaseOptions = {}): Promise<GeneratedCase> {
+    async generateCase({ onProgress, signal: cancel }: GenerateCaseOptions = {}): Promise<GeneratedCase> {
+      // The run's own signal, aborted by the player's cancel or by the run
+      // itself the moment any stage fails. Promise.all rejects on the first
+      // failure but cannot stop the other branch; this does, so the sibling's
+      // in-flight request and remaining retries end with the run instead of
+      // spending quota on a case already headed for the Mistrial screen.
+      const run = new AbortController();
+      const signal = cancel ? anySignal([cancel, run.signal]) : run.signal;
       try {
         return await writeCase(apiKey, createStepRunner(onProgress, signal), signal);
       } catch (err) {
+        run.abort();
         // However the cancel surfaced — at a step boundary, mid-request, or
         // in a backoff wait — the caller hears one thing: it was cancelled.
-        if (signal?.aborted) throw new GenerationCancelledError();
+        if (cancel?.aborted) throw new GenerationCancelledError();
         throw err;
       }
     },

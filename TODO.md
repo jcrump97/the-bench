@@ -17,8 +17,8 @@ existing call site or test changes.
 **Plan review (before any code).** The first draft had four deficiencies,
 each corrected below:
 
-1. *It used `AbortSignal.any` unguarded.* That API only became Baseline
-   "widely available" this autumn, and Safari before 17.4 lacks it. A missing
+1. *It used `AbortSignal.any` unguarded.* That API is newer than everything
+   else the app relies on, and Safari before 17.4 lacks it. A missing
    method there would break every BYOK generation, not just Cancel. The
    transport combines signals through a small helper that falls back to manual
    wiring.
@@ -57,7 +57,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       abort rather than retrying it, and every stage passes its signal through.
       Cancel now ends the in-flight request at once, so the docket can safely
       unlock straight away (review 1 #7 needs no UI change).
-- [ ] **F4 — a failed run stops its siblings** (review 1 #2, #8; review 2 #3):
+- [x] **F4 — a failed run stops its siblings** (review 1 #2, #8; review 2 #3):
       `generateCase` owns an internal `AbortController`, aborted on any
       failure, and combined with the caller's signal. A failure inside one
       `Promise.all` branch aborts the other, and no progress event is emitted

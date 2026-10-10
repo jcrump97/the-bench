@@ -226,6 +226,71 @@ describe('createGameService().generateCase', () => {
     expect(finalizeCasePayload).not.toHaveBeenCalled();
   });
 
+  it('aborts the concurrent sibling when one stage fails', async () => {
+    let defendantSignal: AbortSignal | undefined;
+    let finishDefendant: () => void = () => {};
+    vi.mocked(runCharacterGen).mockImplementation((_key, _model, _charges, signal) => {
+      defendantSignal = signal;
+      return new Promise((resolve) => {
+        finishDefendant = () => resolve(validCase.defendant);
+      });
+    });
+    vi.mocked(runEnvironmentGen).mockRejectedValue(new Error('scene failed'));
+
+    await expect(createGameService(API_KEY).generateCase()).rejects.toThrow(/scene failed/);
+    // Without the abort, the defendant's request and its retries ran on
+    // after the player was already looking at the Mistrial screen.
+    expect(defendantSignal?.aborted).toBe(true);
+    finishDefendant();
+  });
+
+  it('reports nothing once the run has failed', async () => {
+    const events: string[] = [];
+    let finishDefendant: () => void = () => {};
+    vi.mocked(runCharacterGen).mockImplementation(
+      () => new Promise((resolve) => {
+        finishDefendant = () => resolve(validCase.defendant);
+      }),
+    );
+    vi.mocked(runEnvironmentGen).mockRejectedValue(new Error('scene failed'));
+
+    await expect(
+      createGameService(API_KEY).generateCase({ onProgress: (e) => events.push(`${e.stepId}:${e.status}`) }),
+    ).rejects.toThrow(/scene failed/);
+    const settled = [...events];
+
+    // The orphaned sibling finishes after the run has already settled.
+    finishDefendant();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toEqual(settled);
+    expect(events).not.toContain('DEFENDANT:DONE');
+  });
+
+  it('reports nothing once the run is cancelled', async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    let finishScene: () => void = () => {};
+    vi.mocked(runEnvironmentGen).mockImplementation(
+      () => new Promise((resolve) => {
+        finishScene = () => resolve(validCase.environment);
+      }),
+    );
+    vi.mocked(runCharacterGen).mockImplementation(async () => {
+      controller.abort();
+      throw controller.signal.reason;
+    });
+
+    await expect(
+      createGameService(API_KEY).generateCase({
+        signal: controller.signal,
+        onProgress: (e) => events.push(`${e.stepId}:${e.status}`),
+      }),
+    ).rejects.toBeInstanceOf(GenerationCancelledError);
+    finishScene();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).not.toContain('SCENE:DONE');
+  });
+
   it('cannot be failed by a progress listener that throws', async () => {
     const result = await createGameService(API_KEY).generateCase({
       onProgress: () => {

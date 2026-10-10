@@ -1,6 +1,8 @@
 // Thin wrapper over the Gemini REST API via native fetch. No SDK — the stack
 // is locked (see CLAUDE.md), and this surface is small enough not to need one.
 
+import { anySignal } from './anySignal';
+
 const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 // A pipeline makes 6+ of these calls; a sustained burst of 429s (e.g. a
 // short-window testing cadence hitting the same key repeatedly) used to
@@ -130,23 +132,6 @@ function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
     }, ms);
     signal?.addEventListener('abort', onAbort, { once: true });
   });
-}
-
-// One signal that aborts when any of its inputs does. AbortSignal.any only
-// reached Baseline "widely available" in late 2026 — Safari before 17.4 lacks
-// it — and without this fallback every BYOK request there would throw before
-// it was sent, not just the cancelled ones.
-function anySignal(signals: AbortSignal[]): AbortSignal {
-  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
-  const controller = new AbortController();
-  for (const signal of signals) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      break;
-    }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
-  }
-  return controller.signal;
 }
 
 // Gemini's 429s often carry a Retry-After header (seconds) — honoring it
