@@ -5,7 +5,8 @@
 // Written for two readers at once. `plain` is for someone meeting the word
 // for the first time; `authority` is for someone who will want to know what
 // it rests on. Authorities are cited only where the game actually models the
-// rule, and `inThisCourt` says how — including where it is simplified, because
+// rule (a term the game does not model is defined, but carries no citation),
+// and `inThisCourt` says how — including where it is simplified, because
 // a simplification passed off as the real rule is the one error an attorney
 // will not forgive.
 
@@ -131,7 +132,9 @@ export const BENCH_BOOK_TERMS: readonly BenchBookTermGroup[] = [
       {
         term: 'Wobbler',
         plain: 'A crime that can be charged or sentenced as either a felony or a misdemeanor, at the court’s discretion.',
-        authority: 'Cal. Penal Code § 17(b)',
+        // No authority: the game does not model the election, and citing the
+        // statute beside a rule it does not apply would pass a simplification
+        // off as the law.
         inThisCourt: 'Not yet modeled as a choice: where a count could be prison or jail, prison governs. (This is a known simplification.)',
       },
       {
@@ -146,7 +149,7 @@ export const BENCH_BOOK_TERMS: readonly BenchBookTermGroup[] = [
       {
         term: 'Prison and county jail',
         plain: 'State prison holds people serving longer felony terms; county jail holds misdemeanor terms and some felony terms after California’s 2011 realignment.',
-        authority: 'Cal. Penal Code § 1170(h)',
+        inThisCourt: 'Each count’s statutory range already says where its time is served. Which felonies realignment sends to county jail is not modeled.',
       },
       {
         term: 'Aggregate term',

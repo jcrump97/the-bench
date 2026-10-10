@@ -29,6 +29,17 @@ describe('Bench Book', () => {
     }
   });
 
+  // CLAUDE.md, Player Orientation: an authority beside a rule the game does
+  // not apply passes a simplification off as the law — the one error an
+  // attorney will not forgive. A term that admits it is not modeled is
+  // defined, but cites nothing.
+  it('cites no authority for a rule it says the game does not model', () => {
+    for (const { term, authority, inThisCourt } of allTerms) {
+      if (authority === undefined) continue;
+      expect(inThisCourt ?? '', term).not.toMatch(/not (yet )?modeled/i);
+    }
+  });
+
   // The defendant's personality traits drive behavior but are never display
   // data (CLAUDE.md, Vision). A reference page must not name them either.
   it('never names the hidden personality model', () => {
