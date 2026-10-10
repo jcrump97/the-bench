@@ -14,6 +14,8 @@
 //   4. Reyes (STRONG/offer rejected) — skip-to-next-decision, convicted ending
 //   5. Vaughn (multi-charge)         — per-charge verdict beats, split ending
 //   6. Navarro (guided tutorial)     — decision explainers, plea-accepted ending
+//   7. BYOK generating screen        — progress panel, header-only key, Cancel
+//      (Gemini is routed inside the browser: no request leaves, no quota spent)
 // Assertions pin demo-case data (names, ranges, beat headings, speaker order,
 // aftermath variant phrases) — if a case in src/lib/demoCases/ or the beat
 // UI changes intentionally, update them here.
@@ -468,6 +470,61 @@ const browser = await chromium.launch(
   check('Navarro end: plea-accepted aftermath variant shown',
     (await page.locator('text=finally signed something with his own name').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '16-tutorial-endstate.png'), fullPage: true });
+  await page.close();
+}
+
+// ---------- Run 7: BYOK generating screen — progress and Cancel ----------
+// Every Gemini request is answered inside the browser by page.route, so this
+// run needs no key and spends no quota: model discovery is fulfilled with one
+// model, and generateContent is held open forever — the pipeline sits on its
+// first model call, which is exactly the state a player would want to watch
+// or walk away from. The key below is a schema-valid placeholder that never
+// leaves the page.
+{
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  const FAKE_KEY = 'AIzaE2E_PLACEHOLDER_NOT_A_KEY_0000000';
+  const geminiRequests = [];
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const request = route.request();
+    geminiRequests.push({ url: request.url(), key: request.headers()['x-goog-api-key'] });
+    if (request.url().endsWith('/models')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }] }),
+      });
+    }
+    // generateContent: never answered.
+  });
+
+  await gotoWithRetry(page, BASE);
+  await page.locator('input[type="password"]').fill(FAKE_KEY);
+  await page.getByRole('button', { name: 'Submit Key' }).click();
+  await page.getByRole('button', { name: 'Generate a Case', exact: true }).click();
+
+  const panel = page.locator('[data-generation-progress]');
+  await panel.waitFor();
+  await page.locator('[data-step="STATUTES"][data-status="RUNNING"]').waitFor();
+  check('BYOK: model selection reported done before the first stage runs',
+    (await page.locator('[data-step="MODEL_SELECTION"]').getAttribute('data-status')) === 'DONE');
+  check('BYOK: computed steps are labelled apart from model calls',
+    (await page.locator('[data-step="PLEA_STRUCTURE"]', { hasText: 'computed' }).count()) === 1);
+  check('BYOK: the docket is locked while a case is generating',
+    await page.getByRole('button', { name: /People v\. Marcus Webb/ }).isDisabled());
+  check('BYOK: the key travels in the x-goog-api-key header on every request',
+    geminiRequests.length >= 2 && geminiRequests.every((r) => r.key === FAKE_KEY),
+    `${geminiRequests.length} requests`);
+  check('BYOK: the key never appears in a request URL',
+    geminiRequests.every((r) => !r.url.includes(FAKE_KEY) && !r.url.includes('key=')));
+  await page.screenshot({ path: path.join(SHOTS, '17-byok-progress.png'), fullPage: true });
+
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  check('BYOK cancel: the progress panel is gone', (await panel.count()) === 0);
+  check('BYOK cancel: the docket is open again',
+    await page.getByRole('button', { name: /People v\. Marcus Webb/ }).isEnabled());
+  check('BYOK cancel: the key is still vaulted, ready for another try',
+    (await page.getByRole('button', { name: 'Generate a Case', exact: true }).count()) === 1);
+  await page.waitForTimeout(500);
+  check('BYOK cancel: cancelling is not a mistrial', (await page.locator('text=Mistrial').count()) === 0);
   await page.close();
 }
 

@@ -62,7 +62,7 @@ below rather than discovered in review:
       reports each stage and each deterministic derivation as it runs.
 - [x] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
       Needs a `test:live` diagnostic sweep before it is trusted on a free-tier key.
-- [ ] **P8 — generation progress UI:** a live stage checklist (model call vs.
+- [x] **P8 — generation progress UI:** a live stage checklist (model call vs.
       computed, elapsed time), with a Cancel that returns to the docket.
 - [ ] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
 
@@ -1188,7 +1188,8 @@ so they aren't lost.
 - [ ] Tier 3 testing checkpoint — `@playwright/test` E2E + `toHaveScreenshot()`
       baselines, now that the gameplay loop is functionally complete. Needs
       dependency approval.
-- [ ] Loading/pipeline-progress UI for the real (non-demo) generation flow.
+- [x] Loading/pipeline-progress UI for the real (non-demo) generation flow.
+      *(P8: `GenerationProgressPanel`, covered by E2E run 7.)*
 - [x] `PleaOfferForm`'s `NO_OFFER` and `REJECTED_BY_DEFENSE` branches — now
       exercisable via Boone (WEAK → no offer) and Reyes (STRONG → rejected)
       in the demo docket. Covered by the `run-the-bench` headless playthrough.
