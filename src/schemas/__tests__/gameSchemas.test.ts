@@ -4,6 +4,7 @@ import {
   ChargeSchema,
   EvidenceSchema,
   WitnessSchema,
+  CharacterSchema,
   PleaNarrativeSchema,
   ReactionLineSchema,
   AftermathNarrativeSchema,
@@ -234,10 +235,23 @@ describe('WitnessSchema testimony fields', () => {
     expect(WitnessSchema.safeParse({ ...witness, crossExamination: null }).success).toBe(true);
   });
 
+  // R4: every speaker line leads with a name, so a blank one renders a line
+  // spoken by no one. The LLM path can produce names; the gate must refuse.
+  it('rejects a blank witness name', () => {
+    expect(WitnessSchema.safeParse({ ...witness, name: '' }).success).toBe(false);
+  });
+
   it('rejects a witness missing directExamination', () => {
     const withoutDirect: Record<string, unknown> = { ...witness };
     delete withoutDirect.directExamination;
     expect(WitnessSchema.safeParse(withoutDirect).success).toBe(false);
+  });
+});
+
+describe('CharacterSchema names', () => {
+  it.each(['firstName', 'lastName'] as const)('rejects a blank defendant %s', (field) => {
+    const defendant = { ...rawValidCase.defendant, [field]: '' };
+    expect(CharacterSchema.safeParse(defendant).success).toBe(false);
   });
 });
 

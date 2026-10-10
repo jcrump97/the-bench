@@ -45,8 +45,12 @@ below rather than discovered in review:
 - [x] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
       `addChoiceCoverageIssues` / `PleaNarrativeSchema`, so a jury reference in
       plea or verdict lines is a retried repair, not an unretried Mistrial.
-- [ ] **P3 — R3/R4:** names and nullable prose fields require `minLength: 1`
-      in both schema languages.
+- [x] **P3 — R4 (R3 closed as superseded):** names require `minLength: 1`
+      in both schema languages. R3 asked the same of three *nullable* fields,
+      but `schemaParity.test.ts` already records why nullable fields are
+      exempt: Gemini cannot say "null, or at least one character", so a
+      `minLength` there would forbid the null the field permits. An earlier
+      decision outranks a later review that did not see it.
 - [ ] **P4 — A5b:** per-attempt request timeout in the transport.
 - [ ] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline.
 
@@ -533,7 +537,7 @@ the session transcript; this is the consolidated action list.
 
 **Minor**
 
-- [ ] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
+- [x] **R3 — several Gemini responseSchema string fields lack `minLength: 1`
       that their Zod counterparts enforce.** `crossExamination`
       (`stages.ts:381` vs `gameSchemas.ts:290`), `defenseObjection`
       (`stages.ts:415` vs `gameSchemas.ts:310`), and `directExamination`
@@ -548,11 +552,16 @@ the session transcript; this is the consolidated action list.
       two schema languages transcribed by hand — so patching individual
       fields keeps the generator of these bugs intact. See A2 for the
       structural fix, which closes this item as a side effect.
-- [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
+      *(Closed without change, 2026-10-10: all four fields are nullable, and
+      `schemaParity.test.ts` exempts nullable fields from `minLength` on
+      purpose — the keyword would forbid the null the field permits. An
+      empty string there still fails Zod and is repaired like any issue.)*
+- [x] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
       /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
       name passes both gates and renders as an empty speaker line in
       `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
-      `.min(1)` in both layers for all three fields.
+      `.min(1)` in both layers for all three fields. *(Fixed in P3; the parity
+      test now holds the Gemini side to it.)*
 - [x] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
       fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
       `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
@@ -958,7 +967,7 @@ so they aren't lost.
       `courtroomScript.ts`), and `LedgerEntryRow`'s caption reads it back
       ("Direct examination — called by the defense/prosecution") instead of
       silently losing it to the generic name-led caption.
-- [ ] **Blank-name schema gap.** `WitnessSchema.name` and
+- [x] **Blank-name schema gap.** *(Fixed with R4 in P3.)* `WitnessSchema.name` and
       `CharacterSchema.firstName`/`lastName` have no `.min(1)`, so a
       schema-valid empty string would render a blank speaker line in
       `LedgerEntryRow` (`entry.speakerName ?? SPEAKER_LABELS[...]` only

@@ -354,8 +354,8 @@ export const ENVIRONMENT_GEMINI_SCHEMA: GeminiSchema = {
 export const CHARACTER_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
-    firstName: { type: 'string', maxLength: 50 },
-    lastName: { type: 'string', maxLength: 50 },
+    firstName: { type: 'string', minLength: 1, maxLength: 50 },
+    lastName: { type: 'string', minLength: 1, maxLength: 50 },
     age: { type: 'integer', minimum: 18, maximum: 120 },
     demographics: {
       type: 'object',
@@ -435,7 +435,7 @@ export const WITNESS_GEMINI_SCHEMA: GeminiSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', minLength: 1, maxLength: 40 },
-    name: { type: 'string', maxLength: 101 },
+    name: { type: 'string', minLength: 1, maxLength: 101 },
     role: { type: 'string', enum: [...WitnessRoleEnum.options] },
     bias: { type: 'string', enum: [...BiasIndicatorEnum.options] },
     statement: { type: 'string', maxLength: 1000 },
