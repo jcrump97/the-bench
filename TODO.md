@@ -64,7 +64,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       after the run has ended. The rejection is the terminal event, and the
       contract says so.
 - [x] **F5 — plea projection** (review 1 #6; review 2 #10): see review point 4.
-- [ ] **F6 — Bench Book chunk failure** (review 2 #1): a rejected lazy import
+- [x] **F6 — Bench Book chunk failure** (review 2 #1): a rejected lazy import
       renders a "reload to fetch it" modal instead of unmounting the app.
       This is covered by an E2E check that blocks the chunk.
 - [ ] **F7 — stale Bench Book on the docket** (review 2 #7): arriving at the

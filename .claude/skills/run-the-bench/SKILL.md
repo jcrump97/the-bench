@@ -64,6 +64,9 @@ BYOK generating screen —
    `x-goog-api-key` header, and Cancel returning to the docket without a
    mistrial — aborting the held-open request on the wire, with no model call
    started after it
+8. **Bench Book chunk unavailable** at 1280px: the lazy Bench Book chunk is
+   blocked mid-case (a tab opened before a redeploy), and the failed load must
+   render a modal that says so, with the courtroom still mounted behind it
 
 Each ending is asserted by a phrase unique to that case's aftermath variant,
 which is what proves the outcome-conditioned branching end to end.

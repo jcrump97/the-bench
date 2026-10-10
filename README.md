@@ -48,7 +48,9 @@ speaker order, beat ordering, progressive-reveal gating, act title cards, the
 Bench Book, and outcome-conditioned endings — plus a seventh run over the BYOK
 generating screen, where Playwright answers every Gemini request inside the
 browser (no key, no quota) to check the progress panel, that the key travels
-only in a request header, and that Cancel returns to the docket. It needs a server to point at — `npm run dev` locally, or
+only in a request header, and that Cancel aborts the request in flight and
+returns to the docket — and an eighth that blocks the Bench Book's chunk
+mid-case to prove a failed load cannot unmount the courtroom. It needs a server to point at — `npm run dev` locally, or
 `npm run preview` with `BASE_URL=http://localhost:4173/the-bench/` to test the
 production build the way CI does. Playwright is deliberately **not** a project
 dependency; see the skill's `SKILL.md` for the throwaway-prefix install.

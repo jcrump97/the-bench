@@ -573,6 +573,33 @@ const browser = await chromium.launch(
   await page.close();
 }
 
+// ---------- Run 8: Bench Book chunk unavailable mid-case ----------
+// A tab opened before a redeploy asks for a chunk hash that no longer exists.
+// The lazy Bench Book must fail into a modal that says so, never unmount the
+// courtroom. Its own page and console: the blocked chunk's load error is the
+// expected one, so it stays out of the all-runs console check.
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const pageErrors = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await page.route('**/BenchBookModal-*.js', (route) => route.abort());
+
+  await gotoWithRetry(page, BASE);
+  await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
+  await page.getByRole('button', { name: 'Open the Bench Book' }).click();
+  const unavailable = page.locator('[data-bench-book-unavailable]');
+  await unavailable.waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book unavailable: a failed chunk load says so in a modal', (await unavailable.count()) === 1);
+  check('Bench Book unavailable: the courtroom is still mounted behind it',
+    (await page.getByRole('button', { name: 'Open the Bench Book' }).count()) === 1);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  check('Bench Book unavailable: closing returns to the case in progress',
+    (await page.getByRole('dialog').count()) === 0
+      && (await page.getByRole('button', { name: 'Open the Bench Book' }).count()) === 1);
+  check('Bench Book unavailable: no uncaught error', pageErrors.length === 0, pageErrors.join(' | '));
+  await page.close();
+}
+
 await browser.close();
 
 const realErrors = consoleErrors.filter((e) => !e.includes('Download the React DevTools'));
