@@ -120,7 +120,21 @@ function retryAfterMs(response: Response): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
 }
 
-async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+// A timeout reaches us in more than one shape: as the timer signal's own
+// reason (a DOMException named TimeoutError) from fetch or from a body read,
+// and — depending on the fetch implementation — as a DOMException from a
+// different realm than this one's global. Checking the timer itself, then the
+// error's name, classifies all of them; `instanceof DOMException` does not.
+function isTimeout(err: unknown, timer: AbortSignal): boolean {
+  return timer.aborted || (err as { name?: unknown } | null)?.name === 'TimeoutError';
+}
+
+// One request, retried on 429/5xx and network failure, resolving to the
+// response body as text. The body is read *inside* the timed attempt: the
+// timeout bounds the whole exchange, and a stall while a large response is
+// still streaming is the same TIMEOUT as a stall before the headers arrive —
+// read outside, it escaped as a raw DOMException with no `reason` at all.
+async function fetchTextWithRetry(url: string, init: RequestInit): Promise<string> {
   let lastError: unknown;
   let nextDelayMs = 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -129,9 +143,10 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
     const jitter = 0.5 + Math.random() * 0.5;
     nextDelayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt * jitter, MAX_BACKOFF_MS);
 
+    const timer = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      if (response.ok) return response;
+      const response = await fetch(url, { ...init, signal: timer });
+      if (response.ok) return await response.text();
       if (!isRetryableStatus(response.status) || attempt === MAX_ATTEMPTS - 1) {
         const body = await response.text().catch(() => '');
         throw new GeminiError(
@@ -144,7 +159,7 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
       lastError = new GeminiError(`Gemini request failed with status ${response.status}`, response.status);
     } catch (err) {
       if (err instanceof GeminiError) throw err;
-      if (err instanceof DOMException && err.name === 'TimeoutError') {
+      if (isTimeout(err, timer)) {
         throw new GeminiError(`Gemini request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`, null, 'TIMEOUT');
       }
       lastError = err;
@@ -167,7 +182,7 @@ export async function callGemini(
   options: GeminiCallOptions,
 ): Promise<string> {
   const url = `${API_ROOT}/models/${model}:generateContent`;
-  const response = await fetchWithRetry(url, {
+  const body = await fetchTextWithRetry(url, {
     method: 'POST',
     headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
@@ -206,7 +221,7 @@ export async function callGemini(
     }),
   });
 
-  const data = (await response.json()) as {
+  const data = JSON.parse(body) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     promptFeedback?: { blockReason?: string };
   };
@@ -243,10 +258,10 @@ export async function callGemini(
 
 // Lists models available to this key, for dynamic model selection.
 export async function listModels(apiKey: string): Promise<RawModel[]> {
-  const response = await fetchWithRetry(`${API_ROOT}/models`, {
+  const body = await fetchTextWithRetry(`${API_ROOT}/models`, {
     method: 'GET',
     headers: authHeaders(apiKey),
   });
-  const data = (await response.json()) as { models?: RawModel[] };
+  const data = JSON.parse(body) as { models?: RawModel[] };
   return data.models ?? [];
 }

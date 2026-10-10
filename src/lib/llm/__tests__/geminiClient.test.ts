@@ -12,6 +12,13 @@ function textResponse(body: string, status: number): Response {
   return new Response(body, { status });
 }
 
+// A 200 whose headers arrived but whose body times out mid-stream.
+function stalledBodyResponse(): Response {
+  const response = new Response('{"partial":', { status: 200 });
+  vi.spyOn(response, 'text').mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+  return response;
+}
+
 describe('callGemini', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -168,6 +175,40 @@ describe('callGemini', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  // A fetch implementation can throw a DOMException from another realm than
+  // the global one, which an `instanceof DOMException` check misses — and a
+  // missed timeout was retried five times over, 120 s apiece.
+  it('recognizes a timeout by name, whatever realm its error came from', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' }));
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Headers can arrive well inside the limit while a large body is still
+  // streaming when it expires. That stall is the same TIMEOUT, not a raw
+  // DOMException escaping the transport with no reason attached.
+  it('classifies a timeout while the body is still being read', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(stalledBodyResponse());
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws immediately on a 4xx without retrying', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(textResponse('bad key', 400));
@@ -306,6 +347,11 @@ describe('listModels', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('classifies a timeout while the models list is still being read', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(stalledBodyResponse());
+    await expect(listModels('AIzaTestKey1234567890123456789')).rejects.toMatchObject({ reason: 'TIMEOUT' });
   });
 
   it('parses a models list response', async () => {

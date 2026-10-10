@@ -40,10 +40,14 @@ each corrected below:
 No `responseSchema` or `generationConfig` changes, so the live-probe rule is
 not triggered. The `test:live` sweep owed for P4/P7 is still owed.
 
-- [ ] **F1 — timeout classification** (review 1 #3, #4; review 2 #5): read the
+- [x] **F1 — timeout classification** (review 1 #3, #4; review 2 #5): read the
       body inside the timed, classified scope on both endpoints, and detect a
       timeout by the timer's own signal or the error's `name`, never by
-      `instanceof DOMException`, which is realm-bound.
+      `instanceof DOMException`, which is realm-bound. *Found on the way:*
+      two `modelSelection` tests reused one `Response` across calls, and they
+      had only passed because the second read failed outside the retry loop
+      and selection fell back to its hardcoded model. Each call now gets a
+      fresh response.
 - [ ] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
       treats `TIMEOUT` like a non-retryable 4xx, so a stalled connection costs
       one 120 s wait, not 3 × 120 s per stage. The stage name is preserved.
