@@ -90,8 +90,9 @@ export interface GenerateCaseOptions {
   // Called as each step starts and finishes. Display only — never awaited,
   // and a throwing listener must not be able to fail the generation.
   onProgress?: (event: GenerationProgressEvent) => void;
-  // Checked between steps. An in-flight call is left to finish (each attempt
-  // is bounded by the transport's timeout) and its result is discarded.
+  // Aborting cancels the run: the request in flight ends at once, no further
+  // attempt or step starts, and generateCase rejects with
+  // GenerationCancelledError.
   signal?: AbortSignal;
 }
 

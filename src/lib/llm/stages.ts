@@ -97,6 +97,15 @@ function withFeedback(base: string, feedback: string | undefined): string {
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
+interface GenerateOptions {
+  // Extra attempts after the first, each fed the previous failure to repair.
+  maxRetries?: number;
+  // The run's cancel signal. Reaches the request itself, so cancelling ends
+  // the call in flight and spends no further attempts — the stage's budget is
+  // for failures, and a cancel is not one.
+  signal?: AbortSignal | undefined;
+}
+
 function isUnretryableCallFailure(err: GeminiError): boolean {
   if (err.reason === 'TIMEOUT') return true;
   return err.status !== null && err.status !== 429 && err.status < 500;
@@ -117,7 +126,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   buildContents: (feedback: string | undefined) => string,
   responseSchema: GeminiSchema,
   zodSchema: Schema,
-  maxRetries = 2,
+  { maxRetries = 2, signal }: GenerateOptions = {},
 ): Promise<z.infer<Schema>> {
   let feedback: string | undefined;
   let lastError = 'unknown error';
@@ -130,14 +139,19 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   let lastRawResponse: string | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    signal?.throwIfAborted();
     let text: string;
     try {
       text = await callGemini(apiKey, model, {
         systemInstruction,
         contents: buildContents(feedback),
         responseSchema,
+        signal,
       });
     } catch (err) {
+      // A cancelled run is not a failed attempt: nothing to report, and
+      // nothing to retry. The caller's own reason goes back up untouched.
+      if (signal?.aborted) throw signal.reason;
       // Two call failures aren't worth spending the stage's budget on, so
       // they surface immediately. A non-retryable client error (bad request,
       // bad key — never 429 or 5xx) will fail identically on retry. A
@@ -588,6 +602,7 @@ function buildStatuteSelectionContents(feedback: string | undefined): string {
 export async function runStatuteSelection(
   apiKey: string,
   model: string,
+  signal?: AbortSignal,
 ): Promise<{ charges: ChargeCore[]; statuteContexts: string[] }> {
   return generateValidated(
     apiKey,
@@ -597,6 +612,7 @@ export async function runStatuteSelection(
     buildStatuteSelectionContents,
     STATUTE_SELECTION_GEMINI_SCHEMA,
     StatuteSelectionSchema,
+    { signal },
   );
 }
 
@@ -622,7 +638,12 @@ function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | u
   return withFeedback(base, feedback);
 }
 
-export async function runEnvironmentGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Environment> {
+export async function runEnvironmentGen(
+  apiKey: string,
+  model: string,
+  charges: ChargeCore[],
+  signal?: AbortSignal,
+): Promise<Environment> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -631,6 +652,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
     (feedback) => buildEnvironmentGenContents(charges, feedback),
     ENVIRONMENT_GEN_GEMINI_SCHEMA,
     EnvironmentGenSchema,
+    { signal },
   );
   return data.environment;
 }
@@ -659,7 +681,12 @@ function buildCharacterGenContents(charges: ChargeCore[], feedback: string | und
   return withFeedback(base, feedback);
 }
 
-export async function runCharacterGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Defendant> {
+export async function runCharacterGen(
+  apiKey: string,
+  model: string,
+  charges: ChargeCore[],
+  signal?: AbortSignal,
+): Promise<Defendant> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -668,6 +695,7 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
     (feedback) => buildCharacterGenContents(charges, feedback),
     CHARACTER_GEN_GEMINI_SCHEMA,
     CharacterGenSchema,
+    { signal },
   );
   return data.defendant;
 }
@@ -725,6 +753,7 @@ export async function runInterrogationGen(
   defendant: Defendant,
   environment: Environment,
   profile: InterrogationProfile,
+  signal?: AbortSignal,
 ): Promise<z.infer<typeof InterrogationSchema> | null> {
   if (profile.outcome === 'INVOKED_COUNSEL') return null;
 
@@ -736,6 +765,7 @@ export async function runInterrogationGen(
     (feedback) => buildInterrogationGenContents(defendant, environment, profile, feedback),
     INTERROGATION_GEN_GEMINI_SCHEMA,
     InterrogationGenSchema,
+    { signal },
   );
 
   // Belt-and-suspenders: the echo fields must exactly match the derived
@@ -865,6 +895,7 @@ export async function runEvidenceGen(
   environment: Environment,
   defendant: Defendant,
   interrogation: z.infer<typeof InterrogationSchema> | null,
+  signal?: AbortSignal,
 ): Promise<{ evidence: Evidence[]; witnesses: Witness[] }> {
   const data = await generateValidated(
     apiKey,
@@ -874,6 +905,7 @@ export async function runEvidenceGen(
     (feedback) => buildEvidenceGenContents(charges, environment, defendant, interrogation, feedback),
     EVIDENCE_GEN_GEMINI_SCHEMA,
     buildEvidenceGenSchema(interrogation !== null),
+    { signal },
   );
 
   // Force the echo fields on the interrogation exhibit (if any) to match the
@@ -1073,7 +1105,12 @@ interface FinalizeParts {
   evidence: Evidence[];
 }
 
-export async function finalizeCasePayload(apiKey: string, model: string, parts: FinalizeParts): Promise<CasePayload> {
+export async function finalizeCasePayload(
+  apiKey: string,
+  model: string,
+  parts: FinalizeParts,
+  signal?: AbortSignal,
+): Promise<CasePayload> {
   const finalFields = await generateValidated(
     apiKey,
     model,
@@ -1082,6 +1119,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     (feedback) => buildFinalizeContents(parts, feedback),
     FINALIZE_GEMINI_SCHEMA,
     CaseFinalizationFieldsSchema,
+    { signal },
   );
 
   // Fix the two mechanical cross-stage failures before validating, so the
@@ -1154,7 +1192,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     (feedback) => buildRepairContents(assembled, initial.error, feedback),
     FULL_CASE_GEMINI_SCHEMA,
     RepairCaseSchema,
-    2,
+    { maxRetries: 2, signal },
   );
 }
 
@@ -1259,6 +1297,7 @@ export async function runVerdictVoice(
   model: string,
   charges: ChargeCore[],
   defendant: Defendant,
+  signal?: AbortSignal,
 ): Promise<Pick<Charge, 'id' | 'verdictReactions' | 'verdictOptions'>[]> {
   const data = await generateValidated(
     apiKey,
@@ -1275,6 +1314,7 @@ export async function runVerdictVoice(
     // cause. One voiced layer per distinct id is all this stage can meaningfully
     // ask for.
     buildVerdictVoiceSchema([...new Set(charges.map((c) => c.id))]),
+    { signal },
   );
   return data.charges;
 }
@@ -1379,6 +1419,7 @@ export async function runPleaNarrative(
   band: 'WEAK' | 'MODERATE' | 'STRONG',
   offerTerms: { pleadsToChargeIds: string[]; proposedSentence: Sentence[] } | null,
   defensePosture: 'ACCEPT' | 'REJECT',
+  signal?: AbortSignal,
 ): Promise<PleaNarrative> {
   if (band === 'WEAK') {
     return generateValidated(
@@ -1389,6 +1430,7 @@ export async function runPleaNarrative(
       (feedback) => buildPleaNarrativeContents(payload, band, null, defensePosture, feedback),
       WEAK_PLEA_GEMINI_SCHEMA,
       WeakPleaNarrativeSchema,
+      { signal },
     );
   }
 
@@ -1400,6 +1442,7 @@ export async function runPleaNarrative(
     (feedback) => buildPleaNarrativeContents(payload, band, offerTerms, defensePosture, feedback),
     OFFER_PLEA_GEMINI_SCHEMA,
     OfferPleaNarrativeSchema,
+    { signal },
   );
 }
 

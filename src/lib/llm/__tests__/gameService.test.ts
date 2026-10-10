@@ -56,22 +56,26 @@ beforeEach(() => {
   vi.mocked(runAftermath).mockReset().mockResolvedValue('The community absorbed the verdict quietly.');
 });
 
+// Every model-calling stage is handed the run's signal, so a cancel can reach
+// the request in flight. Model selection deliberately is not (see writeCase).
+const RUN_SIGNAL = expect.any(AbortSignal);
+
 describe('createGameService().generateCase', () => {
   it('orchestrates every stage in pipeline order and returns a schema-valid result', async () => {
     const service = createGameService(API_KEY);
-    const result = await service.generateCase();
+    const result = await service.generateCase({ signal: new AbortController().signal });
 
     expect(CaseSchema.safeParse(result.payload).success).toBe(true);
     expect(PleaNarrativeSchema.safeParse(result.pleaNarrative).success).toBe(true);
 
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
-    expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL);
-    expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
-    expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
+    expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL, RUN_SIGNAL);
+    expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, RUN_SIGNAL);
+    expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, RUN_SIGNAL);
     expect(runInterrogationGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.defendant, validCase.environment, {
       outcome: 'DENIAL',
       challengeGround: 'MIRANDA',
-    });
+    }, RUN_SIGNAL);
     expect(runEvidenceGen).toHaveBeenCalledWith(
       API_KEY,
       MODEL,
@@ -79,8 +83,9 @@ describe('createGameService().generateCase', () => {
       validCase.environment,
       validCase.defendant,
       null,
+      RUN_SIGNAL,
     );
-    expect(runVerdictVoice).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, validCase.defendant);
+    expect(runVerdictVoice).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, validCase.defendant, RUN_SIGNAL);
     expect(finalizeCasePayload).toHaveBeenCalledWith(API_KEY, MODEL, {
       charges: validCase.charges,
       statuteContexts: validCase.statuteContexts,
@@ -88,13 +93,13 @@ describe('createGameService().generateCase', () => {
       defendant: validCase.defendant,
       witnesses: validCase.witnesses,
       evidence: validCase.evidence,
-    });
+    }, RUN_SIGNAL);
     // assessProsecution(validCase) scores 41 (MODERATE) — see fixtures.ts's
     // header comment on why the numbers land there.
     expect(runPleaNarrative).toHaveBeenCalledWith(API_KEY, MODEL, validCase, 'MODERATE', {
       pleadsToChargeIds: validCase.charges.map((c) => c.id),
       proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
-    }, 'REJECT');
+    }, 'REJECT', RUN_SIGNAL);
   });
 
   it('asks getOrSelectModel (not the raw discovery call) for the model on every stage that needs one', async () => {
@@ -199,6 +204,26 @@ describe('createGameService().generateCase', () => {
       GenerationCancelledError,
     );
     expect(runCharacterGen).not.toHaveBeenCalled();
+  });
+
+  it('ends the request in flight on cancel instead of waiting for it', async () => {
+    // A stage that only finishes when its signal aborts: the shape of a real
+    // Gemini call cancelled mid-flight. Before the signal reached the stages,
+    // this run could only end when the call did.
+    const controller = new AbortController();
+    vi.mocked(runEvidenceGen).mockImplementation(
+      (...args) =>
+        new Promise((_, reject) => {
+          const signal = args[6];
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+          controller.abort();
+        }),
+    );
+
+    await expect(createGameService(API_KEY).generateCase({ signal: controller.signal })).rejects.toBeInstanceOf(
+      GenerationCancelledError,
+    );
+    expect(finalizeCasePayload).not.toHaveBeenCalled();
   });
 
   it('cannot be failed by a progress listener that throws', async () => {

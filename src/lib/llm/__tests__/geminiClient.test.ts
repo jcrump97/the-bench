@@ -209,6 +209,82 @@ describe('callGemini', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('ends the request in flight when the caller cancels, rejecting with its reason', async () => {
+    const fetchMock = vi.mocked(fetch);
+    // Settles only when the signal it was given aborts, like a real fetch.
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        }),
+    );
+    const controller = new AbortController();
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    // The caller's reason, not a GeminiError: a cancel is not a failure.
+    await expect(promise).rejects.toBe(controller.signal.reason);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Safari before 17.4 has no AbortSignal.any. Without the fallback, every
+  // request there would throw before it was sent.
+  it('still cancels where AbortSignal.any does not exist', async () => {
+    const native = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true });
+    try {
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockImplementation(
+        (_url, init) =>
+          new Promise((_, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+          }),
+      );
+      const controller = new AbortController();
+      const cancelled = new Error('player cancelled');
+
+      const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+        systemInstruction: 'sys',
+        contents: 'content',
+        responseSchema: { type: 'object' },
+        signal: controller.signal,
+      });
+      controller.abort(cancelled);
+
+      await expect(promise).rejects.toBe(cancelled);
+    } finally {
+      if (native) Object.defineProperty(AbortSignal, 'any', native);
+    }
+  });
+
+  it('cuts a backoff wait short when the caller cancels, and makes no further attempt', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(textResponse('rate limited', 429));
+    const controller = new AbortController();
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+      signal: controller.signal,
+    });
+    const cancelled = new Error('player cancelled');
+    const settled = expect(promise).rejects.toBe(cancelled);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    controller.abort(cancelled);
+    await settled;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws immediately on a 4xx without retrying', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(textResponse('bad key', 400));

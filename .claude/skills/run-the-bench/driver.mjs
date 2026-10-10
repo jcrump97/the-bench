@@ -527,6 +527,14 @@ const browser = await chromium.launch(
     }
     // generateContent: never answered.
   });
+  // A held-open generateContent that the page itself aborts is how Cancel
+  // shows up on the wire: the request ends rather than idling until it
+  // times out while still holding the player's quota.
+  const abortedGenerations = [];
+  page.on('requestfailed', (request) => {
+    if (request.url().includes(':generateContent')) abortedGenerations.push(request.failure()?.errorText ?? '');
+  });
+  const generationRequests = () => geminiRequests.filter((r) => r.url.includes(':generateContent')).length;
 
   await gotoWithRetry(page, BASE);
   await page.locator('input[type="password"]').fill(FAKE_KEY);
@@ -549,6 +557,7 @@ const browser = await chromium.launch(
     geminiRequests.every((r) => !r.url.includes(FAKE_KEY) && !r.url.includes('key=')));
   await page.screenshot({ path: path.join(SHOTS, '17-byok-progress.png'), fullPage: true });
 
+  const requestsBeforeCancel = generationRequests();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   check('BYOK cancel: the progress panel is gone', (await panel.count()) === 0);
   check('BYOK cancel: the docket is open again',
@@ -557,6 +566,10 @@ const browser = await chromium.launch(
     (await page.getByRole('button', { name: 'Generate a Case', exact: true }).count()) === 1);
   await page.waitForTimeout(500);
   check('BYOK cancel: cancelling is not a mistrial', (await page.locator('text=Mistrial').count()) === 0);
+  check('BYOK cancel: the request in flight is aborted, not left running',
+    abortedGenerations.length === requestsBeforeCancel, `${abortedGenerations.length} of ${requestsBeforeCancel} aborted`);
+  check('BYOK cancel: no further model call starts after it',
+    generationRequests() === requestsBeforeCancel, `${generationRequests()} after, ${requestsBeforeCancel} before`);
   await page.close();
 }
 

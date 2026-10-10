@@ -68,6 +68,10 @@ export interface GeminiCallOptions {
   contents: string;
   responseSchema: GeminiSchema;
   maxOutputTokens?: number;
+  // The caller's cancel signal. Aborting it ends the request in flight and
+  // any backoff wait, rejecting with the signal's own reason — a cancel is
+  // the caller's decision, not a Gemini failure, so it is never wrapped.
+  signal?: AbortSignal | undefined;
 }
 
 // The pipeline's largest response (EvidenceGen: several exhibits with their
@@ -108,8 +112,41 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+// A backoff wait the caller can cut short: a cancelled run should not sit out
+// a 15 s Retry-After before noticing.
+function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+// One signal that aborts when any of its inputs does. AbortSignal.any only
+// reached Baseline "widely available" in late 2026 — Safari before 17.4 lacks
+// it — and without this fallback every BYOK request there would throw before
+// it was sent, not just the cancelled ones.
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
 }
 
 // Gemini's 429s often carry a Retry-After header (seconds) — honoring it
@@ -135,18 +172,19 @@ function isTimeout(err: unknown, timer: AbortSignal): boolean {
 // timeout bounds the whole exchange, and a stall while a large response is
 // still streaming is the same TIMEOUT as a stall before the headers arrive —
 // read outside, it escaped as a raw DOMException with no `reason` at all.
-async function fetchTextWithRetry(url: string, init: RequestInit): Promise<string> {
+async function fetchTextWithRetry(url: string, init: RequestInit, cancel?: AbortSignal): Promise<string> {
   let lastError: unknown;
   let nextDelayMs = 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (nextDelayMs > 0) await sleep(nextDelayMs);
+    if (nextDelayMs > 0) await sleep(nextDelayMs, cancel);
+    cancel?.throwIfAborted();
     // ±50% jitter so concurrent retries don't land in lockstep.
     const jitter = 0.5 + Math.random() * 0.5;
     nextDelayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt * jitter, MAX_BACKOFF_MS);
 
     const timer = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(url, { ...init, signal: timer });
+      const response = await fetch(url, { ...init, signal: cancel ? anySignal([cancel, timer]) : timer });
       if (response.ok) return await response.text();
       if (!isRetryableStatus(response.status) || attempt === MAX_ATTEMPTS - 1) {
         const body = await response.text().catch(() => '');
@@ -160,6 +198,9 @@ async function fetchTextWithRetry(url: string, init: RequestInit): Promise<strin
       lastError = new GeminiError(`Gemini request failed with status ${response.status}`, response.status);
     } catch (err) {
       if (err instanceof GeminiError) throw err;
+      // Checked before the timeout: a cancel is the caller's, and must not be
+      // retried, reported as a failure, or mistaken for a stall.
+      if (cancel?.aborted) throw cancel.reason;
       if (isTimeout(err, timer)) {
         throw new GeminiError(`Gemini request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`, null, 'TIMEOUT');
       }
@@ -220,7 +261,7 @@ export async function callGemini(
         responseSchema: options.responseSchema,
       },
     }),
-  });
+  }, options.signal);
 
   const data = JSON.parse(body) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];

@@ -62,7 +62,8 @@ BYOK generating screen —
    held open), so it needs no key and spends no quota. Asserts the progress
    panel, the locked docket, the key travelling only in the
    `x-goog-api-key` header, and Cancel returning to the docket without a
-   mistrial
+   mistrial — aborting the held-open request on the wire, with no model call
+   started after it
 
 Each ending is asserted by a phrase unique to that case's aftermath variant,
 which is what proves the outcome-conditioned branching end to end.

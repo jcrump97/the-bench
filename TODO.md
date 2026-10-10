@@ -51,7 +51,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
 - [x] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
       treats `TIMEOUT` like a non-retryable 4xx, so a stalled connection costs
       one 120 s wait, not 3 × 120 s per stage. The stage name is preserved.
-- [ ] **F3 — cancel reaches the request** (review 1 #1, #7; review 2 #2):
+- [x] **F3 — cancel reaches the request** (review 1 #1, #7; review 2 #2):
       `callGemini` takes the signal, combines it with the per-attempt timeout,
       and makes the backoff sleep abortable. `generateValidated` rethrows an
       abort rather than retrying it, and every stage passes its signal through.

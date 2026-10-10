@@ -151,6 +151,26 @@ describe('runStatuteSelection', () => {
     expect(mock).toHaveBeenCalledTimes(1);
   });
 
+  it('rethrows a cancel untouched, without spending the retry budget on it', async () => {
+    const controller = new AbortController();
+    const mock = vi.mocked(callGemini);
+    mock.mockImplementation(async () => {
+      controller.abort();
+      throw controller.signal.reason;
+    });
+
+    await expect(runStatuteSelection(API_KEY, MODEL, controller.signal)).rejects.toBe(controller.signal.reason);
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock.mock.calls[0]?.[2].signal).toBe(controller.signal);
+  });
+
+  it('makes no call at all once the run is already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(runStatuteSelection(API_KEY, MODEL, controller.signal)).rejects.toBe(controller.signal.reason);
+    expect(callGemini).not.toHaveBeenCalled();
+  });
+
   it('fails the stage on a timeout instead of waiting out another one', async () => {
     // The transport already spent its full 120 s on the attempt. Retrying here
     // held a stalled player for three times that, per stage.

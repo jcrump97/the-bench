@@ -26,7 +26,7 @@ import {
 // before the step starts, and STARTED/DONE progress events around it. A
 // listener that throws is contained here — watching a generation must never
 // be able to fail one.
-function createStepRunner({ onProgress, signal }: GenerateCaseOptions) {
+function createStepRunner(onProgress: GenerateCaseOptions['onProgress'], signal: AbortSignal | undefined) {
   const emit = (stepId: GenerationStepId, status: 'STARTED' | 'DONE' | 'SKIPPED') => {
     try {
       onProgress?.({ stepId, status, at: Date.now() });
@@ -37,7 +37,7 @@ function createStepRunner({ onProgress, signal }: GenerateCaseOptions) {
 
   return {
     async step<T>(stepId: GenerationStepId, run: () => T | Promise<T>): Promise<T> {
-      if (signal?.aborted) throw new GenerationCancelledError();
+      signal?.throwIfAborted();
       emit(stepId, 'STARTED');
       const result = await run();
       emit(stepId, 'DONE');
@@ -47,6 +47,89 @@ function createStepRunner({ onProgress, signal }: GenerateCaseOptions) {
       emit(stepId, 'SKIPPED');
     },
   };
+}
+
+type StepRunner = ReturnType<typeof createStepRunner>;
+
+// The pipeline itself, in dependency order. Every stage receives the run's
+// signal, so a cancel ends the call in flight rather than waiting for it.
+async function writeCase(
+  apiKey: string,
+  { step, skip }: StepRunner,
+  signal: AbortSignal | undefined,
+): Promise<GeneratedCase> {
+  // The one call left unsignalled. Model selection is cached per key as a
+  // promise, so an aborted lookup would poison the cache for every later run
+  // this session; it is a free metadata call, and the next step boundary
+  // catches a cancel made while it runs.
+  const model = await step('MODEL_SELECTION', () => getOrSelectModel(apiKey));
+
+  const { charges, statuteContexts } = await step('STATUTES', () => runStatuteSelection(apiKey, model, signal));
+  // Two pairs of stages share no inputs with each other, so each pair runs
+  // concurrently: the scene and the defendant both need only the charges,
+  // and the verdict voice needs only the charges and the defendant — not
+  // the interview or the evidence. Seven sequential round trips become
+  // five on the critical path. Every stage still validates independently;
+  // if one fails, the run fails, and its sibling's result is discarded.
+  const [environment, defendant] = await Promise.all([
+    step('SCENE', () => runEnvironmentGen(apiKey, model, charges, signal)),
+    step('DEFENDANT', () => runCharacterGen(apiKey, model, charges, signal)),
+  ]);
+
+  const writeEvidence = async () => {
+    const interrogationProfile = await step('INTERROGATION_PROFILE', () => deriveInterrogationProfile(defendant));
+    // No tape exists when the defendant invoked counsel, so there is
+    // nothing to write: the step is reported as skipped rather than run.
+    let interrogation: Interrogation | null = null;
+    if (interrogationProfile.outcome === 'INVOKED_COUNSEL') {
+      skip('INTERROGATION');
+    } else {
+      interrogation = await step('INTERROGATION', () =>
+        runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile, signal),
+      );
+    }
+    return step('EVIDENCE', () => runEvidenceGen(apiKey, model, charges, environment, defendant, interrogation, signal));
+  };
+
+  const [{ evidence, witnesses }, chargeVoices] = await Promise.all([
+    writeEvidence(),
+    step('VERDICT_VOICE', () => runVerdictVoice(apiKey, model, charges, defendant, signal)),
+  ]);
+
+  const chargesWithVoice: Charge[] = charges.map((charge) => {
+    const voice = chargeVoices.find((c) => c.id === charge.id);
+    // runVerdictVoice's schema now requires an entry for every requested
+    // charge id, so a miss here is unreachable in practice — kept as a
+    // typed, stage-prefixed guard rather than a bare Error so that if it
+    // ever does fire, the Mistrial screen names the stage like every other
+    // pipeline failure instead of reporting a generic `generateCase`.
+    if (!voice) throw new GameServiceError(`[VerdictVoice] no voiced verdict layer returned for charge ${charge.id}`);
+    return { ...charge, ...voice };
+  });
+
+  const payload = await step('FINALIZE', () =>
+    finalizeCasePayload(apiKey, model, {
+      charges: chargesWithVoice,
+      statuteContexts,
+      environment,
+      defendant,
+      witnesses,
+      evidence,
+    }, signal),
+  );
+
+  const { band, offerTerms, defensePosture } = await step('PLEA_STRUCTURE', () => {
+    const { band } = assessProsecution(payload);
+    const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
+    const defensePosture =
+      offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
+    return { band, offerTerms, defensePosture } as const;
+  });
+  const pleaNarrative = await step('PLEA_NARRATIVE', () =>
+    runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture, signal),
+  );
+
+  return { payload, pleaNarrative };
 }
 
 // The real CaseSource behind BYOK: orchestrates the seven-stage generation
@@ -60,77 +143,15 @@ function createStepRunner({ onProgress, signal }: GenerateCaseOptions) {
 // that lives in stages.ts.
 export function createGameService(apiKey: string): CaseSource {
   return {
-    async generateCase(options: GenerateCaseOptions = {}): Promise<GeneratedCase> {
-      const { step, skip } = createStepRunner(options);
-
-      const model = await step('MODEL_SELECTION', () => getOrSelectModel(apiKey));
-
-      const { charges, statuteContexts } = await step('STATUTES', () => runStatuteSelection(apiKey, model));
-      // Two pairs of stages share no inputs with each other, so each pair runs
-      // concurrently: the scene and the defendant both need only the charges,
-      // and the verdict voice needs only the charges and the defendant — not
-      // the interview or the evidence. Seven sequential round trips become
-      // five on the critical path. Every stage still validates independently;
-      // if one fails, the run fails, and its sibling's result is discarded.
-      const [environment, defendant] = await Promise.all([
-        step('SCENE', () => runEnvironmentGen(apiKey, model, charges)),
-        step('DEFENDANT', () => runCharacterGen(apiKey, model, charges)),
-      ]);
-
-      const writeEvidence = async () => {
-        const interrogationProfile = await step('INTERROGATION_PROFILE', () => deriveInterrogationProfile(defendant));
-        // No tape exists when the defendant invoked counsel, so there is
-        // nothing to write: the step is reported as skipped rather than run.
-        let interrogation: Interrogation | null = null;
-        if (interrogationProfile.outcome === 'INVOKED_COUNSEL') {
-          skip('INTERROGATION');
-        } else {
-          interrogation = await step('INTERROGATION', () =>
-            runInterrogationGen(apiKey, model, defendant, environment, interrogationProfile),
-          );
-        }
-        return step('EVIDENCE', () => runEvidenceGen(apiKey, model, charges, environment, defendant, interrogation));
-      };
-
-      const [{ evidence, witnesses }, chargeVoices] = await Promise.all([
-        writeEvidence(),
-        step('VERDICT_VOICE', () => runVerdictVoice(apiKey, model, charges, defendant)),
-      ]);
-
-      const chargesWithVoice: Charge[] = charges.map((charge) => {
-        const voice = chargeVoices.find((c) => c.id === charge.id);
-        // runVerdictVoice's schema now requires an entry for every requested
-        // charge id, so a miss here is unreachable in practice — kept as a
-        // typed, stage-prefixed guard rather than a bare Error so that if it
-        // ever does fire, the Mistrial screen names the stage like every other
-        // pipeline failure instead of reporting a generic `generateCase`.
-        if (!voice) throw new GameServiceError(`[VerdictVoice] no voiced verdict layer returned for charge ${charge.id}`);
-        return { ...charge, ...voice };
-      });
-
-      const payload = await step('FINALIZE', () =>
-        finalizeCasePayload(apiKey, model, {
-          charges: chargesWithVoice,
-          statuteContexts,
-          environment,
-          defendant,
-          witnesses,
-          evidence,
-        }),
-      );
-
-      const { band, offerTerms, defensePosture } = await step('PLEA_STRUCTURE', () => {
-        const { band } = assessProsecution(payload);
-        const offerTerms = band === 'WEAK' ? null : derivePleaOfferTerms(payload, band);
-        const defensePosture =
-          offerTerms === null ? 'REJECT' : assessDefense(payload, offerTerms.proposedSentence).posture;
-        return { band, offerTerms, defensePosture } as const;
-      });
-      const pleaNarrative = await step('PLEA_NARRATIVE', () =>
-        runPleaNarrative(apiKey, model, payload, band, offerTerms, defensePosture),
-      );
-
-      return { payload, pleaNarrative };
+    async generateCase({ onProgress, signal }: GenerateCaseOptions = {}): Promise<GeneratedCase> {
+      try {
+        return await writeCase(apiKey, createStepRunner(onProgress, signal), signal);
+      } catch (err) {
+        // However the cancel surfaced — at a step boundary, mid-request, or
+        // in a backoff wait — the caller hears one thing: it was cancelled.
+        if (signal?.aborted) throw new GenerationCancelledError();
+        throw err;
+      }
     },
 
     async generateAftermath(ctx: AftermathContext): Promise<string> {
