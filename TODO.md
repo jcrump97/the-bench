@@ -72,7 +72,7 @@ below rather than discovered in review:
 
 - [x] **P10 — act title cards** (open since 2026-07-12): UI chrome on each
       phase transition saying what the act decides.
-- [ ] **P11 — the Bench Book:** an always-available reference — plain-English
+- [x] **P11 — the Bench Book:** an always-available reference — plain-English
       definitions of every term the record uses, each with the California
       authority it rests on, plus "how this court is modeled": what is real
       procedure, what is simplified (S1, bench trial only, exposure collapse),

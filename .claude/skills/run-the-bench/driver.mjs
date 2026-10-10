@@ -182,6 +182,22 @@ const browser = await chromium.launch(
     (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
 
+  // The Bench Book opens from the docket — the one modal that needs no case.
+  await page.getByRole('button', { name: /Open the Bench Book/ }).click();
+  // Fetched on first open (its own chunk), so wait for it like a player would.
+  await page.getByRole('dialog', { name: 'Bench Book' }).waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book: opens from the docket with plain-English terms',
+    (await page.locator('[data-bench-book-term="Allocution"]').count()) === 1);
+  await page.getByRole('tab', { name: 'How this court is modeled' }).click();
+  check('Bench Book: says plainly where the court departs from real practice',
+    (await page.locator('[data-bench-book-tab="modeled"]', { hasText: 'Every trial is a bench trial' }).count()) === 1);
+  await page.getByRole('tab', { name: 'Under the hood' }).click();
+  check('Bench Book: explains what code decides and what the model writes',
+    (await page.locator('[data-bench-book-tab="hood"]', { hasText: 'Code decides the structure' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '00b-bench-book.png') });
+  await page.keyboard.press('Escape');
+  check('Bench Book: Escape closes it', (await page.getByRole('dialog').count()) === 0);
+
   await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
   check('Webb: Act 1 title card opens the proceeding',
     (await page.locator('[data-act-card="ACT_1_INTAKE"]').count()) === 1);
@@ -364,6 +380,14 @@ const browser = await chromium.launch(
   const page = await newPage(browser, { width: 1280, height: 900 });
   await gotoWithRetry(page, BASE);
   await openDocketCase(page, /People v\. Curtis Boone/);
+  // Mid-case, from the top bar: it opens over the record and closes back to it.
+  await page.getByRole('button', { name: 'Open the Bench Book' }).click();
+  await page.getByRole('dialog', { name: 'Bench Book' }).waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book: opens mid-case from the top bar',
+    (await page.getByRole('dialog', { name: 'Bench Book' }).count()) === 1);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  check('Bench Book: closing returns to the record where it was',
+    (await page.locator('text=Case Called').count()) >= 1 && (await page.getByRole('dialog').count()) === 0);
 
   await advanceTo(page, page.getByRole('button', { name: 'Order Trial' }), 'Boone trial order');
   check('Boone Act1: declination beat in the record',

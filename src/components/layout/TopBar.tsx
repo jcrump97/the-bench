@@ -1,4 +1,4 @@
-import { FolderOpen, Scale } from 'lucide-react';
+import { BookOpen, FolderOpen, Scale } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { PanelToggleButton } from './PanelToggleButton';
@@ -14,6 +14,7 @@ export function TopBar() {
   const toggleCasePanel = useUIStore((state) => state.toggleCasePanel);
   const toggleEvidencePanel = useUIStore((state) => state.toggleEvidencePanel);
   const panelHintActive = useUIStore((state) => state.panelHintActive);
+  const openModal = useUIStore((state) => state.openModal);
 
   return (
     <header className="flex shrink-0 items-center justify-between gap-2 border-b border-(--border) bg-(--bg-panel) px-2 py-1">
@@ -30,9 +31,20 @@ export function TopBar() {
         </p>
       </div>
 
-      <PanelToggleButton label="Toggle evidence panel" pressed={evidencePanelOpen} hint={panelHintActive} onClick={toggleEvidencePanel}>
-        <Scale size={20} />
-      </PanelToggleButton>
+      <div className="flex shrink-0 items-center">
+        <button
+          type="button"
+          aria-label="Open the Bench Book"
+          title="Bench Book — terms, and how this court is modeled"
+          onClick={() => openModal({ type: 'BENCH_BOOK' })}
+          className="flex h-11 w-11 items-center justify-center rounded-md text-(--text-muted) hover:text-(--text-h)"
+        >
+          <BookOpen size={20} />
+        </button>
+        <PanelToggleButton label="Toggle evidence panel" pressed={evidencePanelOpen} hint={panelHintActive} onClick={toggleEvidencePanel}>
+          <Scale size={20} />
+        </PanelToggleButton>
+      </div>
     </header>
   );
 }

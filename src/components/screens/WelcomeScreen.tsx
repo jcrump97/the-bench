@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { BookOpen } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSecurityStore } from '../../store/useSecurityStore';
@@ -15,6 +16,7 @@ import {
 } from '../../lib/generationProgress';
 import { BenchRecordPanel } from '../result/BenchRecordPanel';
 import { GenerationProgressPanel } from './GenerationProgressPanel';
+import { ModalRoot } from '../modals/ModalRoot';
 
 // A BYOK generation in flight: its cancel handle, when it began, and how far
 // the pipeline has got. Local view state — it never outlives this screen.
@@ -36,6 +38,7 @@ export function WelcomeScreen() {
   const resetBeatCursor = useUIStore((state) => state.resetBeatCursor);
   const setLastGenerationError = useUIStore((state) => state.setLastGenerationError);
   const clearLastGenerationError = useUIStore((state) => state.clearLastGenerationError);
+  const openModal = useUIStore((state) => state.openModal);
 
   const vault = useSecurityStore((state) => state.vault);
   const setVault = useSecurityStore((state) => state.setVault);
@@ -122,6 +125,14 @@ export function WelcomeScreen() {
         <p className="mt-2 max-w-md text-(--text)">
           You are the judge. Rule on a plea deal, weigh the evidence, and deliver a verdict.
         </p>
+        <button
+          type="button"
+          onClick={() => openModal({ type: 'BENCH_BOOK' })}
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-sm text-(--accent) hover:bg-(--bg-elevated)"
+        >
+          <BookOpen size={16} aria-hidden />
+          New to the courtroom? Open the Bench Book
+        </button>
       </div>
 
       <BenchRecordPanel />
@@ -198,6 +209,9 @@ export function WelcomeScreen() {
           </form>
         )}
       </div>
+
+      {/* Only the Bench Book can open here — every other modal needs a case. */}
+      <ModalRoot />
     </div>
   );
 }
