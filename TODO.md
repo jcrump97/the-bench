@@ -48,7 +48,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       had only passed because the second read failed outside the retry loop
       and selection fell back to its hardcoded model. Each call now gets a
       fresh response.
-- [ ] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
+- [x] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
       treats `TIMEOUT` like a non-retryable 4xx, so a stalled connection costs
       one 120 s wait, not 3 × 120 s per stage. The stage name is preserved.
 - [ ] **F3 — cancel reaches the request** (review 1 #1, #7; review 2 #2):

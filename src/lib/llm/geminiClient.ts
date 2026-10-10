@@ -16,9 +16,10 @@ const MAX_BACKOFF_MS = 15_000;
 // connection that stalls mid-response parks the player on "Generating your
 // case…" forever. Generous on purpose: the largest stage (EvidenceGen) writes
 // thousands of tokens, and cutting a slow-but-healthy call short would turn
-// latency into failures. A timed-out attempt is not retried here — a call that
-// was slow once is likely slow again, and every stage already owns a retry
-// budget of its own in generateValidated.
+// latency into failures. A timed-out attempt is not retried — not here, and not
+// by the stage's generateValidated budget either: a call that stalled once is
+// likely to stall again, so one timeout fails the stage, bounding a dead
+// connection at one wait rather than a stack of them.
 const REQUEST_TIMEOUT_MS = 120_000;
 
 // Why a call produced no usable text, when the HTTP request itself succeeded.

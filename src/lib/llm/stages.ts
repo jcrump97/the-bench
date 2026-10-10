@@ -97,6 +97,11 @@ function withFeedback(base: string, feedback: string | undefined): string {
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
+function isUnretryableCallFailure(err: GeminiError): boolean {
+  if (err.reason === 'TIMEOUT') return true;
+  return err.status !== null && err.status !== 429 && err.status < 500;
+}
+
 // ============================================================================
 // Generic "generate, parse, validate, retry-with-repair" loop shared by every
 // pipeline stage. Gemini's structured-output mode shapes the response; the
@@ -133,14 +138,17 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
         responseSchema,
       });
     } catch (err) {
-      // A non-retryable client error (bad request, bad key — never 429 or
-      // 5xx) will fail identically on retry, so it isn't worth spending the
-      // stage's budget on: surface it immediately. Everything else
-      // (network errors, and 429/5xx that already exhausted
-      // fetchWithRetry's own attempts) gets the same retry-with-feedback
-      // budget a validation failure does, instead of aborting the whole
-      // stage on one transient call failure.
-      if (err instanceof GeminiError && err.status !== null && err.status !== 429 && err.status < 500) {
+      // Two call failures aren't worth spending the stage's budget on, so
+      // they surface immediately. A non-retryable client error (bad request,
+      // bad key — never 429 or 5xx) will fail identically on retry. A
+      // timeout already cost the transport's full 120 s, and a connection
+      // that stalled once is likely to stall again: retrying it here held the
+      // player on the generating screen for up to three times that, per
+      // stage. Everything else (network errors, and 429/5xx that already
+      // exhausted the transport's own attempts) gets the same
+      // retry-with-feedback budget a validation failure does, instead of
+      // aborting the whole stage on one transient call failure.
+      if (err instanceof GeminiError && isUnretryableCallFailure(err)) {
         // Tagged with the stage on the way out. A bare "status 400: Request
         // contains an invalid argument" names none of the seven response
         // schemas the API might have rejected — which is exactly what made a
@@ -148,7 +156,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
         // and cost a live bisection to work out. The GeminiError type and
         // status are preserved so callers still classify it the same way.
         reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [err.message], schemaShape: null });
-        throw new GeminiError(`[${stageName}] ${err.message}`, err.status);
+        throw new GeminiError(`[${stageName}] ${err.message}`, err.status, err.reason);
       }
       lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
       reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError], schemaShape: null });

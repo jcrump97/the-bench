@@ -151,6 +151,20 @@ describe('runStatuteSelection', () => {
     expect(mock).toHaveBeenCalledTimes(1);
   });
 
+  it('fails the stage on a timeout instead of waiting out another one', async () => {
+    // The transport already spent its full 120 s on the attempt. Retrying here
+    // held a stalled player for three times that, per stage.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValue(new GeminiError('Gemini request timed out after 120s', null, 'TIMEOUT'));
+
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toMatchObject({
+      name: 'GeminiError',
+      reason: 'TIMEOUT',
+      message: expect.stringMatching(/^\[StatuteSelection\] .*timed out/),
+    });
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
   it('feeds the previous raw response back into the retry contents, not just the Zod issue message', async () => {
     // A reported mistrial burned all three attempts on the identical field
     // because the model only ever saw the Zod error text ("age: Invalid
