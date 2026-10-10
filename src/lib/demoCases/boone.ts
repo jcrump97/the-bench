@@ -11,7 +11,7 @@ import { defineDemoCase, type SentenceCodas } from './types';
 // identification is worth less than it looks.
 const rawBoonePayload = {
   // [LLM-FILL: CasePayload] — caseId is assigned by the pipeline's final
-  // assembly call (with `summary`, below) once the four stages complete.
+  // assembly call (with `summary`, below) once the earlier stages complete.
   caseId: '24-CR-01102',
   // [LLM-FILL: CharacterGen] — the whole defendant block. On a WEAK case the
   // defense assessment never runs (no offer exists to weigh), so the traits

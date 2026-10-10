@@ -53,7 +53,8 @@ below rather than discovered in review:
       decision outranks a later review that did not see it.
 - [x] **P4 — A5b:** per-attempt request timeout in the transport (120 s,
       surfaced as `GeminiError` reason `TIMEOUT`, not retried in the transport).
-- [ ] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline.
+- [x] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline. (The
+      A4e orphan had already gone; `[LLM-FILL]` tags stay as a demo↔stage map.)
 
 ### Phase 2 — the pipeline, made visible (architect)
 
@@ -181,7 +182,7 @@ instance and is now closed; the rest cluster in that same gap.
       R3 and R5, and answers R11's drift-guard concern structurally.
       **Requires a `npm run test:live` sweep either side** — this is a
       `responseSchema` change and C5a is the precedent for measuring one.
-- [ ] **A3 — stale in-code comments.** `caseSource.ts:33-36` still reads "Until
+- [x] **A3 — stale in-code comments.** *(P5.)* `caseSource.ts:33-36` still reads "Until
       then, `demoCaseSource` is the only implementation" and carries `[LLM-FILL]`
       tags after GameService shipped; `gameService.ts:19` says "five-stage"
       above a six-stage list, and the pipeline is seven LLM stages now that

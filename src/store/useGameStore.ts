@@ -37,9 +37,9 @@ interface GameState {
   chargeVerdicts:  ChargeVerdict[];
   imposedSentence: Sentence[];
 
-  // [LLM-FILL: Aftermath] — narrative input like activeCase, written after
-  // sentencing by the CaseSource (demo registry today, GameService's
-  // Aftermath call on the BYOK path) and read at END_STATE.
+  // Narrative input like activeCase, written after sentencing by the
+  // CaseSource (the demo registry, or GameService's Aftermath call on the
+  // BYOK path) and read at END_STATE.
   aftermathNarrative: string | null;
 
   // The immutable end-of-game snapshot ResultGenerator assembles, written

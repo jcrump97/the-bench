@@ -16,10 +16,11 @@ import {
   runAftermath,
 } from './stages';
 
-// The real CaseSource behind BYOK: orchestrates the five-stage generation
+// The real CaseSource behind BYOK: orchestrates the seven-stage generation
 // pipeline (StatuteSelection → EnvironmentGen → CharacterGen →
-// InterrogationGen → EvidenceGen → finalizeCasePayload), then the separate
-// PleaNarrative and (later) Aftermath calls — each stage's output feeding
+// InterrogationGen → EvidenceGen → VerdictVoice → PleaNarrative, with
+// finalizeCasePayload's assembly and repair between the last two), then the
+// separate Aftermath call once the case closes — each stage's output feeding
 // forward as context into the next, per CLAUDE.md's pipeline. Every LLM
 // response crosses the same Zod boundary a hand-authored demo case does;
 // GameService's job is orchestration and model selection, not validation —
