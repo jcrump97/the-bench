@@ -4,7 +4,8 @@ import { actTitleFor } from '../../lib/actTitles';
 import type { GamePhase } from '../../schemas/gameSchemas';
 
 // How long a card stays up. Long enough to read two short lines, short
-// enough that a player who already knows the act never waits on it.
+// enough that a player who already knows the act never waits on it. The one
+// source for both the unmount timer and the CSS fade's duration.
 const CARD_MS = 3200;
 
 // The title card shown as each act opens. UI chrome laid over the courtroom,
@@ -32,6 +33,7 @@ export function ActTitleCard() {
         key={currentPhase}
         data-act-card={currentPhase}
         role="status"
+        style={{ animationDuration: `${CARD_MS}ms` }}
         className="act-card max-w-md rounded-lg border border-(--accent-border) bg-(--bg-elevated) px-5 py-3 text-center shadow-(--shadow)"
       >
         <p className="font-medium text-(--text-h)">{title.label}</p>

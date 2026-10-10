@@ -204,6 +204,9 @@ const browser = await chromium.launch(
   check('Webb: the title card never blocks the record (pointer events pass through)',
     await page.locator('[data-act-card="ACT_1_INTAKE"]')
       .evaluate((el) => getComputedStyle(el.parentElement).pointerEvents) === 'none');
+  const cardAnimation = await page.locator('[data-act-card="ACT_1_INTAKE"]')
+    .evaluate((el) => `${getComputedStyle(el).animationName} ${getComputedStyle(el).animationDuration}`);
+  check('Webb: the card fades over the same 3.2 s it stays mounted', cardAnimation === 'act-card 3.2s', cardAnimation);
   check('Webb: record starts empty, court seated',
     (await page.locator('text=The courtroom is seated').count()) === 1);
   check('Webb: accent button label wears --bg (cascade-layer regression guard)',

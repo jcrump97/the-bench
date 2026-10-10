@@ -75,7 +75,7 @@ not triggered. The `test:live` sweep owed for P4/P7 is still owed.
       live region. A step counter announces progress instead, and the timers
       tick silently.
 - [x] **F9 — model selection is computed** (review 2 #8, the true half).
-- [ ] **F10 — one card duration** (review 2 #9): `CARD_MS` drives the CSS
+- [x] **F10 — one card duration** (review 2 #9): `CARD_MS` drives the CSS
       animation through an inline `animationDuration`.
 - [ ] **F11 — cite only modeled rules** (review 2 #6): drop the § 17(b) and
       § 1170(h) citations, which the game does not model. A test pins that no
