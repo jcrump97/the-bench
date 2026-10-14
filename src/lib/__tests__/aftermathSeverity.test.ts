@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { demoCaseSource } from '../caseSource';
 import { deriveSentencingExposure, selectSentenceableCharges } from '../sentencingExposure';
+import { floorAmountFor } from '../sentenceBounds';
 import { DEMO_CASES } from '../demoCases';
 import { webbCase } from '../demoCases/webb';
 import type { ChargeVerdict, Sentence } from '../../schemas/gameSchemas';
@@ -8,7 +9,7 @@ import type { DemoCaseBundle } from '../demoCases';
 
 // The floor and the ceiling of what the court could impose on a full
 // conviction — the two ends the player can actually pick between.
-function ends(bundle: DemoCaseBundle): { floor: Sentence[]; ceiling: Sentence[]; verdict: ChargeVerdict[] } {
+function ends(bundle: DemoCaseBundle): { floor: Sentence[]; middle: Sentence[]; ceiling: Sentence[]; verdict: ChargeVerdict[] } {
   const verdict: ChargeVerdict[] = bundle.payload.charges.map((charge) => ({
     chargeId: charge.id,
     chargeName: charge.name,
@@ -17,7 +18,14 @@ function ends(bundle: DemoCaseBundle): { floor: Sentence[]; ceiling: Sentence[];
   }));
   const exposure = deriveSentencingExposure(selectSentenceableCharges(bundle.payload.charges, false, verdict));
   return {
-    floor: exposure.maximumPenalties.map((max) => ({ ...max, amount: 1 })),
+    // The picker's own floor, not a bare 1: under a mandatory minimum (Reyes's
+    // two years, Webb's one) a 1 is a sentence the player cannot impose.
+    floor: exposure.maximumPenalties.map((max) => ({ ...max, amount: floorAmountFor(max, exposure.mandatoryMinimums) })),
+    // The midpoint of each range, as the E2E path matrix sets it.
+    middle: exposure.maximumPenalties.map((max) => ({
+      ...max,
+      amount: Math.round((floorAmountFor(max, exposure.mandatoryMinimums) + max.amount) / 2),
+    })),
     ceiling: exposure.maximumPenalties,
     verdict,
   };
@@ -34,14 +42,16 @@ const aftermathFor = (bundle: DemoCaseBundle, verdict: ChargeVerdict[] | null, i
 
 describe('the demo aftermath answers the sentence, not just the verdict', () => {
   it.each(DEMO_CASES.map((bundle) => [bundle.title, bundle] as const))(
-    '%s reads differently at the floor and at the ceiling of the range',
+    '%s reads differently at the floor, the middle and the ceiling of the range',
     async (_title, bundle) => {
-      const { floor, ceiling, verdict } = ends(bundle);
+      const { floor, middle, ceiling, verdict } = ends(bundle);
       const lenient = await aftermathFor(bundle, verdict, floor);
+      const measured = await aftermathFor(bundle, verdict, middle);
       const severe = await aftermathFor(bundle, verdict, ceiling);
 
-      expect(lenient).not.toEqual(severe);
+      expect(new Set([lenient, measured, severe]).size).toBe(3);
       expect(lenient).toContain(bundle.sentenceCodas.LENIENT);
+      expect(measured).toContain(bundle.sentenceCodas.MEASURED);
       expect(severe).toContain(bundle.sentenceCodas.SEVERE);
       // The outcome half is the same story in both — only the coda moved.
       expect(lenient).toContain(bundle.aftermath.CONVICTED);
@@ -61,7 +71,10 @@ describe('the demo aftermath answers the sentence, not just the verdict', () => 
 
   it('reads a negotiated plea sentence the same way it reads a trial sentence', async () => {
     const exposure = deriveSentencingExposure(webbCase.payload.charges);
-    const lenient = await aftermathFor(webbCase, null, exposure.maximumPenalties.map((m) => ({ ...m, amount: 1 })));
+    const lenient = await aftermathFor(webbCase, null, exposure.maximumPenalties.map((m) => ({
+      ...m,
+      amount: floorAmountFor(m, exposure.mandatoryMinimums),
+    })));
     const severe = await aftermathFor(webbCase, null, exposure.maximumPenalties);
 
     expect(lenient).toContain(webbCase.aftermath.PLEA_ACCEPTED);
