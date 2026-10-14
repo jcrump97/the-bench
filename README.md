@@ -1,6 +1,11 @@
 # The Bench
 
 [![Verify](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml/badge.svg)](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
+**▶ Play it: [jcrump97.github.io/the-bench](https://jcrump97.github.io/the-bench/)** — no sign-up and no API key needed. Five demo cases are ready on the docket; *People v. Eli Navarro* is the guided tutorial.
+
+![The courtroom: Act 1 of People v. Webb, with the plea agreement awaiting the judge's ruling](./docs/screenshots/courtroom.png)
 
 A client-side judge simulation game. You are the judge in a California criminal court. A case lands on your desk. You make decisions regarding pleas, rule on evidentiary motions, and hand down sentences according to the statutes as charged. Powered by your own Gemini API key or a hardcoded demo case.
 
@@ -19,6 +24,10 @@ One courtroom, written to hold up for three very different players:
 | **An attorney** | Procedure that follows a California criminal courtroom — arraignment, discovery, a §1192.5 plea the court may refuse, Miranda and voluntariness fights over a recorded interview, allocution under §1200, a sentence chosen inside the statutory range. The **Bench Book** cites the authority behind each term and lists, plainly, where the game simplifies the law. |
 | **An AI architect** | A non-deterministic model forced through a deterministic state machine. Start a case with your own Gemini key and the generating screen draws the pipeline as it runs — which steps are model calls, which are computed and never generated. Then read on below. |
 | **A high-school student** | The **guided tutorial case** (marked *Start here*), a title card at each act saying what you're deciding, and the Bench Book's plain-English definitions for every term the courtroom throws at you. |
+
+<img src="./docs/screenshots/pipeline.png" alt="The generating screen: each pipeline step marked as a model call or a computed step, with elapsed times and a Cancel button" width="380">
+
+*The generating screen with your own key: model calls write the people and their words, computed steps decide the structure.*
 
 ## Tech Stack
 
@@ -211,9 +220,9 @@ Act 1 follows real procedure: the clerk performs only the call and the charges, 
 - **The close** — a minute order filed under the record that reads the sentence back as consequence, an aftermath that answers *how hard* the sentence landed and not just the verdict, and a bench record that follows the judge across cases.
 - **Generated cases** — a seven-stage Gemini pipeline behind your own key, drawn live on the generating screen, cancellable, and loaded only for players who use it.
 - **Orientation** — act title cards, the guided tutorial, and the Bench Book (plain-English terms, California authority, an honest list of simplifications, and what code decides versus what the model writes).
-- **Quality gates** — lint, 539 unit tests, the type-negative build, and a seven-run Playwright suite against the production bundle run in CI on every pull request; the deploy publishes only the artifact the end-to-end suite passed against.
+- **Quality gates** — lint, 588 unit tests, the type-negative build, and an eight-run Playwright suite against the production bundle run in CI on every pull request; the deploy publishes only the artifact the end-to-end suite passed against.
 
-**Open, and deliberately left to the author** (see [`TODO.md`](./TODO.md)): a per-count custody election for wobblers (S1), a unit-safe sentencing floor (S2), whether an off-phase store write should vacate the game or reject only the write (A7), generating the Gemini response schema from Zod (A2, which needs a live measurement either side), and the concurrent pipeline's first live sweep.
+**Open, and deliberately left to the author** (see [`TODO.md`](./TODO.md)): a per-count custody election for wobblers (S1), a unit-safe sentencing floor (S2), and whether an off-phase store write should vacate the game or reject only the write (A7). Generating the Gemini response schema from Zod (A2) has since shipped, measured live on either side, and the concurrent pipeline's first live sweep came back 5/5 with zero failed attempts.
 
 ### How it got here
 
