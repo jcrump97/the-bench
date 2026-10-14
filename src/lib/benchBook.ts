@@ -66,14 +66,16 @@ export const BENCH_BOOK_TERMS: readonly BenchBookTermGroup[] = [
       },
       {
         term: 'Allocution',
-        plain: 'Before sentence is pronounced, the defendant is given the chance to speak to the court.',
-        authority: 'Cal. Penal Code § 1200',
-        inThisCourt: 'On the plea path the defendant allocutes before you choose the sentence.',
+        plain: 'Before sentence is pronounced, the defendant is given the chance to speak to the court in their own words.',
+        // § 1200 only requires asking whether there is legal cause not to
+        // pronounce judgment; the right to a personal statement is Evans.
+        authority: 'People v. Evans (2008) 44 Cal.4th 590',
+        inThisCourt: 'On the plea path the defendant allocutes before you choose the sentence; after a trial, they go straight to sentencing.',
       },
       {
         term: 'Minute order',
         plain: 'The clerk’s written record of what the court did at a hearing — the official summary, not a transcript.',
-        inThisCourt: 'Filed under the record when the case closes: the disposition, every ruling, and the sentence read back as consequence.',
+        inThisCourt: 'Filed under the record when the case closes: the disposition, every ruling and the sentence. This court adds what a real one would not — a plain reading of what the sentence means for the people in it, with a release date that ignores custody credits.',
       },
     ],
   },
@@ -131,16 +133,16 @@ export const BENCH_BOOK_TERMS: readonly BenchBookTermGroup[] = [
       },
       {
         term: 'Wobbler',
-        plain: 'A crime that can be charged or sentenced as either a felony or a misdemeanor, at the court’s discretion.',
-        // No authority: the game does not model the election, and citing the
-        // statute beside a rule it does not apply would pass a simplification
-        // off as the law.
-        inThisCourt: 'Not yet modeled as a choice: where a count could be prison or jail, prison governs. (This is a known simplification.)',
+        plain: 'A crime the prosecutor may charge as either a felony or a misdemeanor; a court can later reduce a felony wobbler to a misdemeanor.',
+        // No authority: the game does not model the reduction (§ 17(b)), and
+        // citing the statute beside a rule it does not apply would pass a
+        // simplification off as the law.
+        inThisCourt: 'Not yet modeled: each count arrives at one grade, and you cannot reduce it. (This is a known simplification.)',
       },
       {
         term: 'Statutory range',
-        plain: 'The lightest and heaviest sentence the law allows for a crime. The judge chooses a term inside it.',
-        inThisCourt: 'The sentencing form only lets you choose inside the range of the counts you can sentence on — every count on a plea, only the counts of conviction after trial.',
+        plain: 'The lightest and heaviest sentence the law allows for a crime. Most California felonies set three possible terms — low, middle and upper — rather than a free range.',
+        inThisCourt: 'The sentencing form lets you choose any whole term inside the range of the counts you can sentence on — every count on a plea, only the counts of conviction after trial — rather than one of three set terms.',
       },
       {
         term: 'Mandatory minimum',
@@ -172,8 +174,10 @@ export const SIMPLIFICATIONS: readonly string[] = [
   'Every trial is a bench trial. You decide guilt alone; there is no jury to waive or instruct.',
   'There is no preliminary hearing, and no pretrial motions beyond one admissibility ruling per exhibit.',
   'You accept or reject a plea deal; you do not negotiate its terms or offer an indicated sentence.',
-  'A wobbler’s choice between prison and county jail is not yet modeled — prison governs.',
-  'Custody credits, restitution, sentence enhancements and prior-strike law are not modeled.',
+  'Felony terms are chosen anywhere in the range, not from the three set terms (low, middle, upper) of Cal. Penal Code § 1170(b), where the upper term needs aggravating facts proven or admitted.',
+  'A wobbler cannot be reduced to a misdemeanor, and when a case mixes prison and county-jail counts the whole term is served in prison.',
+  'A defendant convicted at trial is not given the chance to allocute before sentence.',
+  'Custody credits, restitution, sentence enhancements and prior-strike law are not modeled, so a release date is the full term served.',
   'Sentences are chosen as a single term inside the aggregate range, not count by count as consecutive or concurrent terms.',
 ];
 
