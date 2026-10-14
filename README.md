@@ -31,11 +31,26 @@ One courtroom, written to hold up for three very different players:
 
 ## Tech Stack
 
-- Vite + React 19 + TypeScript (strict)
-- Zustand (state management)
-- Zod (validation gatekeeper)
-- Tailwind CSS (presentation layer only)
+- Vite 8 + React 19 + TypeScript 6 (strict)
+- Zustand 5 (state management)
+- Zod 4 (validation gatekeeper, and the source the Gemini response schemas are compiled from)
+- Tailwind CSS 4 + lucide-react (presentation layer only)
+- Vitest (unit tests) and Playwright (end-to-end, installed outside the project)
 - GitHub Pages (static hosting)
+
+## Run It Locally
+
+Needs Node 22 (pinned in `.nvmrc`).
+
+```bash
+npm ci
+npm run dev        # http://localhost:5173/the-bench/
+```
+
+The demo docket needs nothing else. To generate a case, paste a
+[Gemini API key](https://aistudio.google.com/apikey) into the
+*Bring Your Own Key* form: it is held in memory only, never written to storage,
+and sent to Google in a request header, never in a URL.
 
 ## Testing
 
@@ -68,13 +83,14 @@ Two further checks are **manual only** — both call the real Gemini API and spe
 real quota, and neither is wired into CI:
 
 ```bash
-npm run test:live                             # live pipeline suite + 5-run diagnostic sweep
+npm run test:live                             # live pipeline suite, every response schema, 5-run sweep
 node .claude/skills/qa-agent/qa-agent.mjs     # LLM-as-judge playthrough of a generated case
 ```
 
 `test:live` validates the generation pipeline against the actual API (it found a
-retired model build, a structured-output null mismatch, and the root cause of a
-reported "Mistrial most of the time"). `qa-agent` is the only check that reads
+retired model build, a structured-output null mismatch, the root cause of a
+reported "Mistrial most of the time", and a repair-round schema the API
+rejected outright). `qa-agent` is the only check that reads
 what the pipeline *writes* — it drives a live BYOK case and has an independent
 Gemini call judge every beat for realism the way a human tester would.
 
@@ -88,7 +104,7 @@ same Zod gate before the game can use it.
 
 ```mermaid
 flowchart LR
-    KEY["Your Gemini key (memory only)"] --> GS["GameService: 7 model calls + computed steps"]
+    KEY["Your Gemini key (memory only)"] --> GS["GameService: 7 model-calling stages + computed steps"]
     GS <--> LLM[Gemini API]
     DEMO["Demo docket (hardcoded)"] --> VL
     GS --> VL["Zod ValidationLayer"]
@@ -104,16 +120,16 @@ derivation decides.
 
 ## Status
 
-**Feature-complete and playable end to end, offline or with your own key.**
+**Feature-complete and playable end to end, with no key or with your own.**
 
-- **The demo docket** — five hand-authored cases, every branch reachable: **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK, no offer), **People v. Dominic Reyes** (STRONG, offer rejected) and **People v. Teresa Vaughn** (multi-charge, split verdict).
+- **The demo docket** — five hand-authored cases, every branch reachable: **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK, no offer), **People v. Dominic Reyes** (STRONG, offer rejected) and **People v. Teresa Vaughn** (multi-charge, a verdict on each count).
 - **The courtroom** — arraignment and discovery before the plea; the record unfolding one statement at a time; exhibits offered, argued and ruled on individually, with recorded interrogations played line by line before the suppression fight; direct and cross; closings that answer to your rulings; per-count verdicts; allocution on the plea path; a sentence chosen inside the statutory range.
 - **The close** — a minute order filed under the record that reads the sentence back as consequence, an aftermath that answers *how hard* the sentence landed and not just the verdict, and a bench record that follows the judge across cases.
 - **Generated cases** — a seven-stage Gemini pipeline behind your own key, drawn live on the generating screen, cancellable, and loaded only for players who use it.
 - **Orientation** — act title cards, the guided tutorial, and the Bench Book (plain-English terms, California authority, an honest list of simplifications, and what code decides versus what the model writes).
 - **Quality gates** — lint, 588 unit tests, the type-negative build, and an eight-run Playwright suite against the production bundle run in CI on every pull request; the deploy publishes only the artifact the end-to-end suite passed against.
 
-**Open, and deliberately left to the author** (see [`TODO.md`](./TODO.md)): a per-count custody election for wobblers (S1), a unit-safe sentencing floor (S2), and whether an off-phase store write should vacate the game or reject only the write (A7). Generating the Gemini response schema from Zod (A2) has since shipped, measured live on either side, and the concurrent pipeline's first live sweep came back 5/5 with zero failed attempts.
+**Open, and deliberately left to the author** (see [`TODO.md`](./TODO.md)): a per-count custody election for wobblers (S1), a unit-safe sentencing floor (S2), whether an off-phase store write should vacate the game or reject only the write (A7), and showing the player how many calls a generated case spent (A5).
 
 ### How it got here
 
@@ -123,13 +139,13 @@ Foundation, UI layer, the beat-by-beat courtroom loop, and the courtroom-realism
 
 Since then the work has moved from *does it generate* to *does it cohere*: the scene's established facts are now a canonical block threaded verbatim into every downstream stage rather than each one paraphrasing the description and drifting; the voiced verdict layer is authored in its own stage after the defendant exists, with the charge ids it echoes validated against the ones it was asked for; and sentencing exposure is scoped to the counts of conviction, so acquitting the only prison-eligible count no longer offers prison anyway.
 
-The game loop now closes: `ResultGenerator` — the last box in the diagram that was designed rather than built — assembles an immutable `FinalResult` from the state the player's own rulings produced, the store's schema gate validates it, and only what passes is persisted. A minute order is filed under the record when the case closes (disposition, plea posture, evidentiary tally, per-count verdicts, sentence), and the judge's bench record greets them on the docket screen next time: cases heard, pleas taken, trials held, the share of tried counts returned guilty, and the recent judgments. Nothing about that assembly is generated — `resolutionPath` falls out of the plea decision and `pleaOutcome` off the computed posture. `localStorage` is treated as hostile in both directions: every snapshot read back is re-parsed through `FinalResultSchema` and a failing entry dropped individually, and every access is wrapped, so blocked site data or an exceeded quota costs the record rather than the finished game.
+The game loop now closes: `ResultGenerator` — the last box in the architecture that was designed rather than built — assembles an immutable `FinalResult` from the state the player's own rulings produced, the store's schema gate validates it, and only what passes is persisted. A minute order is filed under the record when the case closes (disposition, plea posture, evidentiary tally, per-count verdicts, sentence), and the judge's bench record greets them on the docket screen next time: cases heard, pleas taken, trials held, the share of tried counts returned guilty, and the recent judgments. Nothing about that assembly is generated — `resolutionPath` falls out of the plea decision and `pleaOutcome` off the computed posture. `localStorage` is treated as hostile in both directions: every snapshot read back is re-parsed through `FinalResultSchema` and a failing entry dropped individually, and every access is wrapped, so blocked site data or an exceeded quota costs the record rather than the finished game.
 
 And the record now answers the one decision the judge makes alone. Where the term sits between the lightest sentence available and the statutory ceiling is read deterministically, and every closing surface consumes it: each demo case carries three authored codas so a sentence at the floor and one at the ceiling tell different stories about the same people, the Aftermath prompt is given the range, the refused plea, the suppressed exhibits and the household rather than a bare number, and the minute order reads the term back as consequence — release year and age, the dependents that time is taken from, the job it ends, what the conviction carries. The bench record totals the custody ordered across a whole career.
 
 A review pass over the finished branch then corrected six defects in that new arithmetic — a release year that could land before the term ran out, a sentence with one lawful option reported as the maximum, an offer comparison that put fine dollars against prison days, and an aftermath prompt telling the reporter a defendant had refused the plea they took — the kind of bug that produces a confident wrong sentence rather than a crash.
 
-The road to 1.0 then turned to who the game is for. The key moved out of the request URL into a header, plea and verdict lines began failing at the stage that wrote them (so they are repaired rather than ending the run), and every request gained a timeout. The pipeline's independent stages now run concurrently and report their progress, which the generating screen draws — model calls and computed steps side by side — with a Cancel that abandons the run cleanly. The pipeline itself became a separate chunk only key-holders download, and act title cards and the Bench Book gave the courtroom's language and its simplifications a plain explanation.
+The road to 1.0 then turned to who the game is for. The key moved out of the request URL into a header, plea and verdict lines began failing at the stage that wrote them (so they are repaired rather than ending the run), and every request gained a timeout. The pipeline's independent stages now run concurrently and report their progress, which the generating screen draws — model calls and computed steps side by side — with a Cancel that abandons the run cleanly. The pipeline itself became a separate chunk only key-holders download, and act title cards and the Bench Book gave the courtroom's language and its simplifications a plain explanation. Last, the Gemini response schemas stopped being transcribed by hand: they are compiled from the same Zod schemas that validate the responses, so the two can no longer drift. Every one of them is now sent to the live API on its own, which is how a repair-round schema the API had always rejected was found and fixed, and the concurrent pipeline's live sweep came back 5/5 with zero failed attempts.
 
 ## License
 
