@@ -73,6 +73,24 @@ travels only in a request header, and the deployed site carries a
 Content-Security-Policy that limits where the page can load code from and send
 requests to.
 
+**Measured, not assumed.** A paced 10-case live sweep on 2026-10-14
+(`npm run test:live`'s diagnostic, one free-tier key, 60 seconds between cases):
+
+| | Result |
+|---|---|
+| Cases that came out valid | 10 of 10 |
+| Cases that needed even one retry | 0 of 10 |
+| Time to write a case (median) | 18 seconds (16–21) |
+| Model calls per case | 8 |
+| Tokens per case (median) | about 4,300 in and 5,600 out |
+| Rate-limited responses | 0 |
+
+Ten cases is a small sample, and every one of them took the same path (an
+interview tape, no repair round), so the failure handling above was not
+exercised by this run. The same sweep in August found the evidence stage
+failing its first attempt in 3 of 5 cases, which is how the unstated 1–10
+score range was found; after the fix, that rate went to zero.
+
 **[Read the full architecture →](./docs/ARCHITECTURE.md)** Three diagrams
 (trust boundaries, the generation pipeline, the courtroom) with what each
 derivation decides.
