@@ -1,5 +1,65 @@
 # TODO
 
+## Pre-launch reviews (2026-10-14 — OPEN)
+
+Five independent readings of the README (an AI engineer, an AI architect, a
+California criminal-law attorney, a high-school student, a non-technical
+visitor) and an audit of the test suite, run before the 1.0 announcement. What
+could be fixed in wording or tests was fixed on the same branch: the stage
+counts, the README's legal claims, the Bench Book's allocution authority and
+wobbler entry, the three-term sentencing and trial-allocution
+simplifications, a Content-Security-Policy, and an E2E path matrix that plays
+every demo case down every branch. What is left is below — design calls for
+the author, logged rather than changed before launch.
+
+**From the attorney (game design, not wording):**
+- [ ] **AT1 — a WEAK case gets no offer.** In practice a weak case usually
+      draws a *better* offer, or is dismissed; the game's band→offer mapping
+      runs the other way. `buildPleaPosture` and `SENTENCE_DISCOUNT` own it.
+- [ ] **AT2 — the error screen is called "Mistrial".** A mistrial is a
+      specific legal event (a trial terminated without a verdict); a schema
+      failure is not one. Rename the screen, or keep it as deliberate flavour
+      and say so in the Bench Book.
+- [ ] **AT3 — "suppression" for a statement challenge.** A motion to suppress
+      (§ 1538.5) is about searches and seizures; a Miranda or voluntariness
+      challenge is a motion to exclude, heard under Evid. Code § 402. UI copy,
+      beat headings and the E2E assertions use "suppression".
+- [ ] **AT4 — the minute order reads the sentence back as consequence.** A real
+      minute order never carries release year, age or family impact. Now
+      disclosed in the Bench Book; the open question is whether that reading
+      belongs on a separate surface rather than on the order itself.
+- [ ] **AT5 — three-term felony sentencing.** Felony terms are chosen anywhere
+      in the range rather than from the § 1170(b) triad (upper term only on
+      aggravating facts). Disclosed as a simplification; modeling it needs
+      per-count triads in `ChargeSchema`.
+- [ ] **AT6 — no allocution after a trial.** Only the plea path allocutes.
+      Disclosed; modeling it needs a trial-path allocution in the narrative.
+
+**From the test-suite audit:**
+- [ ] **TS1 — `FinalResultSchema` never checks the sentence against the counts
+      of conviction.** A fixture imposing prison on a jail-only conviction
+      passed validation (fixed in the fixture, not in the schema).
+- [ ] **TS2 — a fine's floor is $1.** With no mandatory minimum the picker's
+      floor is one unit, so the lightest fine is $1 (seen in the path matrix's
+      bench record). Related to S2.
+- [ ] **TS3 — no component tests.** UI behavior rests on the E2E driver
+      alone; `SentencingControl`'s seeding and the picker floor have no unit
+      coverage.
+- [ ] **TS4 — no hermetic integration test of the real stages.**
+      `gameService.test.ts` mocks every stage; nothing runs the real stage
+      functions together over canned Gemini responses.
+- [ ] **TS5 — fixed sleeps and swallowed waits in the driver**
+      (`advanceTo`'s 150 ms poll; `.waitFor().catch(() => {})` before a
+      check). They fail late rather than falsely pass, but slow a failing run.
+- [ ] **TS6 — the live suite can run files in parallel.** `vitest.live.config.ts`
+      sets no `fileParallelism: false`, so a full `test:live` stacks the
+      schema probe and the sweep into the same minute. Run the diagnostic file
+      alone under a free-tier key.
+
+**From the AI architect:**
+- [ ] **AR1 — no observability in the shipped app.** Call counts, retries and
+      timing exist only in the live diagnostic; a player sees none of it (A5).
+
 ## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
 
 The first `test:live` sweep after the follow-ups below produced a valid case in 4 of 5 runs. All 7 live tests passed. The concurrent stages and the timeout behaved, with no 429s, timeouts or failed stage attempts. The one failed run reached `FinalizeCasePayload.repair` and got a 400 `INVALID_ARGUMENT` on its first call. This was not flakiness: it reproduces on every request. The repair schema was over Gemini's complexity limit, and it had been since before this branch. No earlier sweep had needed a repair, so it was never sent.
