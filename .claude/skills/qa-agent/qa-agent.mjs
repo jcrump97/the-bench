@@ -520,14 +520,21 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   // call, even though Node's own fetch negotiates the same proxy fine.
   // Intercept just the Gemini calls at the Playwright layer and issue them
   // with Node's fetch instead of letting Chromium's network stack touch the
-  // wire; the app's own requests are plain POST/GET JSON with no headers
-  // beyond Content-Type, so forwarding is a faithful passthrough.
+  // wire. The forward must carry the app's two headers: Content-Type, and
+  // x-goog-api-key — the key has travelled in that header, not the URL,
+  // since A8. Forwarding Content-Type alone sent every call keyless, which
+  // Google answers with 403 "unregistered callers"; model selection hid it by
+  // falling back to its default model, and the run died at StatuteSelection.
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const req = route.request();
+    const sent = req.headers();
+    const headers = {};
+    if (sent['x-goog-api-key']) headers['x-goog-api-key'] = sent['x-goog-api-key'];
+    if (req.method() === 'POST') headers['Content-Type'] = 'application/json';
     try {
       const resp = await fetch(req.url(), {
         method: req.method(),
-        headers: req.method() === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+        headers,
         body: req.method() === 'POST' ? (req.postData() ?? undefined) : undefined,
       });
       const body = Buffer.from(await resp.arrayBuffer());
