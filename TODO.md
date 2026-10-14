@@ -60,6 +60,34 @@ the author, logged rather than changed before launch.
 - [ ] **AR1 — no observability in the shipped app.** Call counts, retries and
       timing exist only in the live diagnostic; a player sees none of it (A5).
 
+**From three paced `qa-agent` playthroughs** (generated cases, 2026-10-14; a
+model judging a model, so each was confirmed by reading the beat itself):
+- [ ] **QA1 — testimony is ruling-blind (HIGH).** In a generated *People v.
+      Pendleton* the court suppressed the recorded interview as involuntary,
+      and the detective then told the court on direct that the defendant
+      "acknowledged initiating the wire transfers" in that interview. Witness
+      testimony is written before any ruling exists, and unlike closings
+      (`exhibitPoints` `ifAdmitted`/`ifExcluded`) it has no ruling-keyed
+      variant. Fix in the same pattern: per-exhibit testimony fragments the
+      script picks off the ruling, or a rule that testimony never relays an
+      exhibit's content. Needs a `test:live` re-measure either way.
+- [ ] **QA2 — VerdictVoice says "the State".** California prosecutes as "the
+      People"; reaction lines also spoke at verdict time as if evidence were
+      still to come. Prompt change in `VERDICT_VOICE_SYSTEM`; re-measure.
+- [ ] **QA3 — scene drift survived `establishedFacts`.** A boot print was
+      "inside" the cage in one stage and "next to" it in another.
+- [ ] **QA4 — smaller verbiage.** "findings of guilt" (plural) read after a
+      split verdict; "on the early morning hours"; the People asked for bank
+      records to be "marked and entered" after the court had already admitted
+      them (the post-ruling reaction line is written as if before the ruling).
+- [x] **QA tool: a truncated judgment aborted the whole run.** The judge model
+      resolves to a version-less alias, so no thinking cap can be sent, and
+      its thinking exhausted the 2048-token output cap. The call now sits
+      inside the degrade loop and the cap is 8192.
+- [ ] **QA tool: contrast findings are mostly false positives.** Screenshots
+      catch transcript rows mid fade-in and the judge reads them as
+      low-contrast text. Wait for the row's animation to settle before capture.
+
 ## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
 
 The first `test:live` sweep after the follow-ups below produced a valid case in 4 of 5 runs. All 7 live tests passed. The concurrent stages and the timeout behaved, with no 429s, timeouts or failed stage attempts. The one failed run reached `FinalizeCasePayload.repair` and got a 400 `INVALID_ARGUMENT` on its first call. This was not flakiness: it reproduces on every request. The repair schema was over Gemini's complexity limit, and it had been since before this branch. No earlier sweep had needed a repair, so it was never sent.

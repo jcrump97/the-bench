@@ -68,8 +68,11 @@ const BASE_BACKOFF_MS = 500;
 const QA_TEMPERATURE = Number(process.env.QA_TEMPERATURE ?? 0.2);
 // An unbounded findings array can run long enough to truncate the JSON
 // mid-object, which fails validation for a reason that has nothing to do
-// with the judgment itself. Bound it generously instead.
-const QA_MAX_OUTPUT_TOKENS = Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 2048);
+// with the judgment itself. Bound it generously instead — and generously means
+// room for thinking too: on a version-less alias like gemini-flash-latest no
+// thinking config can be sent (see below), and thinking tokens count against
+// this cap. 2048 was exhausted mid-run on 2026-10-14.
+const QA_MAX_OUTPUT_TOKENS = Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 8192);
 
 // Gemini's "thinking" knob is split by model family: 2.5-series models take a
 // numeric thinkingBudget, Gemini 3 models take a thinkingLevel enum, and
@@ -346,15 +349,17 @@ async function judgeContent(model, { memory, promptText, screenshot, mode }) {
     // which field it got wrong.
     const text = attempt === 0
       ? composed
-      : `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw}\n\nReturn corrected JSON only.`;
+      : `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw ?? "(none: the call itself failed)"}\n\nReturn corrected JSON only.`;
     const parts = imagePart ? [{ text }, imagePart] : [{ text }];
-    const raw = await callGeminiJson(API_KEY, model, {
-      systemInstruction: PERSONA,
-      parts,
-      responseSchema: schema,
-    });
-    lastRaw = raw;
+    // The call sits inside the try: a truncated (MAX_TOKENS) or empty response
+    // is one failed judgment, not a reason to abandon the whole playthrough.
     try {
+      const raw = await callGeminiJson(API_KEY, model, {
+        systemInstruction: PERSONA,
+        parts,
+        responseSchema: schema,
+      });
+      lastRaw = raw;
       return zodSchema.parse(JSON.parse(raw));
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
@@ -369,7 +374,7 @@ async function judgeContent(model, { memory, promptText, screenshot, mode }) {
   // absorb exactly this shape of result, so this leans on it rather than
   // duplicating it. Mark the returned result as degraded so the report does
   // not present a defaulted beat as a clean one.
-  console.warn(`QA judgment call failed validation twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
+  console.warn(`QA judgment call failed twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
   if (mode === 'decide') {
     return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.', degraded: true };
   }
