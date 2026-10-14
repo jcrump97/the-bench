@@ -188,11 +188,14 @@ below rather than discovered in review:
 UI commit the E2E driver (now seven runs, 83 checks). **Next step for whoever
 picks this up:** run `npm run test:live`'s diagnostic sweep once with a real
 key, to measure the concurrent pipeline (P7) and the per-attempt timeout (P4)
-against the live API before calling them proven.
+against the live API before calling them proven. *(Done 2026-10-14, while
+merging A2: `test:live` passed 18/18 and the five-run sweep finished 5/5 with
+zero failed attempts, concurrency and timeout included.)*
 
 ### Deliberately not in this plan
 
-- **A2** — needs a live sweep either side (see review point 2).
+- **A2** — needs a live sweep either side (see review point 2). *(Shipped
+  separately in #22, swept live either side.)*
 - **S1 / S2 / A7a** — design decisions for the author. Recommendations:
   S1, a per-count `custodyElection` field defaulting to PRISON plus a picker
   toggle; S2, exposure kept in day-equivalents with the picker presenting the
@@ -353,7 +356,9 @@ instance and is now closed; the rest cluster in that same gap.
       `requireChoiceCoverage` is gone, and the hand-written schemas the two
       comments were attached to no longer exist.)* Distinct from the
       `LedgerEntryRow` `<li>`-wrapper duplication already tracked below.
-- [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes seven
+- [ ] **A5 — latency, cost, and cancellation.** *(Mostly done: concurrency
+      in P7, the timeout in P4, Cancel in P6/P8. Still open: nothing surfaces
+      a per-run call count or cost to the player.)* `generateCase` makes seven
       strictly sequential LLM round trips where the dependency graph allows five
       (`finalizeCasePayload` adds an eighth only when its deterministic repair
       is not enough):
