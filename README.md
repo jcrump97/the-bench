@@ -25,6 +25,12 @@ One courtroom, written to hold up for three very different players:
 
 This is my first portfolio project as I transition from the Service Desk to AI Systems Architecture. I chose to do this because I have always had an interest in the criminal legal system. This project was born from countless hours of listening to actual court proceedings, researching different perspectives of the legal system, brainstorming with family/friends and AI, as well as a desire to take a complex system and to create some form of it while demonstrating the skills I have been learning over the past couple of years. I am building it in public with Claude, with an abundance of thought, planning, consideration, and passion injected as well. The commit history is the real documentation of the process. I believe the best results come from collaborating with AI, leaving the decisions to the human, not the AI.
 
+## What I Learned
+
+- **Don't try to perfect the schemas before testing them live.** I spent the early phase trying to get the schemas right on paper, but some things only show up against the real API: Gemini rejected a schema that looked perfectly valid, sent `null` where my code expected a missing field, and kept getting a score wrong until the 1–10 range was actually stated to it. Now I plan enough to start, test live, and let the results drive the changes.
+- **The AI drafts, but I own the design.** Early on, especially while planning the schemas, the AI kept being sloppy, leaving out details that would be critical later in the game. Its first sentence schema would have accepted a fine measured in years, or community service paid in dollars. I pushed back and made every sentence type carry only the units that make sense for it, and everything from the plea offer to the release date is built on that rule.
+- **Some of the design came from the service desk.** I especially wanted the side panels to peek out when a case opens, so players see immediately that they can interact with those buttons and expand the panels.
+
 ## Architecture
 
 The LLM provides color; deterministic code provides structure. The model
