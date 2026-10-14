@@ -6,8 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 // The player pastes a Gemini API key into this page, so the deployed build
 // carries a Content-Security-Policy: scripts, styles and chunks from this
 // origin only, and network requests to this origin and the Gemini API only.
-// An injected script could still read the key from memory, but it could not
-// be loaded from elsewhere or send the key anywhere but Google.
+// It does not make the key safe from an injected script (one could still read
+// it from memory, or navigate away with it in the URL), but such a script can
+// no longer be loaded from elsewhere or fetch() the key to another server.
 //
 // Build only: the dev server injects inline scripts for hot reload, which
 // this policy would block. GitHub Pages cannot set response headers, so it

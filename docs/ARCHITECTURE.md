@@ -74,10 +74,12 @@ flowchart TD
 
 ## The Generation Pipeline
 
-Seven model-calling stages, with four computed steps between them. Two pairs
-share no inputs and run concurrently, so the critical path is five round trips
-rather than seven. The generating screen draws exactly these steps as they
-run. Every model response is validated against the same Zod schemas the demo
+Eight model calls (seven when no interview tape exists), with three computed
+steps between them. Two pairs share no inputs and run concurrently, so the
+critical path is six round trips rather than eight. A ninth call, the
+whole-case repair round, runs only when an assembled case still fails
+validation after the in-code repair. The generating screen draws exactly these
+steps as they run. Every model response is validated against the same Zod schemas the demo
 docket crosses, and a failure is retried with the issues and the previous
 response fed back as a repair task.
 
@@ -98,7 +100,7 @@ flowchart TD
         INTG["InterrogationGen (skipped when counsel is invoked)"]
         EVID[EvidenceGen]
         VERD[VerdictVoice]
-        FIN["finalizeCasePayload (ids reconciled in code; LLM repair round only if still invalid)"]
+        FIN["finalizeCasePayload (model call: statement of facts + closings; ids reconciled in code; whole-case repair call only if still invalid)"]
         PS["Plea structure (computed: assessProsecution, derivePleaOfferTerms, assessDefense)"]
         PLEN[PleaNarrative]
     end
