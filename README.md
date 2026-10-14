@@ -3,17 +3,13 @@
 [![Verify](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml/badge.svg)](https://github.com/jcrump97/the-bench/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**▶ Play it: [jcrump97.github.io/the-bench](https://jcrump97.github.io/the-bench/)** — no sign-up and no API key needed. Five demo cases are ready on the docket; *People v. Eli Navarro* is the guided tutorial.
+**You are the judge.** A California criminal case unfolds in front of you one statement at a time, and you rule on the plea, the evidence, the verdict and the sentence.
 
-![The courtroom: Act 1 of People v. Webb, with the plea agreement awaiting the judge's ruling](./docs/screenshots/courtroom.png)
+**▶ Play it: [jcrump97.github.io/the-bench](https://jcrump97.github.io/the-bench/)** — no sign-up and no API key needed, on a desktop or a phone. Five demo cases are ready on the docket; *People v. Eli Navarro* is the guided tutorial.
 
-A client-side judge simulation game. You are the judge in a California criminal court. A case lands on your desk. You make decisions regarding pleas, rule on evidentiary motions, and hand down sentences according to the statutes as charged. Powered by your own Gemini API key or a hardcoded demo case.
+![A playthrough of People v. Webb: the case is called, the evidence is disclosed beat by beat, the judge rejects the plea agreement, and Act 2 opens with the first exhibit ruling](./docs/screenshots/playthrough.gif)
 
-This is a single-page React application deployed to GitHub Pages. Zero backend. Zero server-side secrets. The architecture forces a non-deterministic LLM into a deterministic state machine using strict JSON schemas and Zod validation.
-
-## Why This Exists
-
-This is my first portfolio project as I transition from the Service Desk to AI Systems Architecture. I chose to do this because I have always had an interest in the criminal legal system. This project was born from countless hours of listening to actual court proceedings, researching different perspectives of the legal system, brainstorming with family/friends and AI, as well as a desire to take a complex system and to create some form of it while demonstrating the skills I have been learning over the past couple of years. I am building it in public with Claude, with an abundance of thought, planning, consideration, and passion injected as well. The commit history is the real documentation of the process. I believe the best results come from collaborating with AI, leaving the decisions to the human, not the AI.
+Bring your own Gemini API key and the game writes you a new case instead. It runs entirely in the browser: a static site with no backend, where a non-deterministic model is forced through a deterministic state machine by strict schemas and Zod validation.
 
 ## Who It's For
 
@@ -25,74 +21,9 @@ One courtroom, written to hold up for three very different players:
 | **An AI architect** | A non-deterministic model forced through a deterministic state machine. Start a case with your own Gemini key and the generating screen draws the pipeline as it runs — which steps are model calls, which are computed and never generated. Then read on below. |
 | **A high-school student** | The **guided tutorial case** (marked *Start here*), a title card at each act saying what you're deciding, and the Bench Book's plain-English definitions for every term the courtroom throws at you. |
 
-<img src="./docs/screenshots/pipeline.png" alt="The generating screen: each pipeline step marked as a model call or a computed step, with elapsed times and a Cancel button" width="380">
+## Why This Exists
 
-*The generating screen with your own key: model calls write the people and their words, computed steps decide the structure.*
-
-## Tech Stack
-
-- Vite 8 + React 19 + TypeScript 6 (strict)
-- Zustand 5 (state management)
-- Zod 4 (validation gatekeeper, and the source the Gemini response schemas are compiled from)
-- Tailwind CSS 4 + lucide-react (presentation layer only)
-- Vitest (unit tests) and Playwright (end-to-end, installed outside the project)
-- GitHub Pages (static hosting)
-
-## Run It Locally
-
-Needs Node 22 (pinned in `.nvmrc`).
-
-```bash
-npm ci
-npm run dev        # http://localhost:5173/the-bench/
-```
-
-The demo docket needs nothing else. To generate a case, paste a
-[Gemini API key](https://aistudio.google.com/apikey) into the
-*Bring Your Own Key* form: it is held in memory only, never written to storage,
-and sent to Google in a request header, never in a URL.
-
-## Testing
-
-Four gates run in CI on every pull request and every push to `main`
-(`.github/workflows/verify.yml`). The deploy job publishes the exact artifact
-the E2E suite passed against.
-
-```bash
-npm run lint       # ESLint — no-explicit-any, ban-ts-comment, no-console
-npm test           # Vitest — hermetic, never calls the Gemini API
-npm run build      # tsc -b (enforces the @ts-expect-error gates) + vite build
-npm run test:e2e   # Playwright — full demo docket, headless, no API key needed
-```
-
-`npm run test:e2e` drives the committed driver at
-`.claude/skills/run-the-bench/driver.mjs`: six runs across all five demo cases,
-both the plea and trial branches, desktop and mobile viewports, asserting
-speaker order, beat ordering, progressive-reveal gating, act title cards, the
-Bench Book, and outcome-conditioned endings — plus a seventh run over the BYOK
-generating screen, where Playwright answers every Gemini request inside the
-browser (no key, no quota) to check the progress panel, that the key travels
-only in a request header, and that Cancel aborts the request in flight and
-returns to the docket — and an eighth that blocks the Bench Book's chunk
-mid-case to prove a failed load cannot unmount the courtroom. It needs a server to point at — `npm run dev` locally, or
-`npm run preview` with `BASE_URL=http://localhost:4173/the-bench/` to test the
-production build the way CI does. Playwright is deliberately **not** a project
-dependency; see the skill's `SKILL.md` for the throwaway-prefix install.
-
-Two further checks are **manual only** — both call the real Gemini API and spend
-real quota, and neither is wired into CI:
-
-```bash
-npm run test:live                             # live pipeline suite, every response schema, 5-run sweep
-node .claude/skills/qa-agent/qa-agent.mjs     # LLM-as-judge playthrough of a generated case
-```
-
-`test:live` validates the generation pipeline against the actual API (it found a
-retired model build, a structured-output null mismatch, the root cause of a
-reported "Mistrial most of the time", and a repair-round schema the API
-rejected outright). `qa-agent` is the only check that reads
-what the pipeline *writes* — it drives a live BYOK case and has an independent
-Gemini call judge every beat for realism the way a human tester would.
+This is my first portfolio project as I transition from the Service Desk to AI Systems Architecture. I chose to do this because I have always had an interest in the criminal legal system. This project was born from countless hours of listening to actual court proceedings, researching different perspectives of the legal system, brainstorming with family/friends and AI, as well as a desire to take a complex system and to create some form of it while demonstrating the skills I have been learning over the past couple of years. I am building it in public with Claude, with an abundance of thought, planning, consideration, and passion injected as well. The commit history is the real documentation of the process. I believe the best results come from collaborating with AI, leaving the decisions to the human, not the AI.
 
 ## Architecture
 
@@ -114,38 +45,85 @@ flowchart LR
     STORE -->|case closed| ARCH["Validated FinalResult → localStorage"]
 ```
 
+<img src="./docs/screenshots/pipeline.png" alt="The generating screen: each pipeline step marked as a model call or a computed step, with elapsed times and a Cancel button" width="380">
+
+*The generating screen with your own key: model calls write the people and their words, computed steps decide the structure.*
+
 **[Read the full architecture →](./docs/ARCHITECTURE.md)** Three diagrams
 (trust boundaries, the generation pipeline, the courtroom) with what each
 derivation decides.
 
 ## Status
 
-**Feature-complete and playable end to end, with no key or with your own.**
+<img src="./docs/screenshots/mobile.png" alt="The Bench on a phone: an exhibit ruling, with the judge's four bench lines as full-width buttons" width="220" align="right">
+
+**Version 1.0: feature-complete and playable end to end, with no key or with your own.**
 
 - **The demo docket** — five hand-authored cases, every branch reachable: **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK, no offer), **People v. Dominic Reyes** (STRONG, offer rejected) and **People v. Teresa Vaughn** (multi-charge, a verdict on each count).
 - **The courtroom** — arraignment and discovery before the plea; the record unfolding one statement at a time; exhibits offered, argued and ruled on individually, with recorded interrogations played line by line before the suppression fight; direct and cross; closings that answer to your rulings; per-count verdicts; allocution on the plea path; a sentence chosen inside the statutory range.
 - **The close** — a minute order filed under the record that reads the sentence back as consequence, an aftermath that answers *how hard* the sentence landed and not just the verdict, and a bench record that follows the judge across cases.
 - **Generated cases** — a seven-stage Gemini pipeline behind your own key, drawn live on the generating screen, cancellable, and loaded only for players who use it.
 - **Orientation** — act title cards, the guided tutorial, and the Bench Book (plain-English terms, California authority, an honest list of simplifications, and what code decides versus what the model writes).
+- **Mobile friendly** — the same courtroom at phone width: the case-file panels fold away behind the top bar, and every ruling is a full-width tap target. The trial path is tested end to end at 375 px in CI.
 - **Quality gates** — lint, 588 unit tests, the type-negative build, and an eight-run Playwright suite against the production bundle run in CI on every pull request; the deploy publishes only the artifact the end-to-end suite passed against.
 
 **Open, and deliberately left to the author** (see [`TODO.md`](./TODO.md)): a per-count custody election for wobblers (S1), a unit-safe sentencing floor (S2), whether an off-phase store write should vacate the game or reject only the write (A7), and showing the player how many calls a generated case spent (A5).
 
-### How it got here
+**How it got here**, in brief: the schemas, state machine and demo docket came first; then the beat-by-beat courtroom; then the BYOK generation pipeline, made reliable by measuring it against the live API rather than guessing; then the close of the case (the minute order, the aftermath, a bench record across cases); and finally the road to 1.0, which made the game readable for its three audiences. The full story is in **[docs/HISTORY.md](./docs/HISTORY.md)**.
 
-Foundation, UI layer, the beat-by-beat courtroom loop, and the courtroom-realism overhaul complete. Schemas, state machine, security vault, deterministic plea/sentencing/interrogation/demeanor derivations, and the full game shell (progressively revealed panels, tiered detail modals, transcript click-through) are implemented — and the game now plays as a living courtroom: arraignment and discovery precede the plea, the record unfolds one statement at a time behind a click-to-advance cursor, exhibits are offered, argued, and ruled on individually (recorded interrogations played line by line before the suppression fight), witnesses take the stand for direct and cross, closings precede per-charge verdicts, and defendants allocute before sentencing on the plea path. Five hardcoded demo cases — **People v. Eli Navarro** (the guided tutorial), **People v. Marcus Webb** (MODERATE offer), **People v. Curtis Boone** (WEAK/no offer), **People v. Dominic Reyes** (STRONG/rejected), and **People v. Teresa Vaughn** (multi-charge, a verdict on each count) — are playable end-to-end on every branch.
+## Run It Locally
 
-`GameService` and the multi-stage LLM generation pipeline are now implemented (`src/lib/llm/`) and wired to the BYOK path — a real Gemini key plays a generated case through the same seam as the demo docket. The default test suite mocks every Gemini call; a separate opt-in live suite (`npm run test:live`, gated behind a real API key) validates the whole pipeline against the actual API and has caught and fixed reliability gaps invisible to mocks — a retired model build ranked ahead of a stable alias, a structured-output null/undefined mismatch on an optional field, and, most recently, a player-reported "Mistrial most of the time." A live diagnostic sweep measured that failure rather than guessing at it: 5/5 case generations succeeded end to end, but with one stage failing its first attempt in 3 of 5 runs because two confidence scores were specified as 1-10 in validation with no range ever stated to the model. Carrying every such constraint from validation into the generation schema and prompts — plus hardening the transport and turning failed retries into repairs instead of blind re-rolls — took the same sweep to 5/5 with zero failed attempts. A second, separate skill, `qa-agent`, closes a different gap: it plays a live BYOK-generated case and has an independent Gemini call judge each beat for realism and UI issues the way a human tester would, since neither the mocked suite nor the live schema checks read what the pipeline actually *writes*.
+Needs Node 22 (pinned in `.nvmrc`).
 
-Since then the work has moved from *does it generate* to *does it cohere*: the scene's established facts are now a canonical block threaded verbatim into every downstream stage rather than each one paraphrasing the description and drifting; the voiced verdict layer is authored in its own stage after the defendant exists, with the charge ids it echoes validated against the ones it was asked for; and sentencing exposure is scoped to the counts of conviction, so acquitting the only prison-eligible count no longer offers prison anyway.
+```bash
+npm ci
+npm run dev        # http://localhost:5173/the-bench/
+```
 
-The game loop now closes: `ResultGenerator` — the last box in the architecture that was designed rather than built — assembles an immutable `FinalResult` from the state the player's own rulings produced, the store's schema gate validates it, and only what passes is persisted. A minute order is filed under the record when the case closes (disposition, plea posture, evidentiary tally, per-count verdicts, sentence), and the judge's bench record greets them on the docket screen next time: cases heard, pleas taken, trials held, the share of tried counts returned guilty, and the recent judgments. Nothing about that assembly is generated — `resolutionPath` falls out of the plea decision and `pleaOutcome` off the computed posture. `localStorage` is treated as hostile in both directions: every snapshot read back is re-parsed through `FinalResultSchema` and a failing entry dropped individually, and every access is wrapped, so blocked site data or an exceeded quota costs the record rather than the finished game.
+The demo docket needs nothing else. To generate a case, paste a
+[Gemini API key](https://aistudio.google.com/apikey) into the
+*Bring Your Own Key* form: it is held in memory only, never written to storage,
+and sent to Google in a request header, never in a URL.
 
-And the record now answers the one decision the judge makes alone. Where the term sits between the lightest sentence available and the statutory ceiling is read deterministically, and every closing surface consumes it: each demo case carries three authored codas so a sentence at the floor and one at the ceiling tell different stories about the same people, the Aftermath prompt is given the range, the refused plea, the suppressed exhibits and the household rather than a bare number, and the minute order reads the term back as consequence — release year and age, the dependents that time is taken from, the job it ends, what the conviction carries. The bench record totals the custody ordered across a whole career.
+## Testing
 
-A review pass over the finished branch then corrected six defects in that new arithmetic — a release year that could land before the term ran out, a sentence with one lawful option reported as the maximum, an offer comparison that put fine dollars against prison days, and an aftermath prompt telling the reporter a defendant had refused the plea they took — the kind of bug that produces a confident wrong sentence rather than a crash.
+Four gates run in CI on every pull request and every push to `main`, and the
+deploy publishes only the artifact the end-to-end suite passed against.
 
-The road to 1.0 then turned to who the game is for. The key moved out of the request URL into a header, plea and verdict lines began failing at the stage that wrote them (so they are repaired rather than ending the run), and every request gained a timeout. The pipeline's independent stages now run concurrently and report their progress, which the generating screen draws — model calls and computed steps side by side — with a Cancel that abandons the run cleanly. The pipeline itself became a separate chunk only key-holders download, and act title cards and the Bench Book gave the courtroom's language and its simplifications a plain explanation. Last, the Gemini response schemas stopped being transcribed by hand: they are compiled from the same Zod schemas that validate the responses, so the two can no longer drift. Every one of them is now sent to the live API on its own, which is how a repair-round schema the API had always rejected was found and fixed, and the concurrent pipeline's live sweep came back 5/5 with zero failed attempts.
+```bash
+npm run lint       # ESLint — no-explicit-any, ban-ts-comment, no-console
+npm test           # Vitest — hermetic, never calls the Gemini API
+npm run build      # tsc -b (enforces the @ts-expect-error gates) + vite build
+npm run test:e2e   # Playwright — the whole demo docket, headless, no API key needed
+```
+
+The end-to-end suite plays all five demo cases, across both the plea and trial
+paths and at desktop and phone widths, and drives the BYOK generating screen with every
+Gemini request answered inside the browser, so it needs no key and spends no
+quota. What each run asserts is in the
+[`run-the-bench` skill](./.claude/skills/run-the-bench/SKILL.md).
+
+Two further checks are **manual only**. Both call the real Gemini API and spend
+real quota, and neither is wired into CI:
+
+```bash
+npm run test:live                             # live pipeline suite, every response schema, 5-run sweep
+node .claude/skills/qa-agent/qa-agent.mjs     # LLM-as-judge playthrough of a generated case
+```
+
+`test:live` validates the pipeline against the actual API and has found four
+bugs the mocked suite could not. `qa-agent` is the only check that reads what
+the pipeline *writes*: it plays a live case and has an independent Gemini call
+judge every beat for realism, the way a human tester would.
+
+## Tech Stack
+
+- Vite 8 + React 19 + TypeScript 6 (strict)
+- Zustand 5 (state management)
+- Zod 4 (validation gatekeeper, and the source the Gemini response schemas are compiled from)
+- Tailwind CSS 4 + lucide-react (presentation layer only)
+- Vitest (unit tests) and Playwright (end-to-end, installed outside the project)
+- GitHub Pages (static hosting)
 
 ## License
 
