@@ -80,136 +80,27 @@ Gemini call judge every beat for realism the way a human tester would.
 
 ## Architecture
 
-### Trust Boundaries & Data Flow
+The LLM provides color; deterministic code provides structure. The model
+writes the people and their words. Plea structure, sentencing ranges, what the
+interview room produced and how hard a sentence landed are pure functions of
+validated data, and every payload, generated or hand-authored, crosses the
+same Zod gate before the game can use it.
 
 ```mermaid
-%%{init:{'flowchart':{'defaultRenderer':'elk'}}}%%
 flowchart LR
-    subgraph Presentation["Presentation Layer"]
-        UI[PlayerUI]
-        PROG["Generation Progress (display only)"]
-        BB["Bench Book (static reference, no case data)"]
-    end
-
-    subgraph ServiceCore["Service Core"]
-        GS["GameService (lazy chunk, BYOK only)"]
-        RG[ResultGenerator]
-        VL[ValidationLayer]
-        DEMO[DemoCase Hardcoded JSON]
-    end
-
-    subgraph StateStore["State Store (Zustand — three isolated slices)"]
-        GAME[GameState]
-        ERR[ErrorState]
-        VAULT[BYOKVault]
-        UIS[UIStore View State]
-    end
-
-    subgraph Persistence["Persistence"]
-        LS[LocalStorage FinalResult]
-    end
-
-    subgraph External["External Boundary"]
-        LLM[LLM API JSON Mode]
-    end
-
-    UI -->|"Action Trigger"| GS
-    UI -->|"User Key Input"| VAULT
-    UI -->|"Select Demo Case"| DEMO
-    VAULT -->|"Transient Secure Injection"| GS
-    GS -->|"POST Strict Schema (key in x-goog-api-key header, 120s timeout)"| LLM
-    GS -.->|"Step started / done"| PROG
-    PROG -.->|"Cancel (abandons the run)"| GS
-    UI -->|"Open any time"| BB
-    DEMO -->|"Hardcoded Payload"| VL
-    LLM -->|"Raw JSON Payload"| VL
-    GS -->|"Unvalidated Data"| VL
-    RG -->|"Unvalidated FinalResult"| VL
-    VL -->|"Validated Schema"| GAME
-    VL -->|"Schema / API Violation"| ERR
-    VL -->|"Persist Immutable Object"| LS
-    LS -->|"Re-validated Bench Record"| VL
-    ERR -->|"Recovery UI"| UI
-    UI -->|"Retry Action"| GS
-    UI <-->|"Panels / Modals (unvalidated view state)"| UIS
+    KEY["Your Gemini key (memory only)"] --> GS["GameService: 7 model calls + computed steps"]
+    GS <--> LLM[Gemini API]
+    DEMO["Demo docket (hardcoded)"] --> VL
+    GS --> VL["Zod ValidationLayer"]
+    VL -->|valid| STORE["Zustand state machine"]
+    VL -->|invalid| ERR["Mistrial screen"]
+    STORE --> SCRIPT["Courtroom script, one beat at a time"]
+    STORE -->|case closed| ARCH["Validated FinalResult → localStorage"]
 ```
 
-### Game State Machine and Generation Pipeline
-
-```mermaid
-%%{init:{'flowchart':{'defaultRenderer':'elk'}}}%%
-flowchart LR
-    subgraph GameService["GameService"]
-        GS[Orchestrator]
-    end
-
-    subgraph GenPipeline["Generation Pipeline"]
-        STAT[StatuteSelection]
-        ENV[EnvironmentGen]
-        CHAR[CharacterGen]
-        INTG[InterrogationGen]
-        EVID[EvidenceGen]
-        VERD[VerdictVoice]
-        FIN["finalizeCasePayload (assembly + cross-stage repair)"]
-        PLEN[PleaNarrative]
-    end
-
-    subgraph Deterministic["Deterministic Derivations (no LLM)"]
-        PLEA["buildPleaPosture (plea structure)"]
-        INTP["deriveInterrogationProfile (OCEAN + priors → interview outcome + suppression ground)"]
-        DEM["describeDemeanor (OCEAN → probation demeanor notes)"]
-        EXPO["deriveSentencingExposure (ranges of the counts of conviction → case exposure)"]
-        MOD["sentencingModifierFromRulings (Act 2 → Act 3)"]
-        SCRIPT["buildCourtroomScript (statement + decision beats; spokenJudgeLines voice record; choice-keyed reaction beats)"]
-        REVEAL["deriveRevealState (revealed transcript → disclosure tiers)"]
-    end
-
-    subgraph ViewState["View State (useUIStore, unvalidated)"]
-        CURSOR["beatCursor (forward-only reveal)"]
-    end
-
-    subgraph GamePhases["Game Phases"]
-        WEL[Welcome]
-        A1["Act1 Intake and Plea"]
-        A2["Act2 Evidentiary Motions"]
-        A3["Act3 Verdict and Sentencing"]
-        END[EndState Aftermath]
-    end
-
-    WEL -->|"Initialize Game"| GS
-    GS -->|"Trigger Pipeline"| STAT
-    STAT -->|"Charges + ranges"| ENV
-    STAT -->|"Charges + ranges (concurrent with scene)"| CHAR
-    ENV -->|"Established facts"| INTG
-    CHAR -->|"OCEAN + priors"| INTP
-    INTP -->|"Outcome + challenge ground (echo-validated)"| INTG
-    INTG -->|"Interview transcript"| EVID
-    CHAR -->|"Defendant (concurrent with interview + evidence)"| VERD
-    EVID -->|"Evidence + witnesses"| FIN
-    VERD -->|"Voiced verdict layer (reactions, bench lines)"| FIN
-    FIN -->|"Assembled Case Payload"| PLEA
-    PLEA -->|"Band, offer terms, defense posture"| PLEN
-    PLEN -->|"Plea Narrative (color only)"| A1
-    DEM -->|"Demeanor notes (traits stay invisible)"| A3
-    SCRIPT --> REVEAL
-    REVEAL -->|"DISCLOSED / PRESENTED gating"| UI2["Panels + Detail Modals"]
-    PLEA -->|"Offer / No-Offer / Rejected"| A1
-    A1 -->|"Trial Forced"| A2
-    A1 -->|"Plea Deal Accepted"| A3
-    A2 -->|"Rulings"| MOD
-    MOD -->|"Admitted-Evidence Weight"| A3
-    EXPO -->|"Statutory Floor and Ceiling"| A3
-    A3 -->|"Sentence Entered"| END
-    END -->|"Trigger Final Snapshot"| GS
-    SCRIPT -->|"Ordered beats, truncated at first unresolved decision"| CURSOR
-    CURSOR -->|"Reveal one beat at a time"| GamePhases
-```
-
-The LLM provides color; deterministic code provides structure. Plea structure, case-level sentencing exposure, and the Act 2 → Act 3 penalty modifier are all pure functions of validated data — the LLM's only plea contribution is narrative strings (rationales, arguments, testimony, allocution). Exposure aggregates the statutory ranges of the counts a sentence can actually reach: every count on the plea path, but only the counts of conviction after a trial, so an acquitted count's range can't reshape the sentence for the counts that were proven. Where a case mixes prison-eligible and jail-only counts, the exposure collapses to one custody type rather than narrating both as separately imposed — counts sentenced together aggregate into a single commitment (Cal. Penal Code §669).
-
-The case plays out **one beat at a time**: `buildCourtroomScript` projects validated state into an ordered screenplay of speaker-attributed statements and decision points, truncated at the first unresolved decision (no spoilers) and prefix-stable (resolving a decision never rewrites the past). A reveal cursor in the view-state slice paces the courtroom — the prosecutor offers each exhibit, the defense objects or waives, witnesses testify, and the judge rules from the bench at every pause. The judge's rulings are *voiced*: each decision point presents authored bench lines bound to the closed decision enums (variants multiply voice, never the state space), the chosen words enter the record verbatim, and the courtroom reacts in character to every ruling. The record itself reads as a spoken transcript — every line led by the party speaking (witnesses and the allocuting defendant by name), each party in its own accent, with the court's rulings and the press aftermath set apart from the flowing testimony. Even the closing arguments answer to what happened: each side's per-exhibit points are assembled onto its closing according to the ruling the judge actually entered, so neither counsel can argue the merits of an exhibit the court suppressed.
-
-Act 1 follows real procedure: the clerk performs only the call and the charges, the defense enters the not-guilty plea, the People state the facts, and both sides disclose their exhibits and witnesses before any plea offer lands. What the judge can browse follows the record — the panels and detail modals are gated by a derived reveal state (`DISCLOSED` at discovery with counsel's brief unverified summary, `PRESENTED` with full detail once the item is offered or the witness sworn), and any transcript line that presents an item clicks through to its detail view. Police interrogations are *simulated at generation time*: a pure function of the defendant's OCEAN traits and priors decides what the interview room produced (confession, partial admission, denial, or lawyering up — in which case no tape exists) and which ground the defense attacks it on; the authored transcript dramatizes exactly that structure, and the tape is played into the record line by line before the suppression ruling. The traits themselves are never displayed — at sentencing the judge reads a derived probation demeanor note instead.
+**[Read the full architecture →](./docs/ARCHITECTURE.md)** Three diagrams
+(trust boundaries, the generation pipeline, the courtroom) with what each
+derivation decides.
 
 ## Status
 
