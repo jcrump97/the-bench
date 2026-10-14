@@ -1,7 +1,9 @@
 {
   "name": "the-bench",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "homepage": "https://jcrump97.github.io/the-bench/",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
