@@ -504,9 +504,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
     // fetch does — it needs the proxy passed as an explicit launch option,
     // or in-page requests (BYOK's Gemini calls) bypass the proxy entirely
     // and fail outright on a network that requires it.
-    // bypass keeps the local dev server off the proxy — a plain-HTTP
-    // request to localhost sent through an HTTPS-only relay 502s outright.
-    ...(proxyServer ? { proxy: { server: proxyServer, bypass: 'localhost,127.0.0.1' } } : {}),
+    // bypass keeps the local server off the proxy — a plain-HTTP request to
+    // localhost sent through an HTTPS-only relay is refused outright. Measured
+    // against Chromium 1194: 'localhost,127.0.0.1' alone no longer bypasses
+    // (loopback is proxied anyway, and the relay's refusal page loads in place
+    // of the app), nor does '<-loopback>' alone; only the combination below
+    // reaches the local server on either loopback name.
+    ...(proxyServer ? { proxy: { server: proxyServer, bypass: '<-loopback>,localhost,127.0.0.1' } } : {}),
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   // Chromium's TLS 1.3 ClientHello now always includes a hybrid
