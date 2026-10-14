@@ -988,7 +988,36 @@ const FINALIZE_GEMINI_SCHEMA: GeminiSchema = {
   required: ['caseId', 'summary', 'statementOfFacts', 'closingArguments'],
 };
 
-const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
+// The repair round asks for the whole case in one response, and that schema
+// was over Gemini's complexity limit: every repair request was a bare 400
+// INVALID_ARGUMENT, so a case that reached the repair round could only end in
+// a Mistrial. It went unseen because the round only runs when the assembled
+// case fails validation, which no earlier live sweep happened to hit.
+//
+// Bisected live (2026-10-14): every property is accepted alone, and the whole
+// schema is accepted with any one large subtree removed — a budget exceeded
+// in aggregate, not an invalid keyword. Dropping either every `enum` or every
+// `maxItems` brings it under; the closed vocabularies are the schema's point,
+// so the bounds go. (Dropping only the interrogation transcript's 24-item cap
+// was enough to pass, but one witness-sized addition put it back over; with
+// every bound gone it still passes with a second copy of the charges, the
+// defendant or the witnesses.) Zod enforces every maximum regardless, and an
+// over-long array is fed back and repaired like any other issue. The stage
+// schemas keep their bounds: each is well inside the limit, and their
+// compliance is measured.
+function withoutMaxItems(schema: GeminiSchema): GeminiSchema {
+  const unbounded: GeminiSchema = { ...schema };
+  delete unbounded.maxItems;
+  if (schema.properties !== undefined) {
+    unbounded.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([name, child]) => [name, withoutMaxItems(child)]),
+    );
+  }
+  if (schema.items !== undefined) unbounded.items = withoutMaxItems(schema.items);
+  return unbounded;
+}
+
+const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = withoutMaxItems({
   type: 'object',
   properties: {
     caseId: { type: 'string', pattern: '^[0-9]{2}-CR-[0-9]{5}$' },
@@ -1025,7 +1054,7 @@ const FULL_CASE_GEMINI_SCHEMA: GeminiSchema = {
     'statementOfFacts',
     'closingArguments',
   ],
-};
+});
 
 const FINALIZE_SYSTEM = `ROLE: You are assembling the narrative face of a California criminal case file.
 
@@ -1552,3 +1581,26 @@ export async function runAftermath(apiKey: string, model: string, ctx: Aftermath
   );
   return data.narrative;
 }
+
+// ============================================================================
+// Every responseSchema a pipeline request can send, by the stage name it is
+// reported under. Read only by the live acceptance test
+// (__tests__/live/responseSchemas.live.test.ts), which sends each one to the
+// real API: a schema Gemini rejects fails the whole request with a bare 400,
+// and the repair round's schema shipped rejected for exactly as long as no
+// sweep happened to need a repair. Exercising each schema directly closes
+// that gap without waiting for a run to reach it.
+// ============================================================================
+export const PIPELINE_RESPONSE_SCHEMAS: Readonly<Record<string, GeminiSchema>> = {
+  StatuteSelection: STATUTE_SELECTION_GEMINI_SCHEMA,
+  EnvironmentGen: ENVIRONMENT_GEN_GEMINI_SCHEMA,
+  CharacterGen: CHARACTER_GEN_GEMINI_SCHEMA,
+  InterrogationGen: INTERROGATION_GEN_GEMINI_SCHEMA,
+  EvidenceGen: EVIDENCE_GEN_GEMINI_SCHEMA,
+  VerdictVoice: VERDICT_VOICE_GEMINI_SCHEMA,
+  FinalizeCasePayload: FINALIZE_GEMINI_SCHEMA,
+  'FinalizeCasePayload.repair': FULL_CASE_GEMINI_SCHEMA,
+  'PleaNarrative.weak': WEAK_PLEA_GEMINI_SCHEMA,
+  'PleaNarrative.offer': OFFER_PLEA_GEMINI_SCHEMA,
+  Aftermath: AFTERMATH_GEMINI_SCHEMA,
+};

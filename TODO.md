@@ -1,5 +1,14 @@
 # TODO
 
+## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
+
+The first `test:live` sweep after the follow-ups below produced a valid case in 4 of 5 runs. All 7 live tests passed. The concurrent stages and the timeout behaved, with no 429s, timeouts or failed stage attempts. The one failed run reached `FinalizeCasePayload.repair` and got a 400 `INVALID_ARGUMENT` on its first call. This was not flakiness: it reproduces on every request. The repair schema was over Gemini's complexity limit, and it had been since before this branch. No earlier sweep had needed a repair, so it was never sent.
+
+- [x] **Root cause, bisected live.** Each property alone is accepted. Removing `defendant`, `charges` or `evidence` is accepted, and so is removing every `enum` or every `maxItems`. That points to an aggregate budget, driven by bounded arrays of enum-carrying items.
+- [x] **Fix.** Strip every `maxItems` from the repair schema only; Zod still enforces the maxima. A narrower fix, removing only the transcript's 24-line cap, also passed but failed again as soon as one more witness-sized subtree was added. The chosen fix passes with a second copy of the charges, the defendant or the witnesses. The stage schemas are untouched, so the live-measured pipeline is unchanged.
+- [x] **Proof.** A live repair of a known-good case, with a jury reference injected into a witness statement, came back schema-valid in 8.5 s with zero failed attempts. That was a one-off probe and is not committed.
+- [x] **Guard.** `responseSchemas.live.test.ts` sends all 11 response schemas to the API; it fails on the old repair schema and passes on the new one. `schemaParity.test.ts` pins the shape hermetically.
+
 ## Road to 1.0 follow-ups (two code-review passes, 2026-10-10 — DONE)
 
 Two independent `/code-review` passes over the Road to 1.0 branch returned 18
