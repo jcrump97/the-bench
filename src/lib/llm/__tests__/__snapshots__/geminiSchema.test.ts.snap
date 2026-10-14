@@ -96,10 +96,12 @@ exports[`compiled stage response schemas > CharacterGen 1`] = `
         },
         "firstName": {
           "maxLength": 50,
+          "minLength": 1,
           "type": "string",
         },
         "lastName": {
           "maxLength": 50,
+          "minLength": 1,
           "type": "string",
         },
         "oceanTraits": {
@@ -583,6 +585,7 @@ exports[`compiled stage response schemas > EvidenceGen 1`] = `
           "name": {
             "description": "Full fictional name. Do not include race or protected demographics.",
             "maxLength": 101,
+            "minLength": 1,
             "type": "string",
           },
           "role": {
@@ -917,7 +920,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
               ],
               "type": "object",
             },
-            "maxItems": 6,
             "minItems": 2,
             "type": "array",
           },
@@ -946,7 +948,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
                   ],
                   "type": "object",
                 },
-                "maxItems": 4,
                 "minItems": 1,
                 "type": "array",
               },
@@ -973,7 +974,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
                   ],
                   "type": "object",
                 },
-                "maxItems": 4,
                 "minItems": 1,
                 "type": "array",
               },
@@ -1158,10 +1158,12 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
         },
         "firstName": {
           "maxLength": 50,
+          "minLength": 1,
           "type": "string",
         },
         "lastName": {
           "maxLength": 50,
+          "minLength": 1,
           "type": "string",
         },
         "oceanTraits": {
@@ -1298,7 +1300,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
             "minLength": 1,
             "type": "string",
           },
-          "maxItems": 6,
           "minItems": 1,
           "type": "array",
         },
@@ -1409,7 +1410,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
                   ],
                   "type": "object",
                 },
-                "maxItems": 24,
                 "minItems": 4,
                 "type": "array",
               },
@@ -1479,7 +1479,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
               ],
               "type": "object",
             },
-            "maxItems": 6,
             "minItems": 2,
             "type": "array",
           },
@@ -1508,7 +1507,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
                   ],
                   "type": "object",
                 },
-                "maxItems": 4,
                 "minItems": 1,
                 "type": "array",
               },
@@ -1535,7 +1533,6 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
                   ],
                   "type": "object",
                 },
-                "maxItems": 4,
                 "minItems": 1,
                 "type": "array",
               },
@@ -1641,6 +1638,7 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
           "name": {
             "description": "Full fictional name. Do not include race or protected demographics.",
             "maxLength": 101,
+            "minLength": 1,
             "type": "string",
           },
           "role": {

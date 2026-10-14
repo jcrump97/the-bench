@@ -14,6 +14,8 @@
 //   4. Reyes (STRONG/offer rejected) — skip-to-next-decision, convicted ending
 //   5. Vaughn (multi-charge)         — per-charge verdict beats, split ending
 //   6. Navarro (guided tutorial)     — decision explainers, plea-accepted ending
+//   7. BYOK generating screen        — progress panel, header-only key, Cancel
+//      (Gemini is routed inside the browser: no request leaves, no quota spent)
 // Assertions pin demo-case data (names, ranges, beat headings, speaker order,
 // aftermath variant phrases) — if a case in src/lib/demoCases/ or the beat
 // UI changes intentionally, update them here.
@@ -180,7 +182,31 @@ const browser = await chromium.launch(
     (await page.locator('button:has-text("People v. Eli Navarro") >> text=Start here').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '00-welcome-docket.png'), fullPage: true });
 
+  // The Bench Book opens from the docket — the one modal that needs no case.
+  await page.getByRole('button', { name: /Open the Bench Book/ }).click();
+  // Fetched on first open (its own chunk), so wait for it like a player would.
+  await page.getByRole('dialog', { name: 'Bench Book' }).waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book: opens from the docket with plain-English terms',
+    (await page.locator('[data-bench-book-term="Allocution"]').count()) === 1);
+  await page.getByRole('tab', { name: 'How this court is modeled' }).click();
+  check('Bench Book: says plainly where the court departs from real practice',
+    (await page.locator('[data-bench-book-tab="modeled"]', { hasText: 'Every trial is a bench trial' }).count()) === 1);
+  await page.getByRole('tab', { name: 'Under the hood' }).click();
+  check('Bench Book: explains what code decides and what the model writes',
+    (await page.locator('[data-bench-book-tab="hood"]', { hasText: 'Code decides the structure' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '00b-bench-book.png') });
+  await page.keyboard.press('Escape');
+  check('Bench Book: Escape closes it', (await page.getByRole('dialog').count()) === 0);
+
   await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
+  check('Webb: Act 1 title card opens the proceeding',
+    (await page.locator('[data-act-card="ACT_1_INTAKE"]').count()) === 1);
+  check('Webb: the title card never blocks the record (pointer events pass through)',
+    await page.locator('[data-act-card="ACT_1_INTAKE"]')
+      .evaluate((el) => getComputedStyle(el.parentElement).pointerEvents) === 'none');
+  const cardAnimation = await page.locator('[data-act-card="ACT_1_INTAKE"]')
+    .evaluate((el) => `${getComputedStyle(el).animationName} ${getComputedStyle(el).animationDuration}`);
+  check('Webb: the card fades over the same 3.2 s it stays mounted', cardAnimation === 'act-card 3.2s', cardAnimation);
   check('Webb: record starts empty, court seated',
     (await page.locator('text=The courtroom is seated').count()) === 1);
   check('Webb: accent button label wears --bg (cascade-layer regression guard)',
@@ -305,6 +331,9 @@ const browser = await chromium.launch(
 
   await advanceTo(page, choiceButton(page, 'REJECT'), 'Webb plea ruling');
   await choiceButton(page, 'REJECT').click();
+  check('Webb trial: Act 2 title card names what the motions decide',
+    (await page.locator('[data-act-card="ACT_2_MOTIONS"]', { hasText: 'Only what you admit' }).count()) === 1);
+  await page.screenshot({ path: path.join(SHOTS, '04b-act2-title-card-mobile.png') });
   // 5 exhibits; excludeLast suppresses the interrogation tape.
   await ruleAllMotions(page, 5, 'Webb Act2', { excludeLast: true });
   check('Webb Act2: LOW-risk exhibit drew the derived waiver line',
@@ -354,6 +383,14 @@ const browser = await chromium.launch(
   const page = await newPage(browser, { width: 1280, height: 900 });
   await gotoWithRetry(page, BASE);
   await openDocketCase(page, /People v\. Curtis Boone/);
+  // Mid-case, from the top bar: it opens over the record and closes back to it.
+  await page.getByRole('button', { name: 'Open the Bench Book' }).click();
+  await page.getByRole('dialog', { name: 'Bench Book' }).waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book: opens mid-case from the top bar',
+    (await page.getByRole('dialog', { name: 'Bench Book' }).count()) === 1);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  check('Bench Book: closing returns to the record where it was',
+    (await page.locator('text=Case Called').count()) >= 1 && (await page.getByRole('dialog').count()) === 0);
 
   await advanceTo(page, page.getByRole('button', { name: 'Order Trial' }), 'Boone trial order');
   check('Boone Act1: declination beat in the record',
@@ -468,6 +505,106 @@ const browser = await chromium.launch(
   check('Navarro end: plea-accepted aftermath variant shown',
     (await page.locator('text=finally signed something with his own name').count()) === 1);
   await page.screenshot({ path: path.join(SHOTS, '16-tutorial-endstate.png'), fullPage: true });
+  await page.close();
+}
+
+// ---------- Run 7: BYOK generating screen — progress and Cancel ----------
+// Every Gemini request is answered inside the browser by page.route, so this
+// run needs no key and spends no quota: model discovery is fulfilled with one
+// model, and generateContent is held open forever — the pipeline sits on its
+// first model call, which is exactly the state a player would want to watch
+// or walk away from. The key below is a schema-valid placeholder that never
+// leaves the page.
+{
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  const FAKE_KEY = 'AIzaE2E_PLACEHOLDER_NOT_A_KEY_0000000';
+  const geminiRequests = [];
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const request = route.request();
+    geminiRequests.push({ url: request.url(), key: request.headers()['x-goog-api-key'] });
+    if (request.url().endsWith('/models')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }] }),
+      });
+    }
+    // generateContent: never answered.
+  });
+  // A held-open generateContent that the page itself aborts is how Cancel
+  // shows up on the wire: the request ends rather than idling until it
+  // times out while still holding the player's quota.
+  const abortedGenerations = [];
+  page.on('requestfailed', (request) => {
+    if (request.url().includes(':generateContent')) abortedGenerations.push(request.failure()?.errorText ?? '');
+  });
+  const generationRequests = () => geminiRequests.filter((r) => r.url.includes(':generateContent')).length;
+
+  await gotoWithRetry(page, BASE);
+  await page.locator('input[type="password"]').fill(FAKE_KEY);
+  await page.getByRole('button', { name: 'Submit Key' }).click();
+  await page.getByRole('button', { name: 'Generate a Case', exact: true }).click();
+
+  const panel = page.locator('[data-generation-progress]');
+  await panel.waitFor();
+  await page.locator('[data-step="STATUTES"][data-status="RUNNING"]').waitFor();
+  check('BYOK: model selection reported done before the first stage runs',
+    (await page.locator('[data-step="MODEL_SELECTION"]').getAttribute('data-status')) === 'DONE');
+  check('BYOK: the step list is not a live region, so its ticking timers stay silent',
+    (await panel.locator('ol[aria-live]').count()) === 0);
+  const announced = (await page.locator('[data-generation-status][aria-live="polite"]').textContent()) ?? '';
+  check('BYOK: progress is announced through the step counter instead',
+    /of \d+ steps\. Now: Statute selection/.test(announced), announced);
+  check('BYOK: computed steps are labelled apart from model calls',
+    (await page.locator('[data-step="PLEA_STRUCTURE"]', { hasText: 'computed' }).count()) === 1);
+  check('BYOK: the docket is locked while a case is generating',
+    await page.getByRole('button', { name: /People v\. Marcus Webb/ }).isDisabled());
+  check('BYOK: the key travels in the x-goog-api-key header on every request',
+    geminiRequests.length >= 2 && geminiRequests.every((r) => r.key === FAKE_KEY),
+    `${geminiRequests.length} requests`);
+  check('BYOK: the key never appears in a request URL',
+    geminiRequests.every((r) => !r.url.includes(FAKE_KEY) && !r.url.includes('key=')));
+  await page.screenshot({ path: path.join(SHOTS, '17-byok-progress.png'), fullPage: true });
+
+  const requestsBeforeCancel = generationRequests();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  check('BYOK cancel: the progress panel is gone', (await panel.count()) === 0);
+  check('BYOK cancel: the docket is open again',
+    await page.getByRole('button', { name: /People v\. Marcus Webb/ }).isEnabled());
+  check('BYOK cancel: the key is still vaulted, ready for another try',
+    (await page.getByRole('button', { name: 'Generate a Case', exact: true }).count()) === 1);
+  await page.waitForTimeout(500);
+  check('BYOK cancel: cancelling is not a mistrial', (await page.locator('text=Mistrial').count()) === 0);
+  check('BYOK cancel: the request in flight is aborted, not left running',
+    abortedGenerations.length === requestsBeforeCancel, `${abortedGenerations.length} of ${requestsBeforeCancel} aborted`);
+  check('BYOK cancel: no further model call starts after it',
+    generationRequests() === requestsBeforeCancel, `${generationRequests()} after, ${requestsBeforeCancel} before`);
+  await page.close();
+}
+
+// ---------- Run 8: Bench Book chunk unavailable mid-case ----------
+// A tab opened before a redeploy asks for a chunk hash that no longer exists.
+// The lazy Bench Book must fail into a modal that says so, never unmount the
+// courtroom. Its own page and console: the blocked chunk's load error is the
+// expected one, so it stays out of the all-runs console check.
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const pageErrors = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await page.route('**/BenchBookModal-*.js', (route) => route.abort());
+
+  await gotoWithRetry(page, BASE);
+  await page.getByRole('button', { name: /People v\. Marcus Webb/ }).click();
+  await page.getByRole('button', { name: 'Open the Bench Book' }).click();
+  const unavailable = page.locator('[data-bench-book-unavailable]');
+  await unavailable.waitFor({ timeout: 5000 }).catch(() => {});
+  check('Bench Book unavailable: a failed chunk load says so in a modal', (await unavailable.count()) === 1);
+  check('Bench Book unavailable: the courtroom is still mounted behind it',
+    (await page.getByRole('button', { name: 'Open the Bench Book' }).count()) === 1);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  check('Bench Book unavailable: closing returns to the case in progress',
+    (await page.getByRole('dialog').count()) === 0
+      && (await page.getByRole('button', { name: 'Open the Bench Book' }).count()) === 1);
+  check('Bench Book unavailable: no uncaught error', pageErrors.length === 0, pageErrors.join(' | '));
   await page.close();
 }
 

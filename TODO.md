@@ -1,5 +1,206 @@
 # TODO
 
+## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
+
+The first `test:live` sweep after the follow-ups below produced a valid case in 4 of 5 runs. All 7 live tests passed. The concurrent stages and the timeout behaved, with no 429s, timeouts or failed stage attempts. The one failed run reached `FinalizeCasePayload.repair` and got a 400 `INVALID_ARGUMENT` on its first call. This was not flakiness: it reproduces on every request. The repair schema was over Gemini's complexity limit, and it had been since before this branch. No earlier sweep had needed a repair, so it was never sent.
+
+- [x] **Root cause, bisected live.** Each property alone is accepted. Removing `defendant`, `charges` or `evidence` is accepted, and so is removing every `enum` or every `maxItems`. That points to an aggregate budget, driven by bounded arrays of enum-carrying items.
+- [x] **Fix.** Strip every `maxItems` from the repair schema only; Zod still enforces the maxima. A narrower fix, removing only the transcript's 24-line cap, also passed but failed again as soon as one more witness-sized subtree was added. The chosen fix passes with a second copy of the charges, the defendant or the witnesses. The stage schemas are untouched, so the live-measured pipeline is unchanged.
+- [x] **Proof.** A live repair of a known-good case, with a jury reference injected into a witness statement, came back schema-valid in 8.5 s with zero failed attempts. That was a one-off probe and is not committed.
+- [x] **Guard.** `responseSchemas.live.test.ts` sends all 11 response schemas to the API; it fails on the old repair schema and passes on the new one. `schemaParity.test.ts` pins the shape hermetically.
+
+## Road to 1.0 follow-ups (two code-review passes, 2026-10-10 — DONE)
+
+Two independent `/code-review` passes over the Road to 1.0 branch returned 18
+findings. They collapse to 14 distinct defects: both passes flagged the same
+four LLM issues (cancel never reaches the network, an orphaned concurrent
+sibling, a body-read timeout escaping classification, the strict plea schema).
+Most of them trace to one root cause: plan-review point 4 below, which deferred
+threading a cancel signal through the stages. The code review shows what that
+deferral cost. A cancelled or failed run kept spending the player's real
+Gemini quota for minutes, and a second run could stack on top of it. That is a
+cost to the player, not a matter of style, so the point is reversed. The churn
+it feared is avoided: `signal` is a trailing optional parameter, so no
+existing call site or test changes.
+
+**Plan review (before any code).** The first draft had four deficiencies,
+each corrected below:
+
+1. *It used `AbortSignal.any` unguarded.* That API is newer than everything
+   else the app relies on, and Safari before 17.4 lacks it. A missing
+   method there would break every BYOK generation, not just Cancel. The
+   transport combines signals through a small helper that falls back to manual
+   wiring.
+2. *It cancelled model selection too.* `getOrSelectModel` caches the promise
+   per key, so an aborted lookup would poison the cache for the rest of the
+   session. `ListModels` is a free metadata call, so it stays unsignalled, and
+   the step boundary straight after it catches the cancel.
+3. *It took every finding at face value.* Finding 8 ("FINALIZE is labelled a
+   model call") is half wrong: finalize always makes a model call to write the
+   summary, the statement of facts and the closings. Only model selection is
+   mislabelled, so FINALIZE stays as it is.
+4. *It "fixed" the plea schema by loosening the gate.* Making
+   `PleaNarrativeSchema` non-strict would weaken the boundary demo cases cross.
+   Instead, each band projects the response onto the fields that band asks
+   for before the real strict schema runs. That restores exactly the tolerance
+   the pre-R5 code had. A `null` in a field the offer requires is still a
+   defect, and still goes to a repair round.
+
+No `responseSchema` or `generationConfig` changes, so the live-probe rule is
+not triggered. The `test:live` sweep owed for P4/P7 is still owed.
+
+- [x] **F1 — timeout classification** (review 1 #3, #4; review 2 #5): read the
+      body inside the timed, classified scope on both endpoints, and detect a
+      timeout by the timer's own signal or the error's `name`, never by
+      `instanceof DOMException`, which is realm-bound. *Found on the way:*
+      two `modelSelection` tests reused one `Response` across calls, and they
+      had only passed because the second read failed outside the retry loop
+      and selection fell back to its hardcoded model. Each call now gets a
+      fresh response.
+- [x] **F2 — a timeout fails the stage** (review 1 #5): `generateValidated`
+      treats `TIMEOUT` like a non-retryable 4xx, so a stalled connection costs
+      one 120 s wait, not 3 × 120 s per stage. The stage name is preserved.
+- [x] **F3 — cancel reaches the request** (review 1 #1, #7; review 2 #2):
+      `callGemini` takes the signal, combines it with the per-attempt timeout,
+      and makes the backoff sleep abortable. `generateValidated` rethrows an
+      abort rather than retrying it, and every stage passes its signal through.
+      Cancel now ends the in-flight request at once, so the docket can safely
+      unlock straight away (review 1 #7 needs no UI change).
+- [x] **F4 — a failed run stops its siblings** (review 1 #2, #8; review 2 #3):
+      `generateCase` owns an internal `AbortController`, aborted on any
+      failure, and combined with the caller's signal. A failure inside one
+      `Promise.all` branch aborts the other, and no progress event is emitted
+      after the run has ended. The rejection is the terminal event, and the
+      contract says so.
+- [x] **F5 — plea projection** (review 1 #6; review 2 #10): see review point 4.
+- [x] **F6 — Bench Book chunk failure** (review 2 #1): a rejected lazy import
+      renders a "reload to fetch it" modal instead of unmounting the app.
+      This is covered by an E2E check that blocks the chunk.
+- [x] **F7 — stale Bench Book on the docket** (review 2 #7): arriving at the
+      docket closes any modal left open by the screen that came before it.
+      No E2E check: the only path to it is a failed BYOK aftermath call, which
+      the demo docket cannot reach and Run 7's held-open routes do not cover.
+- [x] **F8 — screen-reader noise** (review 2 #4): the step list is no longer a
+      live region. A step counter announces progress instead, and the timers
+      tick silently.
+- [x] **F9 — model selection is computed** (review 2 #8, the true half).
+- [x] **F10 — one card duration** (review 2 #9): `CARD_MS` drives the CSS
+      animation through an inline `animationDuration`.
+- [x] **F11 — cite only modeled rules** (review 2 #6): drop the § 17(b) and
+      § 1170(h) citations, which the game does not model. A test pins that no
+      cited term calls itself "not modeled".
+
+**Stopping point.** F1–F11 each landed as one commit. Every commit passes
+lint, unit tests and build; every commit that changes behaviour also passes
+the E2E driver (now eight runs). Every new test and E2E check was confirmed to
+fail against the code it fixes before the fix went in. The `test:live` sweep
+for P4/P7 is still owed. F2 and F3 change what that sweep would measure: a
+timeout now fails the run, and a cancel ends it. Read its table with that in
+mind.
+
+## Road to 1.0 — three players, one courtroom (plan, 2026-10-10 — DONE)
+
+**Goal.** Bring the game to a finished state that is enjoyable for three very
+different players without bending the architecture's mandate (*LLM provides
+color, deterministic code provides structure*, every trust boundary Zod-gated):
+
+| Player | What makes it enjoyable | What would ruin it |
+|---|---|---|
+| **Attorney** | Procedure that tracks real California practice; the law cited where it is modeled; honesty about where it is simplified | A confident legal error, or a simplification passed off as the real rule |
+| **AI architect** | Seeing the pipeline work: which stages are model calls, which are deterministic, how long each took, how it fails | A spinner that hides all of it; a key leaked into URLs; a hung request with no way out |
+| **High schooler** | Knowing where they are (which act, why it matters) and what the jargon means without leaving the game | Walls of unexplained legalese; no sense of progress |
+
+**Plan review (before any code).** Checked against the project's own rules and
+the open items above, the first draft had five deficiencies, each corrected
+below rather than discovered in review:
+
+1. *It reached for dependencies* (testing-library for the new UI). The stack is
+   locked and Tier 2/3 still await approval — new UI is covered by pure-function
+   unit tests plus the existing E2E driver, which is extended rather than
+   replaced.
+2. *It changed the live pipeline without a way to measure it.* No
+   `GEMINI_API_KEY` is available to this session, and the house rule is to
+   probe every `responseSchema`/`generationConfig` change live. So **A2** (the
+   Zod→Gemini schema compiler) stays deferred; schema edits are limited to
+   `minLength: 1`, a keyword C5 already verified live on ~60 fields; and stage
+   parallelization (**A5a**) is flagged as needing a `test:live` sweep before
+   it is trusted under free-tier rate limits.
+3. *Title cards as courtroom beats* would put an omniscient narrator in the
+   record. They are UI chrome over the record, never a beat, non-blocking
+   (the E2E driver and impatient players click straight through), and honor
+   `prefers-reduced-motion`.
+4. *Cancellation threaded through every stage signature* would churn ~50 call
+   sites for little gain. *(Reversed by the follow-ups above: the code
+   review showed what the deferral cost the player.)* Split instead: the transport bounds a hung request
+   with a per-attempt timeout, and the orchestrator checks a cancel signal
+   between stages; the UI drops a cancelled run's late result.
+5. *Decisions that belong to the human* (S1 custody-election UI, S2 rounding
+   direction, A7a reject-vs-vacate) were scheduled as if settled. They stay
+   open with a recommendation, not an implementation.
+
+### Phase 1 — trust & correctness (every audience, architect first)
+
+- [x] **P1 — A8:** the API key travels in the `x-goog-api-key` header, never the URL.
+- [x] **P2 — R5 (+A4b):** stage schemas reuse the shared `judgeLineOption` /
+      `addChoiceCoverageIssues` / `PleaNarrativeSchema`, so a jury reference in
+      plea or verdict lines is a retried repair, not an unretried Mistrial.
+- [x] **P3 — R4 (R3 closed as superseded):** names require `minLength: 1`
+      in both schema languages. R3 asked the same of three *nullable* fields,
+      but `schemaParity.test.ts` already records why nullable fields are
+      exempt: Gemini cannot say "null, or at least one character", so a
+      `minLength` there would forbid the null the field permits. An earlier
+      decision outranks a later review that did not see it.
+- [x] **P4 — A5b:** per-attempt request timeout in the transport (120 s,
+      surfaced as `GeminiError` reason `TIMEOUT`, not retried in the transport).
+- [x] **P5 — A3/A4d/A4e:** stale and orphaned comments in the pipeline. (The
+      A4e orphan had already gone; `[LLM-FILL]` tags stay as a demo↔stage map.)
+
+### Phase 2 — the pipeline, made visible (architect)
+
+- [x] **P6 — progress + cancel seam:** `generateCase({ onProgress, signal })`
+      reports each stage and each deterministic derivation as it runs.
+- [x] **P7 — A5a:** run independent stages concurrently (two `Promise.all`s).
+      Needs a `test:live` diagnostic sweep before it is trusted on a free-tier key.
+- [x] **P8 — generation progress UI:** a live stage checklist (model call vs.
+      computed, elapsed time), with a Cancel that returns to the docket.
+- [x] **P9 — A9 (part):** load the LLM pipeline as its own chunk, only for BYOK.
+      Main chunk 526 → 494 kB (Vite's 500 kB warning gone); the pipeline is a
+      40 kB chunk fetched on first use.
+
+### Phase 3 — the courtroom, made legible (high schooler + attorney)
+
+- [x] **P10 — act title cards** (open since 2026-07-12): UI chrome on each
+      phase transition saying what the act decides.
+- [x] **P11 — the Bench Book:** an always-available reference — plain-English
+      definitions of every term the record uses, each with the California
+      authority it rests on, plus "how this court is modeled": what is real
+      procedure, what is simplified (S1, bench trial only, exposure collapse),
+      and what the model writes versus what code decides.
+
+### Phase 4 — documentation
+
+- [x] **P12 — docs sync:** README (who it is for, a readable status, both
+      Mermaid diagrams updated for parallel stages, progress and the lazy
+      chunk), CLAUDE.md and AGENTS.md together, this plan checked off.
+
+**Stopping point (2026-10-10).** P1–P12 landed as one commit each on
+`ccr-1d2f862f-1dzsgw`, every one passing lint, unit tests and build, and every
+UI commit the E2E driver (now seven runs, 83 checks). **Next step for whoever
+picks this up:** run `npm run test:live`'s diagnostic sweep once with a real
+key, to measure the concurrent pipeline (P7) and the per-attempt timeout (P4)
+against the live API before calling them proven.
+
+### Deliberately not in this plan
+
+- **A2** — needs a live sweep either side (see review point 2).
+- **S1 / S2 / A7a** — design decisions for the author. Recommendations:
+  S1, a per-count `custodyElection` field defaulting to PRISON plus a picker
+  toggle; S2, exposure kept in day-equivalents with the picker presenting the
+  finest unit; A7a, reject the single write and keep the game, reserving
+  `ERROR_STATE` for case hydration.
+- **Tier 2/3 test dependencies** — still awaiting approval.
+
+
 ## Sentencing exposure follow-ups (code review, 2026-08-07 — OPEN)
 
 Opened alongside the `fix/sentencing-exposure-and-stage-context` branch, which
@@ -126,11 +327,11 @@ instance and is now closed; the rest cluster in that same gap.
       no longer tripped the "nullable nested object" carve-out, and the API
       rejects `minItems` above *any* absentable nested object, not only a
       nullable one. The carve-out now says so, with a unit test for both
-      forms. The same probe found R13 below. A new live test
+      forms. The same probe found R13 below (since fixed). A new live test
       (`responseSchemas.live.test.ts`) sends every compiled stage schema to
       the API so neither can hide again, and `geminiSchema.test.ts` snapshots
       what the model is sent. Measured after: **5/5, zero failed attempts**.)*
-- [ ] **A3 — stale in-code comments.** *(`caseSource.ts` half fixed; `gameService.ts:19` "five-stage" remains.)* `caseSource.ts:33-36` still reads "Until
+- [x] **A3 — stale in-code comments.** *(P5.)* `caseSource.ts:33-36` still reads "Until
       then, `demoCaseSource` is the only implementation" and carries `[LLM-FILL]`
       tags after GameService shipped; `gameService.ts:19` says "five-stage"
       above a six-stage list, and the pipeline is seven LLM stages now that
@@ -140,9 +341,10 @@ instance and is now closed; the rest cluster in that same gap.
       `{choice, lineText}[]` → `recordSpokenJudgeLine` → commit the structural
       decision → `advanceBeat`. Extract a `<JudgeLineChoice>` presentational
       component plus three thin adapters, preserving the `data-choice`
-      attributes the E2E driver selects on. (b) `requireChoiceCoverage`
+      attributes the E2E driver selects on. (b) ~~`requireChoiceCoverage`
       (`stages.ts:160`) reimplements `addChoiceCoverageIssues`
-      (`gameSchemas.ts:246`) — export the latter, delete the former.
+      (`gameSchemas.ts:246`) — export the latter, delete the former.~~
+      *(Done in P2.)*
       (c) Button class constants copy-pasted across four files in
       `src/components/actionbar/`. (d) The `minItems`/nullable-nested comment is
       verbatim at `stages.ts:774` and `:936`, and the second copy says
@@ -183,13 +385,18 @@ instance and is now closed; the rest cluster in that same gap.
       (`WelcomeScreen.tsx:36`), and the Mistrial screen's technical-details
       rendering. Both are cheapest as vitest store tests plus a rejecting
       `CaseSource` stub — not E2E.
-- [ ] **A8 — the API key travels in the URL query string.**
+- [x] **A8 — the API key travels in the URL query string.**
       `geminiClient.ts:146` and `:223` interpolate `?key=…`, while
       `.cursor/rules/security.mdc:12` states the key must never touch the URL —
       the code contradicts the project's own stated invariant. Gemini accepts an
       `x-goog-api-key` header; two-line change, and it keeps the key out of any
-      URL-logging surface.
-- [ ] **A9 — demo-case data ships in the eager chunk.** ~1,660 lines across five
+      URL-logging surface. *(Fixed in P1: one `authHeaders` helper serves both
+      endpoints, and a test asserts neither URL carries the key.)*
+- [ ] **A9 — demo-case data ships in the eager chunk.** *(Partly done in P9:
+      the LLM pipeline, not the demo data, was split out first — it is needed
+      by fewer players and splits with no change to any synchronous lookup.
+      The demo bundles remain eager because `findDemoCaseById` is read
+      synchronously during render; splitting them needs a docket manifest.)* ~1,660 lines across five
       hand-authored bundles land in the main bundle for every visitor; the build
       is 505 kB / 149 kB gzip and Vite already warns past its 500 kB threshold.
       `import()` per bundle behind the docket click.
@@ -504,11 +711,12 @@ the session transcript; this is the consolidated action list.
       structural fix, which closes this item as a side effect.
       *(Closed by A2; the live probe confirmed the API accepts `minLength`
       on a nullable string.)*
-- [ ] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
+- [x] **R4 — `name` fields (`WitnessSchema.name`, `CharacterSchema.firstName`
       /`lastName`) lack `.min(1)` in both Zod and Gemini schema.** A blank
       name passes both gates and renders as an empty speaker line in
       `LedgerEntryRow`. The LLM pipeline can now produce names. Fix:
-      `.min(1)` in both layers for all three fields.
+      `.min(1)` in both layers for all three fields. *(Fixed in P3; the parity
+      test now holds the Gemini side to it.)*
 - [x] **R5 — `VerdictVoiceSchema` and `OfferPleaNarrativeSchema` `lineText`
       fields are not `noJury`-wrapped, unlike their `ChargeSchema`/
       `PleaNarrativeSchema` counterparts.** A jury reference passes the stage
@@ -582,7 +790,7 @@ the session transcript; this is the consolidated action list.
       244` survives only inside `FULL_CASE_GEMINI_SCHEMA`. A comment noting
       "repair-round only" would prevent someone simplifying it away.
 
-- [ ] **R13 — the repair round's response schema is rejected by the live
+- [x] **R13 — the repair round's response schema is rejected by the live
       API, and always has been.** Found by A2's live probe. The full-case
       schema `finalizeCasePayload` sends when deterministic repair is not
       enough returns a bare 400 — with the *old hand-written* schema too, so
@@ -596,6 +804,11 @@ the session transcript; this is the consolidated action list.
       the sections the issues point at, each against its own (small) schema,
       rather than regenerating the case. `responseSchemas.live.test.ts`
       carries it as `it.fails` so the fix announces itself.
+      *(Fixed on main by `withoutMaxItems` — the root cause was bounded
+      arrays of enum-carrying items exceeding the API's complexity budget in
+      aggregate, see CLAUDE.md. Carried onto the compiled schema in the merge:
+      `withoutMaxItems(toGeminiSchema(CaseSchema))`. The live test now
+      expects all eleven schemas accepted, and they are.)*
 
 **Open questions for the author**
 
@@ -841,7 +1054,8 @@ view-layer polish:
       `entry.speaker` (new `--speaker-*` tokens in `index.css`, chosen apart
       from the status hues), heavier headings for the verdict/sentence outcome
       beats, and the press Aftermath rendered as a clipping.
-- [ ] **Act title cards on phase transition** — brief interstitial overlay
+- [x] **Act title cards on phase transition** *(P10: `ActTitleCard` +
+      `lib/actTitles.ts`, which also titles the top bar)* — brief interstitial overlay
       ("Act 2 — Evidentiary Motions · The parties will be heard on
       admissibility"), rendered as UI chrome, not a courtroom beat, so the
       record stays a pure projection. **Tier: lower-tier.**
@@ -930,7 +1144,7 @@ so they aren't lost.
       `courtroomScript.ts`), and `LedgerEntryRow`'s caption reads it back
       ("Direct examination — called by the defense/prosecution") instead of
       silently losing it to the generic name-led caption.
-- [ ] **Blank-name schema gap.** `WitnessSchema.name` and
+- [x] **Blank-name schema gap.** *(Fixed with R4 in P3.)* `WitnessSchema.name` and
       `CharacterSchema.firstName`/`lastName` have no `.min(1)`, so a
       schema-valid empty string would render a blank speaker line in
       `LedgerEntryRow` (`entry.speakerName ?? SPEAKER_LABELS[...]` only
@@ -1148,7 +1362,8 @@ so they aren't lost.
 - [ ] Tier 3 testing checkpoint — `@playwright/test` E2E + `toHaveScreenshot()`
       baselines, now that the gameplay loop is functionally complete. Needs
       dependency approval.
-- [ ] Loading/pipeline-progress UI for the real (non-demo) generation flow.
+- [x] Loading/pipeline-progress UI for the real (non-demo) generation flow.
+      *(P8: `GenerationProgressPanel`, covered by E2E run 7.)*
 - [x] `PleaOfferForm`'s `NO_OFFER` and `REJECTED_BY_DEFENSE` branches — now
       exercisable via Boone (WEAK → no offer) and Reyes (STRONG → rejected)
       in the demo docket. Covered by the `run-the-bench` headless playthrough.

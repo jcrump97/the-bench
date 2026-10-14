@@ -29,7 +29,7 @@ export const DEMO_CASES: readonly [DemoCaseBundle, ...DemoCaseBundle[]] = [
   }
 }
 
-// Render-safe lookup: returns undefined off the demo path (e.g. a future
+// Render-safe lookup: returns undefined off the demo path (e.g. an
 // LLM-generated case) instead of throwing mid-render.
 export function findDemoCaseById(caseId: string): DemoCaseBundle | undefined {
   return DEMO_CASES.find((bundle) => bundle.id === caseId);

@@ -14,7 +14,7 @@ import { defineDemoCase, type SentenceCodas } from './types';
 // seconds of engine idle.
 const rawVaughnPayload = {
   // [LLM-FILL: CasePayload] — caseId is assigned by the pipeline's final
-  // assembly call (with `summary`, below) once the four stages complete.
+  // assembly call (with `summary`, below) once the earlier stages complete.
   caseId: '24-CR-01579',
   // [LLM-FILL: CharacterGen] — the whole defendant block. The priors and
   // traits are the accept-side counterweight: three convictions with a

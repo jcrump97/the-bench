@@ -10,7 +10,7 @@ import { defineDemoCase, type SentenceCodas } from './types';
 // forced). The texture: the tape shows everything except what started it.
 const rawReyesPayload = {
   // [LLM-FILL: CasePayload] — caseId is assigned by the pipeline's final
-  // assembly call (with `summary`, below) once the four stages complete.
+  // assembly call (with `summary`, below) once the earlier stages complete.
   caseId: '24-CR-01388',
   // [LLM-FILL: CharacterGen] — the whole defendant block. This is the stage
   // that decides the Act 1 branch here: a clean record and a gambler's

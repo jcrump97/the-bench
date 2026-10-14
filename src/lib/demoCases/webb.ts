@@ -8,11 +8,12 @@ import { defineDemoCase, type SentenceCodas } from './types';
 // player-chooses-the-branch case). The narrative layer is deliberately
 // morally textured — partial repayments, thin firm controls, a second-chance
 // employer, custody pressure — so the judge is weighing a person, not
-// processing a form. This is the quality bar for the future LLM generation
-// pipeline's prompts.
+// processing a form. This is the quality bar the LLM generation pipeline's
+// prompts are written to. The [LLM-FILL: Stage] tags below map each block to
+// the pipeline stage that writes its equivalent in a generated case.
 const rawWebbPayload = {
   // [LLM-FILL: CasePayload] — caseId is assigned by the pipeline's final
-  // assembly call (with `summary`, below) once the four stages complete.
+  // assembly call (with `summary`, below) once the earlier stages complete.
   caseId: '24-CR-00847',
   // [LLM-FILL: CharacterGen] — the whole defendant block: identity,
   // demographics, priors, and OCEAN traits. The traits and priors are not

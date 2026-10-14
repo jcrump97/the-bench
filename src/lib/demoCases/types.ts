@@ -43,10 +43,11 @@ export type AftermathVariants = SingleChargeAftermath | MultiChargeAftermath;
 // generate for one docket entry, hand-authored and validated at module load.
 //
 // [LLM-FILL] convention: every point in a demo bundle (or the runtime flow)
-// that the future GameService pipeline will fill is tagged with a grep-able
-// `[LLM-FILL: <stage>]` comment, where <stage> is one of the pipeline calls:
-// StatuteSelection, EnvironmentGen, CharacterGen, EvidenceGen, CasePayload
-// (final assembly), PleaNarrative, or Aftermath.
+// that the GameService pipeline fills in a generated case is tagged with a
+// grep-able `[LLM-FILL: <stage>]` comment, where <stage> is one of the
+// pipeline calls: StatuteSelection, EnvironmentGen, CharacterGen,
+// InterrogationGen, EvidenceGen, VerdictVoice, CasePayload (final assembly),
+// PleaNarrative, or Aftermath.
 // The decision-control explainers a guided (tutorial) bundle carries — one
 // short out-of-fiction line per control the action bar can present. Keyed by
 // the pending beat: CONTINUE for statement beats, else the decision type.

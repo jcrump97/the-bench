@@ -6,6 +6,9 @@ export type ActiveModal =
   | { type: 'WITNESS'; witnessId: string }
   | { type: 'DEFENDANT' }
   | { type: 'EVENT' }
+  // The Bench Book reads no case data, so it is the one modal that can open
+  // from the docket as well as the courtroom.
+  | { type: 'BENCH_BOOK' }
   | null;
 
 // Diagnostic-only record of the last GameService failure (case generation or

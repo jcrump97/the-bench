@@ -75,6 +75,20 @@ function withFeedback(base: string, feedback: string | undefined): string {
   return feedback ? `${base}\n\n${feedback}` : base;
 }
 
+interface GenerateOptions {
+  // Extra attempts after the first, each fed the previous failure to repair.
+  maxRetries?: number;
+  // The run's cancel signal. Reaches the request itself, so cancelling ends
+  // the call in flight and spends no further attempts — the stage's budget is
+  // for failures, and a cancel is not one.
+  signal?: AbortSignal | undefined;
+}
+
+function isUnretryableCallFailure(err: GeminiError): boolean {
+  if (err.reason === 'TIMEOUT') return true;
+  return err.status !== null && err.status !== 429 && err.status < 500;
+}
+
 // ============================================================================
 // Generic "generate, parse, validate, retry-with-repair" loop shared by every
 // pipeline stage. Gemini's structured-output mode shapes the response; the
@@ -90,7 +104,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   buildContents: (feedback: string | undefined) => string,
   responseSchema: GeminiSchema,
   zodSchema: Schema,
-  maxRetries = 2,
+  { maxRetries = 2, signal }: GenerateOptions = {},
 ): Promise<z.infer<Schema>> {
   let feedback: string | undefined;
   let lastError = 'unknown error';
@@ -103,22 +117,30 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
   let lastRawResponse: string | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    signal?.throwIfAborted();
     let text: string;
     try {
       text = await callGemini(apiKey, model, {
         systemInstruction,
         contents: buildContents(feedback),
         responseSchema,
+        signal,
       });
     } catch (err) {
-      // A non-retryable client error (bad request, bad key — never 429 or
-      // 5xx) will fail identically on retry, so it isn't worth spending the
-      // stage's budget on: surface it immediately. Everything else
-      // (network errors, and 429/5xx that already exhausted
-      // fetchWithRetry's own attempts) gets the same retry-with-feedback
-      // budget a validation failure does, instead of aborting the whole
-      // stage on one transient call failure.
-      if (err instanceof GeminiError && err.status !== null && err.status !== 429 && err.status < 500) {
+      // A cancelled run is not a failed attempt: nothing to report, and
+      // nothing to retry. The caller's own reason goes back up untouched.
+      if (signal?.aborted) throw signal.reason;
+      // Two call failures aren't worth spending the stage's budget on, so
+      // they surface immediately. A non-retryable client error (bad request,
+      // bad key — never 429 or 5xx) will fail identically on retry. A
+      // timeout already cost the transport's full 120 s, and a connection
+      // that stalled once is likely to stall again: retrying it here held the
+      // player on the generating screen for up to three times that, per
+      // stage. Everything else (network errors, and 429/5xx that already
+      // exhausted the transport's own attempts) gets the same
+      // retry-with-feedback budget a validation failure does, instead of
+      // aborting the whole stage on one transient call failure.
+      if (err instanceof GeminiError && isUnretryableCallFailure(err)) {
         // Tagged with the stage on the way out. A bare "status 400: Request
         // contains an invalid argument" names none of the seven response
         // schemas the API might have rejected — which is exactly what made a
@@ -126,7 +148,7 @@ async function generateValidated<Schema extends z.ZodTypeAny>(
         // and cost a live bisection to work out. The GeminiError type and
         // status are preserved so callers still classify it the same way.
         reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [err.message], schemaShape: null });
-        throw new GeminiError(`[${stageName}] ${err.message}`, err.status);
+        throw new GeminiError(`[${stageName}] ${err.message}`, err.status, err.reason);
       }
       lastError = `Gemini call failed: ${err instanceof Error ? err.message : String(err)}`;
       reportAttemptFailure({ stage: stageName, attempt, kind: 'CALL_FAILED', issues: [lastError], schemaShape: null });
@@ -248,6 +270,7 @@ function buildStatuteSelectionContents(feedback: string | undefined): string {
 export async function runStatuteSelection(
   apiKey: string,
   model: string,
+  signal?: AbortSignal,
 ): Promise<{ charges: ChargeCore[]; statuteContexts: string[] }> {
   return generateValidated(
     apiKey,
@@ -257,6 +280,7 @@ export async function runStatuteSelection(
     buildStatuteSelectionContents,
     STATUTE_SELECTION_GEMINI_SCHEMA,
     StatuteSelectionSchema,
+    { signal },
   );
 }
 
@@ -288,7 +312,12 @@ function buildEnvironmentGenContents(charges: ChargeCore[], feedback: string | u
   return withFeedback(base, feedback);
 }
 
-export async function runEnvironmentGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Environment> {
+export async function runEnvironmentGen(
+  apiKey: string,
+  model: string,
+  charges: ChargeCore[],
+  signal?: AbortSignal,
+): Promise<Environment> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -297,6 +326,7 @@ export async function runEnvironmentGen(apiKey: string, model: string, charges: 
     (feedback) => buildEnvironmentGenContents(charges, feedback),
     ENVIRONMENT_GEN_GEMINI_SCHEMA,
     EnvironmentGenSchema,
+    { signal },
   );
   return data.environment;
 }
@@ -325,7 +355,12 @@ function buildCharacterGenContents(charges: ChargeCore[], feedback: string | und
   return withFeedback(base, feedback);
 }
 
-export async function runCharacterGen(apiKey: string, model: string, charges: ChargeCore[]): Promise<Defendant> {
+export async function runCharacterGen(
+  apiKey: string,
+  model: string,
+  charges: ChargeCore[],
+  signal?: AbortSignal,
+): Promise<Defendant> {
   const data = await generateValidated(
     apiKey,
     model,
@@ -334,6 +369,7 @@ export async function runCharacterGen(apiKey: string, model: string, charges: Ch
     (feedback) => buildCharacterGenContents(charges, feedback),
     CHARACTER_GEN_GEMINI_SCHEMA,
     CharacterGenSchema,
+    { signal },
   );
   return data.defendant;
 }
@@ -388,6 +424,7 @@ export async function runInterrogationGen(
   defendant: Defendant,
   environment: Environment,
   profile: InterrogationProfile,
+  signal?: AbortSignal,
 ): Promise<z.infer<typeof InterrogationSchema> | null> {
   if (profile.outcome === 'INVOKED_COUNSEL') return null;
 
@@ -399,6 +436,7 @@ export async function runInterrogationGen(
     (feedback) => buildInterrogationGenContents(defendant, environment, profile, feedback),
     INTERROGATION_GEN_GEMINI_SCHEMA,
     InterrogationGenSchema,
+    { signal },
   );
 
   // Belt-and-suspenders: the echo fields must exactly match the derived
@@ -517,6 +555,7 @@ export async function runEvidenceGen(
   environment: Environment,
   defendant: Defendant,
   interrogation: z.infer<typeof InterrogationSchema> | null,
+  signal?: AbortSignal,
 ): Promise<{ evidence: Evidence[]; witnesses: Witness[] }> {
   const data = await generateValidated(
     apiKey,
@@ -526,6 +565,7 @@ export async function runEvidenceGen(
     (feedback) => buildEvidenceGenContents(charges, environment, defendant, interrogation, feedback),
     EVIDENCE_GEN_GEMINI_SCHEMA,
     buildEvidenceGenSchema(interrogation !== null),
+    { signal },
   );
 
   // Force the echo fields on the interrogation exhibit (if any) to match the
@@ -559,10 +599,36 @@ const CaseFinalizationFieldsSchema = z.object({
 
 const FINALIZE_GEMINI_SCHEMA = toGeminiSchema(CaseFinalizationFieldsSchema);
 
-// The repair round regenerates the whole case against the real gate. The live
-// API currently rejects this schema outright (R13 in TODO.md — the hand-written
-// version was rejected too); responseSchemas.live.test.ts tracks it.
-const FULL_CASE_GEMINI_SCHEMA = toGeminiSchema(CaseSchema);
+// The repair round asks for the whole case in one response, and that schema
+// was over Gemini's complexity limit: every repair request was a bare 400
+// INVALID_ARGUMENT, so a case that reached the repair round could only end in
+// a Mistrial. It went unseen because the round only runs when the assembled
+// case fails validation, which no earlier live sweep happened to hit.
+//
+// Bisected live (2026-10-14): every property is accepted alone, and the whole
+// schema is accepted with any one large subtree removed — a budget exceeded
+// in aggregate, not an invalid keyword. Dropping either every `enum` or every
+// `maxItems` brings it under; the closed vocabularies are the schema's point,
+// so the bounds go. (Dropping only the interrogation transcript's 24-item cap
+// was enough to pass, but one witness-sized addition put it back over; with
+// every bound gone it still passes with a second copy of the charges, the
+// defendant or the witnesses.) Zod enforces every maximum regardless, and an
+// over-long array is fed back and repaired like any other issue. The stage
+// schemas keep their bounds: each is well inside the limit, and their
+// compliance is measured.
+function withoutMaxItems(schema: GeminiSchema): GeminiSchema {
+  const unbounded: GeminiSchema = { ...schema };
+  delete unbounded.maxItems;
+  if (schema.properties !== undefined) {
+    unbounded.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([name, child]) => [name, withoutMaxItems(child)]),
+    );
+  }
+  if (schema.items !== undefined) unbounded.items = withoutMaxItems(schema.items);
+  return unbounded;
+}
+
+const FULL_CASE_GEMINI_SCHEMA = withoutMaxItems(toGeminiSchema(CaseSchema));
 
 const FINALIZE_SYSTEM = `ROLE: You are assembling the narrative face of a California criminal case file.
 
@@ -642,7 +708,12 @@ interface FinalizeParts {
   evidence: Evidence[];
 }
 
-export async function finalizeCasePayload(apiKey: string, model: string, parts: FinalizeParts): Promise<CasePayload> {
+export async function finalizeCasePayload(
+  apiKey: string,
+  model: string,
+  parts: FinalizeParts,
+  signal?: AbortSignal,
+): Promise<CasePayload> {
   const finalFields = await generateValidated(
     apiKey,
     model,
@@ -651,6 +722,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     (feedback) => buildFinalizeContents(parts, feedback),
     FINALIZE_GEMINI_SCHEMA,
     CaseFinalizationFieldsSchema,
+    { signal },
   );
 
   // Fix the two mechanical cross-stage failures before validating, so the
@@ -723,7 +795,7 @@ export async function finalizeCasePayload(apiKey: string, model: string, parts: 
     (feedback) => buildRepairContents(assembled, initial.error, feedback),
     FULL_CASE_GEMINI_SCHEMA,
     RepairCaseSchema,
-    2,
+    { maxRetries: 2, signal },
   );
 }
 
@@ -823,6 +895,7 @@ export async function runVerdictVoice(
   model: string,
   charges: ChargeCore[],
   defendant: Defendant,
+  signal?: AbortSignal,
 ): Promise<Pick<Charge, 'id' | 'verdictReactions' | 'verdictOptions'>[]> {
   const data = await generateValidated(
     apiKey,
@@ -839,6 +912,7 @@ export async function runVerdictVoice(
     // cause. One voiced layer per distinct id is all this stage can meaningfully
     // ask for.
     buildVerdictVoiceSchema([...new Set(charges.map((c) => c.id))]),
+    { signal },
   );
   return data.charges;
 }
@@ -854,14 +928,40 @@ export async function runVerdictVoice(
 // rationale skipped the repair entirely and went straight to the Mistrial
 // screen with no stage prefix. Held to the full rule here, it gets the same
 // retry-with-feedback as every other stage.
-const WeakPleaNarrativeSchema = PleaNarrativeFieldsSchema.pick({ prosecutionRationale: true });
+const WeakPleaNarrativeFields = PleaNarrativeFieldsSchema.pick({ prosecutionRationale: true });
 
-const OfferPleaNarrativeSchema = PleaNarrativeFieldsSchema.required().superRefine((narrative, ctx) => {
+// MODERATE/STRONG: an offer reaches the bench, so every offer field is owed.
+// A null in one of them survives the projection below and is repaired, not
+// dropped: the field was asked for, and null is not an answer.
+const OfferPleaNarrativeFields = PleaNarrativeFieldsSchema.required().superRefine((narrative, ctx) => {
   addChoiceCoverageIssues(narrative.pleaRulingOptions, PleaDecisionSchema.options, ctx);
 });
 
-const WEAK_PLEA_GEMINI_SCHEMA = toGeminiSchema(WeakPleaNarrativeSchema);
-const OFFER_PLEA_GEMINI_SCHEMA = toGeminiSchema(OfferPleaNarrativeSchema);
+// Keeps only the fields a band asked the model for. Structured output can
+// return a key the request never named, or an optional one materialized as an
+// explicit null — the same habit `interrogation` showed on evidence. The real
+// schema is strict, so either would burn a retry on an answer whose requested
+// fields were fine. Projecting first restores exactly the tolerance the
+// pre-R5 stage schemas had, without loosening the gate demo cases cross.
+function projectOnto(fields: readonly string[]) {
+  return (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    const response = value as Record<string, unknown>;
+    return Object.fromEntries(fields.filter((field) => field in response).map((field) => [field, response[field]]));
+  };
+}
+
+// The gate projects first; the model is sent the schema the projection feeds.
+// A preprocess has no input shape of its own to compile, so the Gemini schema
+// is compiled from the inner object rather than from the gate.
+const WeakPleaNarrativeSchema = z.preprocess(projectOnto(Object.keys(WeakPleaNarrativeFields.shape)), WeakPleaNarrativeFields);
+const OfferPleaNarrativeSchema = z.preprocess(
+  projectOnto(Object.keys(PleaNarrativeFieldsSchema.shape)),
+  OfferPleaNarrativeFields,
+);
+
+const WEAK_PLEA_GEMINI_SCHEMA = toGeminiSchema(WeakPleaNarrativeFields);
+const OFFER_PLEA_GEMINI_SCHEMA = toGeminiSchema(OfferPleaNarrativeFields);
 
 const PLEA_NARRATIVE_SYSTEM = `ROLE: You are counsel for both sides, stating your plea positions on the record.
 
@@ -912,9 +1012,10 @@ export async function runPleaNarrative(
   band: 'WEAK' | 'MODERATE' | 'STRONG',
   offerTerms: { pleadsToChargeIds: string[]; proposedSentence: Sentence[] } | null,
   defensePosture: 'ACCEPT' | 'REJECT',
+  signal?: AbortSignal,
 ): Promise<PleaNarrative> {
   if (band === 'WEAK') {
-    const data = await generateValidated(
+    return generateValidated(
       apiKey,
       model,
       'PleaNarrative.weak',
@@ -922,11 +1023,11 @@ export async function runPleaNarrative(
       (feedback) => buildPleaNarrativeContents(payload, band, null, defensePosture, feedback),
       WEAK_PLEA_GEMINI_SCHEMA,
       WeakPleaNarrativeSchema,
+      { signal },
     );
-    return { prosecutionRationale: data.prosecutionRationale };
   }
 
-  const data = await generateValidated(
+  return generateValidated(
     apiKey,
     model,
     'PleaNarrative.offer',
@@ -934,8 +1035,8 @@ export async function runPleaNarrative(
     (feedback) => buildPleaNarrativeContents(payload, band, offerTerms, defensePosture, feedback),
     OFFER_PLEA_GEMINI_SCHEMA,
     OfferPleaNarrativeSchema,
+    { signal },
   );
-  return data;
 }
 
 // ============================================================================
@@ -1037,7 +1138,10 @@ export async function runAftermath(apiKey: string, model: string, ctx: Aftermath
 // compiled output so any change to what the model is sent shows up in review.
 // That matters because a responseSchema change is the one kind of change a
 // mocked test cannot vouch for: `minItems` in the wrong place is a bare 400
-// from the live API. See CLAUDE.md.
+// from the live API. See CLAUDE.md. The live acceptance test
+// (__tests__/live/responseSchemas.live.test.ts) sends every one of these to
+// the real API on its own, since the repair round's schema shipped rejected
+// for exactly as long as no sweep happened to need a repair.
 export const STAGE_RESPONSE_SCHEMAS: Record<string, { zod: z.ZodType; gemini: GeminiSchema }> = {
   StatuteSelection: { zod: StatuteSelectionSchema, gemini: STATUTE_SELECTION_GEMINI_SCHEMA },
   EnvironmentGen: { zod: EnvironmentGenSchema, gemini: ENVIRONMENT_GEN_GEMINI_SCHEMA },

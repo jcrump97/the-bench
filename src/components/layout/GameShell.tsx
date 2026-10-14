@@ -10,6 +10,7 @@ import { CaseFilePanel } from '../panels/CaseFilePanel';
 import { EvidenceTestimonyPanel } from '../panels/EvidenceTestimonyPanel';
 import { ModalRoot } from '../modals/ModalRoot';
 import { JudgmentSummary } from '../result/JudgmentSummary';
+import { ActTitleCard } from './ActTitleCard';
 
 // Panels behave differently per viewport with the same open/closed boolean:
 // mobile and tablet (< lg) they are fixed drawers sliding off-canvas; desktop (lg:) they
@@ -102,6 +103,7 @@ export function GameShell() {
         </PanelDrawer>
       </div>
 
+      <ActTitleCard />
       <ModalRoot />
     </div>
   );

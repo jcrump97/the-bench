@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGameService } from '../gameService';
 import { validCase } from '../../__tests__/fixtures';
 import { CaseSchema, PleaNarrativeSchema } from '../../../schemas/gameSchemas';
+import { GenerationCancelledError } from '../../generationProgress';
 
 vi.mock('../modelSelection', () => ({ getOrSelectModel: vi.fn() }));
 vi.mock('../stages', () => ({
@@ -55,22 +56,26 @@ beforeEach(() => {
   vi.mocked(runAftermath).mockReset().mockResolvedValue('The community absorbed the verdict quietly.');
 });
 
+// Every model-calling stage is handed the run's signal, so a cancel can reach
+// the request in flight. Model selection deliberately is not (see writeCase).
+const RUN_SIGNAL = expect.any(AbortSignal);
+
 describe('createGameService().generateCase', () => {
   it('orchestrates every stage in pipeline order and returns a schema-valid result', async () => {
     const service = createGameService(API_KEY);
-    const result = await service.generateCase();
+    const result = await service.generateCase({ signal: new AbortController().signal });
 
     expect(CaseSchema.safeParse(result.payload).success).toBe(true);
     expect(PleaNarrativeSchema.safeParse(result.pleaNarrative).success).toBe(true);
 
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
-    expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL);
-    expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
-    expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges);
+    expect(runStatuteSelection).toHaveBeenCalledWith(API_KEY, MODEL, RUN_SIGNAL);
+    expect(runEnvironmentGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, RUN_SIGNAL);
+    expect(runCharacterGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, RUN_SIGNAL);
     expect(runInterrogationGen).toHaveBeenCalledWith(API_KEY, MODEL, validCase.defendant, validCase.environment, {
       outcome: 'DENIAL',
       challengeGround: 'MIRANDA',
-    });
+    }, RUN_SIGNAL);
     expect(runEvidenceGen).toHaveBeenCalledWith(
       API_KEY,
       MODEL,
@@ -78,8 +83,9 @@ describe('createGameService().generateCase', () => {
       validCase.environment,
       validCase.defendant,
       null,
+      RUN_SIGNAL,
     );
-    expect(runVerdictVoice).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, validCase.defendant);
+    expect(runVerdictVoice).toHaveBeenCalledWith(API_KEY, MODEL, validCase.charges, validCase.defendant, RUN_SIGNAL);
     expect(finalizeCasePayload).toHaveBeenCalledWith(API_KEY, MODEL, {
       charges: validCase.charges,
       statuteContexts: validCase.statuteContexts,
@@ -87,13 +93,13 @@ describe('createGameService().generateCase', () => {
       defendant: validCase.defendant,
       witnesses: validCase.witnesses,
       evidence: validCase.evidence,
-    });
+    }, RUN_SIGNAL);
     // assessProsecution(validCase) scores 41 (MODERATE) — see fixtures.ts's
     // header comment on why the numbers land there.
     expect(runPleaNarrative).toHaveBeenCalledWith(API_KEY, MODEL, validCase, 'MODERATE', {
       pleadsToChargeIds: validCase.charges.map((c) => c.id),
       proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
-    }, 'REJECT');
+    }, 'REJECT', RUN_SIGNAL);
   });
 
   it('asks getOrSelectModel (not the raw discovery call) for the model on every stage that needs one', async () => {
@@ -114,6 +120,184 @@ describe('createGameService().generateCase', () => {
     });
 
     expect(getOrSelectModel).toHaveBeenCalledWith(API_KEY);
+  });
+
+  it('reports every step as it starts and finishes', async () => {
+    const events: string[] = [];
+    await createGameService(API_KEY).generateCase({
+      onProgress: (event) => events.push(`${event.stepId}:${event.status}`),
+    });
+
+    const finished = events.filter((e) => e.endsWith(':DONE')).map((e) => e.split(':')[0]);
+    expect([...finished].sort()).toEqual([
+      'DEFENDANT', 'EVIDENCE', 'FINALIZE', 'INTERROGATION', 'INTERROGATION_PROFILE', 'MODEL_SELECTION',
+      'PLEA_NARRATIVE', 'PLEA_STRUCTURE', 'SCENE', 'STATUTES', 'VERDICT_VOICE',
+    ]);
+    for (const step of finished) {
+      expect(events.indexOf(`${step}:STARTED`)).toBeLessThan(events.indexOf(`${step}:DONE`));
+    }
+    // The dependency edges hold whatever runs concurrently.
+    const doneAt = (step: string) => events.indexOf(`${step}:DONE`);
+    const startedAt = (step: string) => events.indexOf(`${step}:STARTED`);
+    expect(doneAt('STATUTES')).toBeLessThan(startedAt('SCENE'));
+    expect(doneAt('SCENE')).toBeLessThan(startedAt('INTERROGATION'));
+    expect(doneAt('DEFENDANT')).toBeLessThan(startedAt('VERDICT_VOICE'));
+    expect(doneAt('INTERROGATION')).toBeLessThan(startedAt('EVIDENCE'));
+    expect(Math.max(doneAt('EVIDENCE'), doneAt('VERDICT_VOICE'))).toBeLessThan(startedAt('FINALIZE'));
+    expect(doneAt('PLEA_STRUCTURE')).toBeLessThan(startedAt('PLEA_NARRATIVE'));
+  });
+
+  // A5: stages that share no inputs overlap rather than queue. Proved with
+  // stages that cannot finish until released: if the pipeline awaited them
+  // one at a time, the second would never start while the first was held.
+  it('runs the scene and the defendant concurrently', async () => {
+    let releaseScene!: () => void;
+    vi.mocked(runEnvironmentGen).mockImplementation(
+      () => new Promise((resolve) => { releaseScene = () => resolve(validCase.environment); }),
+    );
+    const run = createGameService(API_KEY).generateCase();
+    await vi.waitFor(() => expect(runCharacterGen).toHaveBeenCalled());
+    releaseScene();
+    await run;
+  });
+
+  it('runs the verdict voice concurrently with the evidence', async () => {
+    let releaseEvidence!: () => void;
+    vi.mocked(runEvidenceGen).mockImplementation(
+      () => new Promise((resolve) => {
+        releaseEvidence = () => resolve({ evidence: validCase.evidence, witnesses: validCase.witnesses });
+      }),
+    );
+    const run = createGameService(API_KEY).generateCase();
+    await vi.waitFor(() => {
+      expect(runEvidenceGen).toHaveBeenCalled();
+      expect(runVerdictVoice).toHaveBeenCalled();
+    });
+    releaseEvidence();
+    await run;
+  });
+
+  it('skips the interview recording, without a call, when the defendant invoked counsel', async () => {
+    // Three priors and an unremarkable temperament derives INVOKED_COUNSEL
+    // (deriveInterrogationProfile): the defendant asks for a lawyer at once.
+    const prior = { chargeName: 'Petty theft', year: 2015, sentences: [] };
+    vi.mocked(runCharacterGen).mockResolvedValue({
+      ...validCase.defendant,
+      pastConvictions: [prior, { ...prior, year: 2017 }, { ...prior, year: 2019 }],
+    });
+    const events: string[] = [];
+    await createGameService(API_KEY).generateCase({ onProgress: (e) => events.push(`${e.stepId}:${e.status}`) });
+
+    expect(events).toContain('INTERROGATION:SKIPPED');
+    expect(events).not.toContain('INTERROGATION:STARTED');
+    expect(runInterrogationGen).not.toHaveBeenCalled();
+  });
+
+  it('stops at the next step boundary once cancelled, with a cancellation rather than a failure', async () => {
+    const controller = new AbortController();
+    vi.mocked(runEnvironmentGen).mockImplementation(async () => {
+      controller.abort();
+      return validCase.environment;
+    });
+
+    await expect(createGameService(API_KEY).generateCase({ signal: controller.signal })).rejects.toBeInstanceOf(
+      GenerationCancelledError,
+    );
+    expect(runCharacterGen).not.toHaveBeenCalled();
+  });
+
+  it('ends the request in flight on cancel instead of waiting for it', async () => {
+    // A stage that only finishes when its signal aborts: the shape of a real
+    // Gemini call cancelled mid-flight. Before the signal reached the stages,
+    // this run could only end when the call did.
+    const controller = new AbortController();
+    vi.mocked(runEvidenceGen).mockImplementation(
+      (...args) =>
+        new Promise((_, reject) => {
+          const signal = args[6];
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+          controller.abort();
+        }),
+    );
+
+    await expect(createGameService(API_KEY).generateCase({ signal: controller.signal })).rejects.toBeInstanceOf(
+      GenerationCancelledError,
+    );
+    expect(finalizeCasePayload).not.toHaveBeenCalled();
+  });
+
+  it('aborts the concurrent sibling when one stage fails', async () => {
+    let defendantSignal: AbortSignal | undefined;
+    let finishDefendant: () => void = () => {};
+    vi.mocked(runCharacterGen).mockImplementation((_key, _model, _charges, signal) => {
+      defendantSignal = signal;
+      return new Promise((resolve) => {
+        finishDefendant = () => resolve(validCase.defendant);
+      });
+    });
+    vi.mocked(runEnvironmentGen).mockRejectedValue(new Error('scene failed'));
+
+    await expect(createGameService(API_KEY).generateCase()).rejects.toThrow(/scene failed/);
+    // Without the abort, the defendant's request and its retries ran on
+    // after the player was already looking at the Mistrial screen.
+    expect(defendantSignal?.aborted).toBe(true);
+    finishDefendant();
+  });
+
+  it('reports nothing once the run has failed', async () => {
+    const events: string[] = [];
+    let finishDefendant: () => void = () => {};
+    vi.mocked(runCharacterGen).mockImplementation(
+      () => new Promise((resolve) => {
+        finishDefendant = () => resolve(validCase.defendant);
+      }),
+    );
+    vi.mocked(runEnvironmentGen).mockRejectedValue(new Error('scene failed'));
+
+    await expect(
+      createGameService(API_KEY).generateCase({ onProgress: (e) => events.push(`${e.stepId}:${e.status}`) }),
+    ).rejects.toThrow(/scene failed/);
+    const settled = [...events];
+
+    // The orphaned sibling finishes after the run has already settled.
+    finishDefendant();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toEqual(settled);
+    expect(events).not.toContain('DEFENDANT:DONE');
+  });
+
+  it('reports nothing once the run is cancelled', async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    let finishScene: () => void = () => {};
+    vi.mocked(runEnvironmentGen).mockImplementation(
+      () => new Promise((resolve) => {
+        finishScene = () => resolve(validCase.environment);
+      }),
+    );
+    vi.mocked(runCharacterGen).mockImplementation(async () => {
+      controller.abort();
+      throw controller.signal.reason;
+    });
+
+    await expect(
+      createGameService(API_KEY).generateCase({
+        signal: controller.signal,
+        onProgress: (e) => events.push(`${e.stepId}:${e.status}`),
+      }),
+    ).rejects.toBeInstanceOf(GenerationCancelledError);
+    finishScene();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).not.toContain('SCENE:DONE');
+  });
+
+  it('cannot be failed by a progress listener that throws', async () => {
+    const result = await createGameService(API_KEY).generateCase({
+      onProgress: () => {
+        throw new Error('listener bug');
+      },
+    });
+    expect(CaseSchema.safeParse(result.payload).success).toBe(true);
   });
 
   it('propagates a stage failure without swallowing it', async () => {

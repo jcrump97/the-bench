@@ -12,6 +12,13 @@ function textResponse(body: string, status: number): Response {
   return new Response(body, { status });
 }
 
+// A 200 whose headers arrived but whose body times out mid-stream.
+function stalledBodyResponse(): Response {
+  const response = new Response('{"partial":', { status: 200 });
+  vi.spyOn(response, 'text').mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+  return response;
+}
+
 describe('callGemini', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -40,6 +47,24 @@ describe('callGemini', () => {
     const call = fetchMock.mock.calls[0];
     expect(call).toBeDefined();
     expect(String(call?.[0])).toContain('gemini-flash-latest:generateContent');
+  });
+
+  it('sends the key in the x-goog-api-key header and never in the URL', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).not.toContain('AIzaTestKey1234567890123456789');
+    expect(String(url)).not.toContain('key=');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'AIzaTestKey1234567890123456789' });
   });
 
   it('sets a moderate temperature for schema-compliant-but-varied output', async () => {
@@ -119,6 +144,145 @@ describe('callGemini', () => {
     await vi.advanceTimersByTimeAsync(2500);
     await expect(promise).resolves.toBe('{"ok":true}');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds every attempt with a timeout signal', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('surfaces a timed-out attempt as reason TIMEOUT without retrying it', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT', status: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A fetch implementation can throw a DOMException from another realm than
+  // the global one, which an `instanceof DOMException` check misses — and a
+  // missed timeout was retried five times over, 120 s apiece.
+  it('recognizes a timeout by name, whatever realm its error came from', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' }));
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Headers can arrive well inside the limit while a large body is still
+  // streaming when it expires. That stall is the same TIMEOUT, not a raw
+  // DOMException escaping the transport with no reason attached.
+  it('classifies a timeout while the body is still being read', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(stalledBodyResponse());
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    await expect(promise).rejects.toMatchObject({ name: 'GeminiError', reason: 'TIMEOUT' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends the request in flight when the caller cancels, rejecting with its reason', async () => {
+    const fetchMock = vi.mocked(fetch);
+    // Settles only when the signal it was given aborts, like a real fetch.
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        }),
+    );
+    const controller = new AbortController();
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    // The caller's reason, not a GeminiError: a cancel is not a failure.
+    await expect(promise).rejects.toBe(controller.signal.reason);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Safari before 17.4 has no AbortSignal.any. Without the fallback, every
+  // request there would throw before it was sent.
+  it('still cancels where AbortSignal.any does not exist', async () => {
+    const native = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true });
+    try {
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockImplementation(
+        (_url, init) =>
+          new Promise((_, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+          }),
+      );
+      const controller = new AbortController();
+      const cancelled = new Error('player cancelled');
+
+      const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+        systemInstruction: 'sys',
+        contents: 'content',
+        responseSchema: { type: 'object' },
+        signal: controller.signal,
+      });
+      controller.abort(cancelled);
+
+      await expect(promise).rejects.toBe(cancelled);
+    } finally {
+      if (native) Object.defineProperty(AbortSignal, 'any', native);
+    }
+  });
+
+  it('cuts a backoff wait short when the caller cancels, and makes no further attempt', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(textResponse('rate limited', 429));
+    const controller = new AbortController();
+
+    const promise = callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+      signal: controller.signal,
+    });
+    const cancelled = new Error('player cancelled');
+    const settled = expect(promise).rejects.toBe(cancelled);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    controller.abort(cancelled);
+    await settled;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('throws immediately on a 4xx without retrying', async () => {
@@ -261,6 +425,11 @@ describe('listModels', () => {
     vi.unstubAllGlobals();
   });
 
+  it('classifies a timeout while the models list is still being read', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(stalledBodyResponse());
+    await expect(listModels('AIzaTestKey1234567890123456789')).rejects.toMatchObject({ reason: 'TIMEOUT' });
+  });
+
   it('parses a models list response', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
@@ -275,6 +444,9 @@ describe('listModels', () => {
     expect(models).toEqual([
       { name: 'models/gemini-flash-latest', supportedGenerationMethods: ['generateContent'] },
     ]);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).not.toContain('key=');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'AIzaTestKey1234567890123456789' });
   });
 
   it('returns an empty array when the response omits models', async () => {

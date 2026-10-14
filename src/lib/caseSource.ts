@@ -10,6 +10,7 @@ import type { DemoCaseBundle } from './demoCases';
 import { assembleAftermath, selectAftermath } from './demoCases/aftermath';
 import { classifyOutcome } from './outcome';
 import { severityOfImposedSentence } from './sentenceSeverity';
+import type { GenerateCaseOptions } from './generationProgress';
 
 export interface GeneratedCase {
   payload: CasePayload;
@@ -37,9 +38,11 @@ export interface AftermathContext {
 // pipeline (generateCase) and the post-sentencing Aftermath call
 // (generateAftermath); demoCaseSource below is the offline implementation.
 // Callers must treat both methods as fallible and asynchronous; outputs still
-// pass through the store's Zod boundary before touching game state.
+// pass through the store's Zod boundary before touching game state. The
+// options are observational: progress events and a cancel signal. A source
+// that resolves instantly (the demo docket) may ignore them.
 export interface CaseSource {
-  generateCase(): Promise<GeneratedCase>;
+  generateCase(options?: GenerateCaseOptions): Promise<GeneratedCase>;
   generateAftermath(ctx: AftermathContext): Promise<string>;
 }
 

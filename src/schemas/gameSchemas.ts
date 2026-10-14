@@ -288,7 +288,9 @@ export const ReactionBeatSchema = z.array(ReactionLineSchema).min(1).max(4);
 // One selectable judge line: the words the court speaks when the player picks
 // it, bound to a choice from a closed decision vocabulary. Multiple options
 // may share a choice — variants multiply voice, never the state space.
-function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
+// Exported so the pipeline's stage schemas build the same option (bench-trial
+// refinement included) instead of re-declaring a weaker copy of it.
+export function judgeLineOption<T extends z.ZodEnum<Record<string, string>>>(choice: T) {
   return z.strictObject({
     choice,
     lineText: noJury(z.string().min(1).max(300)),
@@ -382,7 +384,7 @@ export const InterrogationSchema = z.strictObject({
 
 export const WitnessSchema = z.strictObject({
   id: z.string().min(1).max(40),
-  name: z.string().max(101).describe("Full fictional name. Do not include race or protected demographics."),
+  name: z.string().min(1).max(101).describe("Full fictional name. Do not include race or protected demographics."),
   role: WitnessRoleEnum,
   bias: BiasIndicatorEnum,
   statement: noJury(z.string().max(1000)).describe("A summary of their expected testimony."),
@@ -471,9 +473,11 @@ export const SubstanceAbuseSchema = z.strictObject({
   status: SubstanceStatusEnum,
 });
 
+// Names are required to be non-blank: every speaker line in the record leads
+// with one, and an empty string would render a line spoken by no one.
 export const CharacterSchema = z.strictObject({
-  firstName: z.string().max(50),
-  lastName: z.string().max(50),
+  firstName: z.string().min(1).max(50),
+  lastName: z.string().min(1).max(50),
   age: z.number().int().min(18).max(120),
 
   demographics: z.strictObject({
