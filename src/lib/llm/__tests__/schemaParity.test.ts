@@ -9,6 +9,7 @@ import {
   INTERROGATION_GEMINI_SCHEMA,
   WITNESS_GEMINI_SCHEMA,
   EVIDENCE_GEMINI_SCHEMA,
+  PIPELINE_RESPONSE_SCHEMAS,
 } from '../stages';
 import {
   ChargeCoreSchema,
@@ -253,5 +254,41 @@ describe('Zod <-> Gemini schema parity', () => {
     expect(new Set(SENTENCE_GEMINI_SCHEMA.properties!.unit!.enum)).toEqual(
       new Set(SentenceUnitEnum.options),
     );
+  });
+});
+
+// The repair round's whole-case schema was over Gemini's complexity limit — a
+// bare 400 on every repair request — until its array bounds were dropped
+// (see withoutMaxItems in stages.ts). These pin that decision both ways: the
+// repair schema must stay unbounded, and the stage schemas must keep the
+// bounds the measured pipeline was tuned with. Whether Gemini accepts each
+// schema is checked against the real API by responseSchemas.live.test.ts.
+function boundedArrayPaths(schema: GeminiSchema, at = ''): string[] {
+  const here = schema.maxItems === undefined ? [] : [at || '(root)'];
+  const fromProperties = Object.entries(schema.properties ?? {}).flatMap(([name, child]) =>
+    boundedArrayPaths(child, `${at}.${name}`),
+  );
+  const fromItems = schema.items === undefined ? [] : boundedArrayPaths(schema.items, `${at}[]`);
+  return [...here, ...fromProperties, ...fromItems];
+}
+
+describe('repair round response schema', () => {
+  it('bounds no array, keeping the whole-case schema under the API complexity limit', () => {
+    expect(boundedArrayPaths(PIPELINE_RESPONSE_SCHEMAS['FinalizeCasePayload.repair']!)).toEqual([]);
+  });
+
+  it('leaves the stage schemas their bounds', () => {
+    expect(boundedArrayPaths(PIPELINE_RESPONSE_SCHEMAS.EvidenceGen!)).toContain('.evidence[].interrogation.lines');
+    expect(boundedArrayPaths(EVIDENCE_GEMINI_SCHEMA)).toContain('.interrogation.lines');
+  });
+
+  it('keeps the closed vocabularies — only the bounds were traded away', () => {
+    const repair = PIPELINE_RESPONSE_SCHEMAS['FinalizeCasePayload.repair']!.properties!;
+    const evidence = repair.evidence!.items!.properties!;
+    expect(evidence.type!.enum).toEqual(EVIDENCE_GEMINI_SCHEMA.properties!.type!.enum);
+    expect(evidence.interrogation!.properties!.lines!.items!.properties!.speaker!.enum).toEqual(
+      INTERROGATION_GEMINI_SCHEMA.properties!.lines!.items!.properties!.speaker!.enum,
+    );
+    expect(repair.witnesses!.items!.properties!.role!.enum).toEqual(WITNESS_GEMINI_SCHEMA.properties!.role!.enum);
   });
 });

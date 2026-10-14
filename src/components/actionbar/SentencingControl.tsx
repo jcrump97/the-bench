@@ -66,10 +66,10 @@ export function SentencingControl({ anyGuilty }: { anyGuilty: boolean }) {
   if (!activeCase || !exposure) return null;
   const { defendant } = activeCase;
 
-  // [LLM-FILL: Aftermath] — the CaseSource generates the outcome-conditioned
-  // aftermath (GameService's Gemini call on the BYOK path, the authored demo
-  // variant today) before the END_STATE transition; any failure, including a
-  // sourceless active case, is an ErrorState.
+  // The CaseSource generates the outcome-conditioned aftermath (GameService's
+  // Gemini call on the BYOK path, the authored variant plus severity coda on
+  // the demo docket) before the END_STATE transition; any failure, including
+  // a sourceless active case, is an ErrorState.
   const handleSubmit = async () => {
     if (submitting) return;
     setSubmitting(true);

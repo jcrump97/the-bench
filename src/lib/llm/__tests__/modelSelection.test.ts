@@ -8,6 +8,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+// A fresh Response per call: a body can be read once, and a reused one fails
+// every call after the first — which selectModel would quietly paper over by
+// falling back to its hardcoded candidate.
+function liteLatestModels(): Response {
+  return jsonResponse({
+    models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
+  });
+}
+
 describe('selectModel', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -151,11 +160,7 @@ describe('getOrSelectModel', () => {
 
   it('discovers the model only once for the same key across separate calls', async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(
-      jsonResponse({
-        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
-      }),
-    );
+    fetchMock.mockImplementation(async () => liteLatestModels());
 
     const key = 'AIzaTestKey1234567890123456789';
     const first = await getOrSelectModel(key);
@@ -168,30 +173,22 @@ describe('getOrSelectModel', () => {
 
   it('discovers independently per distinct API key', async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(
-      jsonResponse({
-        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
-      }),
-    );
+    fetchMock.mockImplementation(async () => liteLatestModels());
 
-    await getOrSelectModel('AIzaKeyOne1234567890123456789');
-    await getOrSelectModel('AIzaKeyTwo1234567890123456789');
+    expect(await getOrSelectModel('AIzaKeyOne1234567890123456789')).toBe('gemini-flash-lite-latest');
+    expect(await getOrSelectModel('AIzaKeyTwo1234567890123456789')).toBe('gemini-flash-lite-latest');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('discovers again after clearModelCache', async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(
-      jsonResponse({
-        models: [{ name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] }],
-      }),
-    );
+    fetchMock.mockImplementation(async () => liteLatestModels());
 
     const key = 'AIzaTestKey1234567890123456789';
     await getOrSelectModel(key);
     clearModelCache();
-    await getOrSelectModel(key);
+    expect(await getOrSelectModel(key)).toBe('gemini-flash-lite-latest');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

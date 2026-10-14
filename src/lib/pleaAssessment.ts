@@ -228,7 +228,7 @@ export function buildPleaPosture(
 
 // ─── Wires assessProsecution's band into buildPleaPosture's discriminated ────
 // input, exactly as the comment on buildPleaPosture above describes GameService
-// doing it. Building it now means the future GameService reuses it unchanged.
+// doing it. usePleaPosture applies it to every case, demo or generated.
 export function computePleaPostureForCase(
   caseData: CasePayload,
   narrative: PleaNarrative

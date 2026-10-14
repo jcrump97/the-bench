@@ -151,6 +151,40 @@ describe('runStatuteSelection', () => {
     expect(mock).toHaveBeenCalledTimes(1);
   });
 
+  it('rethrows a cancel untouched, without spending the retry budget on it', async () => {
+    const controller = new AbortController();
+    const mock = vi.mocked(callGemini);
+    mock.mockImplementation(async () => {
+      controller.abort();
+      throw controller.signal.reason;
+    });
+
+    await expect(runStatuteSelection(API_KEY, MODEL, controller.signal)).rejects.toBe(controller.signal.reason);
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock.mock.calls[0]?.[2].signal).toBe(controller.signal);
+  });
+
+  it('makes no call at all once the run is already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(runStatuteSelection(API_KEY, MODEL, controller.signal)).rejects.toBe(controller.signal.reason);
+    expect(callGemini).not.toHaveBeenCalled();
+  });
+
+  it('fails the stage on a timeout instead of waiting out another one', async () => {
+    // The transport already spent its full 120 s on the attempt. Retrying here
+    // held a stalled player for three times that, per stage.
+    const mock = vi.mocked(callGemini);
+    mock.mockRejectedValue(new GeminiError('Gemini request timed out after 120s', null, 'TIMEOUT'));
+
+    await expect(runStatuteSelection(API_KEY, MODEL)).rejects.toMatchObject({
+      name: 'GeminiError',
+      reason: 'TIMEOUT',
+      message: expect.stringMatching(/^\[StatuteSelection\] .*timed out/),
+    });
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
   it('feeds the previous raw response back into the retry contents, not just the Zod issue message', async () => {
     // A reported mistrial burned all three attempts on the identical field
     // because the model only ever saw the Zod error text ("age: Invalid
@@ -479,6 +513,17 @@ describe('runVerdictVoice', () => {
     verdictOptions: charge.verdictOptions,
   });
 
+  it('repairs a jury reference in a judge line at this stage, not at the case gate', async () => {
+    const juryLine = { choice: 'GUILTY', lineText: 'The jury having been discharged, the court finds the defendant guilty.' };
+    const tainted = { ...voiceFor(charge.id), verdictOptions: [juryLine, ...charge.verdictOptions] };
+    mockCallsWith(JSON.stringify({ charges: [tainted] }), JSON.stringify({ charges: [voiceFor(charge.id)] }));
+
+    await runVerdictVoice(API_KEY, MODEL, [chargeCore], defendant);
+
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('bench trial');
+  });
+
   it('retries when the model echoes a charge id that was not requested', async () => {
     // Before the schema checked ids against the request, a wrong echo validated
     // here and then hit an un-retried throw in gameService, killing the whole
@@ -551,6 +596,20 @@ describe('runVerdictVoice', () => {
   });
 });
 
+const completeOffer = {
+  prosecutionRationale: 'The People offer a negotiated plea.',
+  defenseRationale: 'The defense recommends acceptance.',
+  allocution: 'I take responsibility for my actions, Your Honor.',
+  pleaReactions: {
+    ACCEPT: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }],
+    REJECT: [{ speaker: 'PROSECUTION', text: 'The People will proceed to trial.' }],
+  },
+  pleaRulingOptions: [
+    { choice: 'ACCEPT', lineText: 'The court accepts the negotiated plea.' },
+    { choice: 'REJECT', lineText: 'The court rejects the negotiated plea.' },
+  ],
+};
+
 describe('runPleaNarrative', () => {
   it('requests only prosecutionRationale for a WEAK band', async () => {
     mockCallsWith(JSON.stringify({ prosecutionRationale: 'The People decline to offer given the thin proof.' }));
@@ -618,6 +677,86 @@ describe('runPleaNarrative', () => {
     }, 'REJECT');
     expect(result.pleaRulingOptions).toHaveLength(2);
     expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
+  // R5: a jury reference in a plea rationale used to pass the stage schema and
+  // then fail the real PleaNarrativeSchema outside the retry loop — an
+  // unretried Mistrial with no stage name. It is now an ordinary repair.
+  it('repairs a jury reference in a plea rationale instead of failing the case', async () => {
+    mockCallsWith(
+      JSON.stringify({ prosecutionRationale: 'The People would rather let the jury decide.' }),
+      JSON.stringify({ prosecutionRationale: 'The People will proceed to trial before this court.' }),
+    );
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
+    expect(result.prosecutionRationale).toContain('before this court');
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
+
+  // Structured output can add a key or null-fill an optional one. Neither may
+  // cost a retry when every field the band asked for is valid.
+  it('accepts a WEAK response carrying keys it was never asked for', async () => {
+    mockCallsWith(
+      JSON.stringify({
+        prosecutionRationale: 'The People decline to offer given the thin proof.',
+        defenseRationale: null,
+        commentary: 'an extra key',
+      }),
+    );
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'WEAK', null, 'REJECT');
+    expect(result).toEqual({ prosecutionRationale: 'The People decline to offer given the thin proof.' });
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts an offer response carrying a key it was never asked for', async () => {
+    mockCallsWith(JSON.stringify({ ...completeOffer, commentary: 'an extra key' }));
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'ACCEPT');
+    expect(result).toEqual(completeOffer);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(1);
+  });
+
+  it('repairs a null in a field the offer owes rather than dropping it', async () => {
+    mockCallsWith(JSON.stringify({ ...completeOffer, allocution: null }), JSON.stringify(completeOffer));
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'ACCEPT');
+    expect(result.allocution).toBe(completeOffer.allocution);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+  });
+
+  it('repairs an offer that omits a field the offer path owes', async () => {
+    const complete = {
+      prosecutionRationale: 'The People offer a negotiated plea.',
+      defenseRationale: 'The defense recommends acceptance.',
+      allocution: 'I take responsibility for my actions, Your Honor.',
+      pleaReactions: {
+        ACCEPT: [{ speaker: 'DEFENSE', text: 'The defense thanks the court.' }],
+        REJECT: [{ speaker: 'PROSECUTION', text: 'The People will proceed to trial.' }],
+      },
+      pleaRulingOptions: [
+        { choice: 'ACCEPT', lineText: 'The court accepts the negotiated plea.' },
+        { choice: 'REJECT', lineText: 'The court rejects the negotiated plea.' },
+      ],
+    };
+    mockCallsWith(JSON.stringify({ ...complete, allocution: undefined }), JSON.stringify(complete));
+
+    const parsedCase = CaseSchema.parse(rawValidCase);
+    const result = await runPleaNarrative(API_KEY, MODEL, parsedCase, 'MODERATE', {
+      pleadsToChargeIds: parsedCase.charges.map((c) => c.id),
+      proposedSentence: [{ type: 'PRISON', unit: 'YEARS', amount: 8 }],
+    }, 'ACCEPT');
+    expect(result.allocution).toBe(complete.allocution);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('allocution is required');
   });
 });
 

@@ -3,7 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { useSecurityStore } from '../store/useSecurityStore';
 import { demoCaseSource, type CaseSource } from '../lib/caseSource';
 import { findDemoCaseById, type DemoCaseBundle } from '../lib/demoCases';
-import { createGameService } from '../lib/llm/gameService';
+import { createLazyGameService } from '../lib/llm/lazyGameService';
 
 // Which source backs a case, given what the stores hold. Exported separately
 // from the hook so the precedence rule can be tested directly — the hook
@@ -17,7 +17,7 @@ export function selectCaseSource(
   apiKey: string | null,
 ): CaseSource | null {
   if (bundle !== undefined) return demoCaseSource(bundle);
-  if (apiKey !== null) return createGameService(apiKey);
+  if (apiKey !== null) return createLazyGameService(apiKey);
   return null;
 }
 

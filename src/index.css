@@ -190,4 +190,20 @@
     animation: toggle-pop 550ms ease-in-out 2;
     animation-delay: 900ms;
   }
+
+  /* Act title card: settles in, holds, and fades before it unmounts.
+     Duration is set inline from ActTitleCard's CARD_MS — the same number
+     that unmounts it — so the fade and the unmount cannot drift apart.
+     Reduced-motion users get the card without the movement or the fade. */
+  @keyframes act-card {
+    0% { opacity: 0; transform: translateY(-0.5rem); }
+    10%, 85% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(0); }
+  }
+
+  .act-card {
+    animation-name: act-card;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
 }

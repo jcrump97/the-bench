@@ -37,9 +37,14 @@ describe('selectCaseSource', () => {
     expect(generated.pleaNarrative).toBe(bundle.pleaNarrative);
   });
 
-  it('builds a GameService source from a vaulted key', () => {
+  it('builds a GameService source from a vaulted key, loading the pipeline on first use', async () => {
+    vi.mocked(createGameService).mockClear();
     const source = selectCaseSource(undefined, VALID_KEY);
     expect(source).not.toBeNull();
+    // Choosing the source must not pull the pipeline in; using it does.
+    expect(vi.mocked(createGameService)).not.toHaveBeenCalled();
+
+    await expect(source!.generateCase()).rejects.toThrow('stub');
     expect(vi.mocked(createGameService)).toHaveBeenCalledWith(VALID_KEY);
   });
 

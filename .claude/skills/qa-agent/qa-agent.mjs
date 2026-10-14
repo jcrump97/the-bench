@@ -567,7 +567,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
     await page.locator('input[type="password"]').fill(API_KEY);
     await page.getByRole('button', { name: 'Submit Key' }).click();
     await page.waitForSelector('text=Key accepted.', { timeout: 10_000 });
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Generate a Case', exact: true }).click();
 
     const genResult = await waitForGenerationToSettle(page);
     if (genResult.status !== 'READY') {
