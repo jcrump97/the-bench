@@ -167,7 +167,9 @@ describe('buildFinalResult — ValidationLayer contract', () => {
       buildFinalResult(inputFor(vaughnCase, {
         motionRulings: admitAll(vaughnCase),
         chargeVerdicts: guiltyOn(vaughnCase).map((v, i) => (i === 0 ? { ...v, verdict: 'NOT_GUILTY' as const } : v)),
-        imposedSentence: PRISON_2,
+        // The only count of conviction is the misdemeanor, capped at six
+        // months in jail — a sentence the court could actually impose here.
+        imposedSentence: [{ type: 'JAIL', unit: 'MONTHS', amount: 6 }],
       })),
     ];
 

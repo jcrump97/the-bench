@@ -88,9 +88,14 @@ Knobs (all optional):
   comparable between runs; the API default of `1.0` makes the same beat flip
   between "no findings" and "HIGH severity" on a re-run for reasons that have
   nothing to do with the content.
-- `QA_MAX_OUTPUT_TOKENS` — default `2048`. Passed as
+- `QA_MAX_OUTPUT_TOKENS` — default `8192`. Passed as
   `generationConfig.maxOutputTokens`, so an unusually long findings array
-  can't truncate the response mid-JSON.
+  can't truncate the response mid-JSON. On a version-less alias no thinking
+  cap can be sent and thinking tokens count against this limit; 2048 was
+  exhausted mid-run.
+
+Every numeric override is validated at startup: a value that isn't a number
+(or is below its floor) stops the run before the browser opens.
 
 ## What it does
 

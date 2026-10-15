@@ -3,6 +3,7 @@ import { SentenceList } from '../common/SentenceList';
 import { enumLabel, formatJudgmentDate } from '../../lib/format';
 import { describeDisposition, dispositionOf } from '../../lib/resultSummary';
 import { describeConsequences } from '../../lib/consequences';
+import { severityOfImposedSentence } from '../../lib/sentenceSeverity';
 import type { CaseOutcome } from '../../lib/outcome';
 import type { CasePayload, FinalResult } from '../../schemas/gameSchemas';
 
@@ -24,6 +25,15 @@ export function JudgmentSummary({ result, caseData }: { result: FinalResult; cas
   // What the order does to the people in it — derived, never generated: the
   // aftermath above is where the narrative voice lives.
   const consequences = describeConsequences(caseData, result);
+  // The same reading the aftermath was written to, exposed for structural
+  // selection (the E2E driver asserts it per path) — not rendered: the band is
+  // the court's own business, and the aftermath already says it in prose.
+  const severity = severityOfImposedSentence(
+    caseData,
+    result.resolutionPath === 'PLEA' ? 'ACCEPT' : null,
+    result.resolutionPath === 'TRIAL' ? result.verdict : null,
+    result.imposedSentence,
+  );
   const admitted = result.resolutionPath === 'TRIAL'
     ? result.motionRulings.filter((r) => r.ruling === 'ADMITTED').length
     : 0;
@@ -32,6 +42,7 @@ export function JudgmentSummary({ result, caseData }: { result: FinalResult; cas
     <section
       data-judgment-summary
       data-disposition={disposition}
+      data-severity={severity?.band ?? 'NONE'}
       className="mt-6 rounded-lg border border-(--border-strong) bg-(--bg-panel) p-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
