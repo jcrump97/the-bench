@@ -151,7 +151,8 @@ export function createGameService(apiKey: string): CaseSource {
       // in-flight request and remaining retries end with the run instead of
       // spending quota on a case already headed for the Mistrial screen.
       const run = new AbortController();
-      const signal = cancel ? anySignal([cancel, run.signal]) : run.signal;
+      const combined = cancel ? anySignal([cancel, run.signal]) : { signal: run.signal, release: () => {} };
+      const { signal } = combined;
       try {
         return await writeCase(apiKey, createStepRunner(onProgress, signal), signal);
       } catch (err) {
@@ -160,6 +161,8 @@ export function createGameService(apiKey: string): CaseSource {
         // in a backoff wait — the caller hears one thing: it was cancelled.
         if (cancel?.aborted) throw new GenerationCancelledError();
         throw err;
+      } finally {
+        combined.release();
       }
     },
 

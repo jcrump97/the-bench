@@ -168,8 +168,9 @@ async function fetchTextWithRetry(url: string, init: RequestInit, cancel?: Abort
     nextDelayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt * jitter, MAX_BACKOFF_MS);
 
     const timer = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const combined = cancel ? anySignal([cancel, timer]) : { signal: timer, release: () => {} };
     try {
-      const response = await fetch(url, { ...init, signal: cancel ? anySignal([cancel, timer]) : timer });
+      const response = await fetch(url, { ...init, signal: combined.signal });
       if (response.ok) return await response.text();
       if (!isRetryableStatus(response.status) || attempt === MAX_ATTEMPTS - 1) {
         const body = await response.text().catch(() => '');
@@ -196,6 +197,8 @@ async function fetchTextWithRetry(url: string, init: RequestInit, cancel?: Abort
           null,
         );
       }
+    } finally {
+      combined.release();
     }
   }
   throw lastError instanceof Error ? lastError : new GeminiError('Gemini request failed', null);
