@@ -84,9 +84,36 @@ model judging a model, so each was confirmed by reading the beat itself):
       resolves to a version-less alias, so no thinking cap can be sent, and
       its thinking exhausted the 2048-token output cap. The call now sits
       inside the degrade loop and the cap is 8192.
+- [x] **QA tool: review follow-ups.** The key now travels as the
+      `x-goog-api-key` header, not `?key=`. A 4xx or a safety stop is fatal
+      rather than degraded, so a bad key fails the run instead of quietly
+      defaulting every beat. That 4xx was also being retried by the
+      transport's own catch, which is fixed. Retry-After is honored, and
+      numeric env overrides are validated.
 - [ ] **QA tool: contrast findings are mostly false positives.** Screenshots
       catch transcript rows mid fade-in and the judge reads them as
       low-contrast text. Wait for the row's animation to settle before capture.
+
+## Branch code review (2026-10-15)
+
+- [x] **`anySignal` fallback leaked listeners.** On browsers without
+      `AbortSignal.any`, each request left an abort listener on the player's
+      long-lived cancel signal. It now returns `{ signal, release }`, and the
+      transport and `generateCase` release in `finally`.
+- [x] **Cancel versus a failure racing it — no change.** If the player has
+      cancelled, `generateCase` reports a cancel even when a stage failed in
+      the same instant. The welcome screen ignores a cancelled run's late
+      outcome anyway, so the Mistrial screen would be wrong there.
+- [x] **Sibling abort noise — no change.** `Promise.all` has already settled
+      on the first rejection, so the aborted sibling's AbortError is dropped.
+- [x] **`withoutMaxItems` and `anyOf` — no change.** `toGeminiSchema` flattens
+      every union before the repair schema is post-processed, so no `anyOf` or
+      `oneOf` reaches it.
+- [x] **OCEAN `.int()` — verified.** The compiled snapshot emits
+      `"type": "integer"`, and no schema or snapshot changed on this branch.
+- [ ] **`generateAftermath` takes no cancel signal.** It is one call at the
+      end of a case, and the screen shows it until it lands. Thread a signal
+      through if the aftermath screen ever gains a way to leave it.
 
 ## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
 
