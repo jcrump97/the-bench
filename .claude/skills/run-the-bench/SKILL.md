@@ -41,8 +41,8 @@ look at them — a blank frame means the app didn't render. Other knobs:
 `BASE_URL` (default `http://localhost:5173/the-bench/`), `PLAYWRIGHT_PREFIX`
 (default `/tmp/bench-playwright`).
 
-What it drives: six runs across the five docket cases, plus one over the
-BYOK generating screen —
+What it drives: six story runs across the five docket cases, one over the
+BYOK generating screen, one over a failed chunk load, and a path matrix —
 1. **Webb** accepted plea at 1280px (the Bench Book from the docket, the
    Act 1 title card and its pointer transparency, reveal gating, transcript
    click-through, dossier + charge modals, allocution beat, demeanor notes,
@@ -67,6 +67,14 @@ BYOK generating screen —
 8. **Bench Book chunk unavailable** at 1280px: the lazy Bench Book chunk is
    blocked mid-case (a tab opened before a redeploy), and the failed load must
    render a modal that says so, with the courtroom still mounted behind it
+9. **The path matrix** at 1280px: 13 more playthroughs in one session, so
+   every case is played down every branch it has — accept and reject where an
+   offer is pending, each verdict class (convicted, acquitted, and Vaughn's
+   split both ways), every exhibit admitted or every exhibit excluded — and a
+   sentence lands in each severity band (the picker's floor reads LENIENT, its
+   ceiling SEVERE, the midpoint MEASURED). Each close asserts the minute
+   order's `data-disposition` and `data-severity`, and the bench record must
+   count every case as it closes
 
 Each ending is asserted by a phrase unique to that case's aftermath variant,
 which is what proves the outcome-conditioned branching end to end.

@@ -25,7 +25,7 @@ describe('Bench Book', () => {
     const cited = allTerms.flatMap((t) => (t.authority === undefined ? [] : [t.authority]));
     expect(cited.length).toBeGreaterThan(0);
     for (const authority of cited) {
-      expect(authority).toMatch(/^(Cal\. (Penal|Evid\.) Code §|Cal\. Const\.|[A-Z][a-z]+ v\. [A-Z][a-z]+ \(\d{4}\) \d+ U\.S\. \d+)/);
+      expect(authority).toMatch(/^(Cal\. (Penal|Evid\.) Code §|Cal\. Const\.|[A-Z][a-z]+ v\. [A-Z][a-z]+ \(\d{4}\) \d+ (U\.S\.|Cal\.\dth) \d+)/);
     }
   });
 

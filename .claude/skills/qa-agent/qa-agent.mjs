@@ -61,15 +61,38 @@ if (!API_KEY) {
 const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 30_000;
+
+// A mistyped override (QA_SHOT_EVERY=five) parses to NaN, and NaN fails every
+// comparison silently — a modulo that never matches, a timeout that never
+// fires. Refuse it at startup instead of discovering it twenty minutes in.
+function envNumber(name, fallback, { min = -Infinity } = {}) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min) {
+    throw new Error(`${name} must be a number${min > -Infinity ? ` >= ${min}` : ''}; got "${raw}"`);
+  }
+  return value;
+}
+
+// A failure no retry can fix — a 4xx (bad key, rejected schema, retired
+// model) or a safety stop. The judgment loop rethrows these instead of
+// degrading: a run that "completes" with every beat defaulted, because the
+// key was wrong, is a worse report than one that stops and says so.
+class FatalGeminiError extends Error {}
 
 // A grader's severity ratings need to be comparable between runs — the API's
 // default temperature of 1.0 makes the same beat flip between "no findings"
 // and "HIGH severity" on a re-run for no reason tied to the content itself.
-const QA_TEMPERATURE = Number(process.env.QA_TEMPERATURE ?? 0.2);
+const QA_TEMPERATURE = envNumber('QA_TEMPERATURE', 0.2, { min: 0 });
 // An unbounded findings array can run long enough to truncate the JSON
 // mid-object, which fails validation for a reason that has nothing to do
-// with the judgment itself. Bound it generously instead.
-const QA_MAX_OUTPUT_TOKENS = Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 2048);
+// with the judgment itself. Bound it generously instead — and generously means
+// room for thinking too: on a version-less alias like gemini-flash-latest no
+// thinking config can be sent (see below), and thinking tokens count against
+// this cap. 2048 was exhausted mid-run on 2026-10-14.
+const QA_MAX_OUTPUT_TOKENS = envNumber('QA_MAX_OUTPUT_TOKENS', 8192, { min: 1 });
 
 // Gemini's "thinking" knob is split by model family: 2.5-series models take a
 // numeric thinkingBudget, Gemini 3 models take a thinkingLevel enum, and
@@ -91,29 +114,41 @@ function isRetryableStatus(status) {
 async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
+// Retried on 429/5xx and network failure only. The status checks sit outside
+// the try so a non-retryable 4xx is thrown straight out rather than caught and
+// retried as if it were a dropped connection. A 429's Retry-After is honored.
 async function fetchWithRetry(url, init) {
   let lastError;
+  let delayMs = 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await sleep(BASE_BACKOFF_MS * 2 ** (attempt - 1));
+    if (delayMs > 0) await sleep(delayMs);
+    delayMs = Math.min(BASE_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS);
+    let response;
     try {
-      const response = await fetch(url, init);
-      if (response.ok) return response;
-      if (!isRetryableStatus(response.status) || attempt === MAX_ATTEMPTS - 1) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`Gemini request failed with status ${response.status}: ${body}`);
-      }
-      lastError = new Error(`Gemini request failed with status ${response.status}`);
+      response = await fetch(url, init);
     } catch (err) {
       lastError = err;
-      if (attempt === MAX_ATTEMPTS - 1) throw lastError;
+      continue;
     }
+    if (response.ok) return response;
+    const body = await response.text().catch(() => '');
+    lastError = new Error(`Gemini request failed with status ${response.status}: ${body}`);
+    if (!isRetryableStatus(response.status)) throw new FatalGeminiError(lastError.message);
+    const retryAfter = Number(response.headers.get('retry-after'));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) delayMs = Math.min(retryAfter * 1000, MAX_BACKOFF_MS);
   }
   throw lastError;
 }
 
+// The key travels as a header, never in the URL — the same rule the app's own
+// client follows, so it cannot land in a proxy log or an error message.
+function authHeaders(apiKey, extra = {}) {
+  return { 'x-goog-api-key': apiKey, ...extra };
+}
+
 async function listModels(apiKey) {
-  const url = `${API_ROOT}/models?key=${encodeURIComponent(apiKey)}`;
-  const response = await fetchWithRetry(url, { method: 'GET' });
+  const url = `${API_ROOT}/models`;
+  const response = await fetchWithRetry(url, { method: 'GET', headers: authHeaders(apiKey) });
   const data = await response.json();
   return data.models ?? [];
 }
@@ -161,10 +196,10 @@ async function selectQaModel(apiKey) {
 }
 
 async function callGeminiJson(apiKey, model, { systemInstruction, parts, responseSchema }) {
-  const url = `${API_ROOT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `${API_ROOT}/models/${model}:generateContent`;
   const response = await fetchWithRetry(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts }],
@@ -185,7 +220,7 @@ async function callGeminiJson(apiKey, model, { systemInstruction, parts, respons
   // candidate text", burns a retry, and degrades — never naming the real cause.
   const blockReason = data.promptFeedback?.blockReason;
   if (blockReason !== undefined) {
-    throw new Error(`Gemini blocked the prompt (${blockReason})`);
+    throw new FatalGeminiError(`Gemini blocked the prompt (${blockReason})`);
   }
 
   const candidate = data.candidates?.[0];
@@ -200,7 +235,7 @@ async function callGeminiJson(apiKey, model, { systemInstruction, parts, respons
     );
   }
   if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'PROHIBITED_CONTENT') {
-    throw new Error(`Gemini stopped generating for ${candidate.finishReason}`);
+    throw new FatalGeminiError(`Gemini stopped generating for ${candidate.finishReason}`);
   }
   if (text === undefined) {
     const detail = candidate?.finishReason === undefined ? '' : ` (finishReason: ${candidate.finishReason})`;
@@ -276,7 +311,7 @@ Report findings in these categories:
 Report a finding when you can quote the specific offending text in "quote", or — for a purely visual issue — name the specific element in "note" and leave "quote" an empty string. Keep "note" to one or two sentences on why it is a problem. Ordinary courtroom formality and stylistic flourish are correct for this game and belong in no finding. An empty findings array is the expected, correct answer for a beat that reads well.`;
 
 // How much of the already-read record to carry into each judgment call.
-const MEMORY_CHARS = Number(process.env.QA_MEMORY_CHARS ?? 12_000);
+const MEMORY_CHARS = envNumber('QA_MEMORY_CHARS', 12_000, { min: 1 });
 
 // The tester used to see only the delta since its last look, with no memory of
 // any earlier beat — while PERSONA asked it to flag "facts that don't match
@@ -344,37 +379,45 @@ async function judgeContent(model, { memory, promptText, screenshot, mode }) {
     // error message alone ("expected number, received string") gives the
     // model nothing to anchor the fix to; the raw text lets it see exactly
     // which field it got wrong.
-    const text = attempt === 0
-      ? composed
-      : `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw}\n\nReturn corrected JSON only.`;
+    // Only a response that arrived and failed to parse is a validation
+    // failure worth showing back; a truncated or empty one is just re-asked.
+    const text = attempt === 0 ? composed
+      : lastRaw !== null
+        ? `${composed}\n\nYour previous response failed validation: ${lastError}\n\nYour previous response was:\n${lastRaw}\n\nReturn corrected JSON only.`
+        : `${composed}\n\nYour previous response was unusable (${lastError}). Keep findings brief and return the JSON only.`;
+    lastRaw = null;
     const parts = imagePart ? [{ text }, imagePart] : [{ text }];
-    const raw = await callGeminiJson(API_KEY, model, {
-      systemInstruction: PERSONA,
-      parts,
-      responseSchema: schema,
-    });
-    lastRaw = raw;
+    // The call sits inside the try: a truncated (MAX_TOKENS) or empty response
+    // is one failed judgment, not a reason to abandon the whole playthrough.
+    // A fatal failure (4xx, safety stop) is not — it is rethrown.
     try {
+      const raw = await callGeminiJson(API_KEY, model, {
+        systemInstruction: PERSONA,
+        parts,
+        responseSchema: schema,
+      });
+      lastRaw = raw;
       return zodSchema.parse(JSON.parse(raw));
     } catch (err) {
+      if (err instanceof FatalGeminiError) throw err;
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
 
   // A live run's whole point is surviving a 10-20 minute playthrough — one
-  // beat's judgment call failing validation twice shouldn't discard the rest
+  // beat's judgment call failing twice shouldn't discard the rest
   // of it. Degrade to a neutral, mode-appropriate result and let the run
   // continue; the downstream fallback logic (out-of-range chosenIndex ->
   // first option, missing amounts -> each line's floor) already exists to
   // absorb exactly this shape of result, so this leans on it rather than
   // duplicating it. Mark the returned result as degraded so the report does
   // not present a defaulted beat as a clean one.
-  console.warn(`QA judgment call failed validation twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
+  console.warn(`QA judgment call failed twice in a row (mode=${mode}): ${lastError}. Defaulting to a neutral result so the run continues.`);
   if (mode === 'decide') {
-    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed validation twice; defaulted to the first option.', degraded: true };
+    return { findings: [], chosenIndex: 0, reasoning: 'QA judgment call failed twice; defaulted to the first option.', degraded: true };
   }
   if (mode === 'sentencing') {
-    return { findings: [], amounts: [], reasoning: 'QA judgment call failed validation twice; defaulted to the statutory floor.', degraded: true };
+    return { findings: [], amounts: [], reasoning: 'QA judgment call failed twice; defaulted to the statutory floor.', degraded: true };
   }
   return { findings: [], degraded: true };
 }
@@ -404,9 +447,9 @@ function buildReport({ startedAt, model, caseTitle, findings, actionLog, transcr
 
   const actionText = actionLog
     .map((a) => {
-      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}")${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''}.`;
-      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''}${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
-      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}]${a.degraded ? ' (degraded — judgment call failed validation twice)' : ''} — ${a.reasoning}`;
+      if (a.type === 'ADVANCE') return `Beat ${a.beat}: advanced ("${a.clicked}")${a.degraded ? ' (degraded — judgment call failed twice)' : ''}.`;
+      if (a.type === 'DECISION') return `Beat ${a.beat}: chose "${a.chosen}"${a.fallback ? ' (fallback — judgment call was invalid)' : ''}${a.degraded ? ' (degraded — judgment call failed twice)' : ''} — ${a.reasoning}`;
+      if (a.type === 'SENTENCING') return `Beat ${a.beat}: imposed [${a.amounts.map((v) => v ?? 'default').join(', ')}]${a.degraded ? ' (degraded — judgment call failed twice)' : ''} — ${a.reasoning}`;
       return `Beat ${a.beat}: ${a.type}`;
     })
     .join('\n');
@@ -438,8 +481,8 @@ ${transcript}
 const BASE = process.env.BASE_URL ?? 'http://localhost:5173/the-bench/';
 const REPORT_DIR = process.env.QA_REPORT_DIR ?? '/tmp/bench-qa-report';
 const SHOTS_DIR = process.env.QA_SHOTS_DIR ?? path.join(REPORT_DIR, 'screenshots');
-const MAX_ITERATIONS = Number(process.env.QA_MAX_ITERATIONS ?? 150);
-const STUCK_TIMEOUT_MS = Number(process.env.QA_STUCK_TIMEOUT_MS ?? 60_000);
+const MAX_ITERATIONS = envNumber('QA_MAX_ITERATIONS', 150, { min: 1 });
+const STUCK_TIMEOUT_MS = envNumber('QA_STUCK_TIMEOUT_MS', 60_000, { min: 1 });
 // Screenshots dominate per-beat token cost, and most plain statement-advance
 // beats look pixel-identical to the one before — nothing in the layout
 // changed, so there's nothing new for the model to see. Decision/sentencing
@@ -447,7 +490,7 @@ const STUCK_TIMEOUT_MS = Number(process.env.QA_STUCK_TIMEOUT_MS ?? 60_000);
 // this cadence; this only throttles the plain-advance beats in between. Every
 // beat still gets a screenshot written to disk — this only limits what the
 // *model* sees.
-const QA_SHOT_EVERY = Number(process.env.QA_SHOT_EVERY ?? 5);
+const QA_SHOT_EVERY = envNumber('QA_SHOT_EVERY', 5, { min: 1 });
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
 
 async function gotoWithRetry(page, url, attempts = 20) {
@@ -473,7 +516,7 @@ async function gotoWithRetry(page, url, attempts = 20) {
 // page is more reliable than timing-dependent console-event capture — and is
 // exactly the stage-level diagnostic that tells you which of the seven
 // response schemas actually failed.
-async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000)) {
+async function waitForGenerationToSettle(page, timeoutMs = envNumber('QA_GENERATION_TIMEOUT_MS', 480_000, { min: 1 })) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if ((await page.locator('[data-action-bar] button').count()) > 0) return { status: 'READY', technicalDetails: '' };
@@ -504,9 +547,13 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
     // fetch does — it needs the proxy passed as an explicit launch option,
     // or in-page requests (BYOK's Gemini calls) bypass the proxy entirely
     // and fail outright on a network that requires it.
-    // bypass keeps the local dev server off the proxy — a plain-HTTP
-    // request to localhost sent through an HTTPS-only relay 502s outright.
-    ...(proxyServer ? { proxy: { server: proxyServer, bypass: 'localhost,127.0.0.1' } } : {}),
+    // bypass keeps the local server off the proxy — a plain-HTTP request to
+    // localhost sent through an HTTPS-only relay is refused outright. Measured
+    // against Chromium 1194: 'localhost,127.0.0.1' alone no longer bypasses
+    // (loopback is proxied anyway, and the relay's refusal page loads in place
+    // of the app), nor does '<-loopback>' alone; only the combination below
+    // reaches the local server on either loopback name.
+    ...(proxyServer ? { proxy: { server: proxyServer, bypass: '<-loopback>,localhost,127.0.0.1' } } : {}),
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   // Chromium's TLS 1.3 ClientHello now always includes a hybrid
@@ -516,14 +563,21 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
   // call, even though Node's own fetch negotiates the same proxy fine.
   // Intercept just the Gemini calls at the Playwright layer and issue them
   // with Node's fetch instead of letting Chromium's network stack touch the
-  // wire; the app's own requests are plain POST/GET JSON with no headers
-  // beyond Content-Type, so forwarding is a faithful passthrough.
+  // wire. The forward must carry the app's two headers: Content-Type, and
+  // x-goog-api-key — the key has travelled in that header, not the URL,
+  // since A8. Forwarding Content-Type alone sent every call keyless, which
+  // Google answers with 403 "unregistered callers"; model selection hid it by
+  // falling back to its default model, and the run died at StatuteSelection.
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const req = route.request();
+    const sent = req.headers();
+    const headers = {};
+    if (sent['x-goog-api-key']) headers['x-goog-api-key'] = sent['x-goog-api-key'];
+    if (req.method() === 'POST') headers['Content-Type'] = 'application/json';
     try {
       const resp = await fetch(req.url(), {
         method: req.method(),
-        headers: req.method() === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+        headers,
         body: req.method() === 'POST' ? (req.postData() ?? undefined) : undefined,
       });
       const body = Buffer.from(await resp.arrayBuffer());
@@ -619,7 +673,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
           if (result.degraded) {
-            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the final review was defaulted, not judged.' }], beat);
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed twice; the final review was defaulted, not judged.' }], beat);
           }
           outcome = 'PASS: case completed';
           break;
@@ -691,7 +745,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           let fallback = false;
           if (!Number.isInteger(idx) || idx < 0 || idx >= choiceCount) { idx = 0; fallback = true; }
           if (result.degraded) {
-            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the beat was defaulted, not judged.' }], beat);
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed twice; the beat was defaulted, not judged.' }], beat);
           }
           actionLog.push({ beat, type: 'DECISION', chosen: options[idx].text, reasoning: result.reasoning, fallback, degraded: result.degraded === true });
           await choiceButtons.nth(idx).click();
@@ -714,7 +768,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
           if (result.degraded) {
-            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; the sentence was defaulted, not judged.' }], beat);
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed twice; the sentence was defaulted, not judged.' }], beat);
           }
           const amounts = ranges.map((r, i) => {
             const amt = result.amounts[i];
@@ -756,7 +810,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           // call finally resolves. Wait for it to actually go before moving
           // on to the next beat.
           await submitButton
-            .waitFor({ state: 'detached', timeout: Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000) })
+            .waitFor({ state: 'detached', timeout: envNumber('QA_GENERATION_TIMEOUT_MS', 480_000, { min: 1 }) })
             .catch(() => {});
         } else {
           const texts = [];
@@ -779,7 +833,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           recordFindings(result.findings, beat);
           hasJudgedFirstBeat = true;
           if (result.degraded) {
-            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed validation twice; this review was defaulted, not judged.' }], beat);
+            recordFindings([{ severity: 'LOW', category: 'VERBIAGE', quote: '', note: 'QA judgment call failed twice; this review was defaulted, not judged.' }], beat);
           }
           actionLog.push({ beat, type: 'ADVANCE', clicked: texts[clickIdx], degraded: result.degraded === true });
           const clicked = plainButtons.nth(clickIdx);
@@ -793,7 +847,7 @@ async function waitForGenerationToSettle(page, timeoutMs = Number(process.env.QA
           // actionable state and clicks it again. Wait for it to actually go.
           if (isSubmit) {
             await clicked
-              .waitFor({ state: 'detached', timeout: Number(process.env.QA_GENERATION_TIMEOUT_MS ?? 480_000) })
+              .waitFor({ state: 'detached', timeout: envNumber('QA_GENERATION_TIMEOUT_MS', 480_000, { min: 1 }) })
               .catch(() => {});
           }
         }

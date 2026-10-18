@@ -1,5 +1,120 @@
 # TODO
 
+## Pre-launch reviews (2026-10-14 — OPEN)
+
+Five independent readings of the README (an AI engineer, an AI architect, a
+California criminal-law attorney, a high-school student, a non-technical
+visitor) and an audit of the test suite, run before the 1.0 announcement. What
+could be fixed in wording or tests was fixed on the same branch: the stage
+counts, the README's legal claims, the Bench Book's allocution authority and
+wobbler entry, the three-term sentencing and trial-allocution
+simplifications, a Content-Security-Policy, and an E2E path matrix that plays
+every demo case down every branch. What is left is below — design calls for
+the author, logged rather than changed before launch.
+
+**From the attorney (game design, not wording):**
+- [ ] **AT1 — a WEAK case gets no offer.** In practice a weak case usually
+      draws a *better* offer, or is dismissed; the game's band→offer mapping
+      runs the other way. `buildPleaPosture` and `SENTENCE_DISCOUNT` own it.
+- [ ] **AT2 — the error screen is called "Mistrial".** A mistrial is a
+      specific legal event (a trial terminated without a verdict); a schema
+      failure is not one. Rename the screen, or keep it as deliberate flavour
+      and say so in the Bench Book.
+- [ ] **AT3 — "suppression" for a statement challenge.** A motion to suppress
+      (§ 1538.5) is about searches and seizures; a Miranda or voluntariness
+      challenge is a motion to exclude, heard under Evid. Code § 402. UI copy,
+      beat headings and the E2E assertions use "suppression".
+- [ ] **AT4 — the minute order reads the sentence back as consequence.** A real
+      minute order never carries release year, age or family impact. Now
+      disclosed in the Bench Book; the open question is whether that reading
+      belongs on a separate surface rather than on the order itself.
+- [ ] **AT5 — three-term felony sentencing.** Felony terms are chosen anywhere
+      in the range rather than from the § 1170(b) triad (upper term only on
+      aggravating facts). Disclosed as a simplification; modeling it needs
+      per-count triads in `ChargeSchema`.
+- [ ] **AT6 — no allocution after a trial.** Only the plea path allocutes.
+      Disclosed; modeling it needs a trial-path allocution in the narrative.
+
+**From the test-suite audit:**
+- [ ] **TS1 — `FinalResultSchema` never checks the sentence against the counts
+      of conviction.** A fixture imposing prison on a jail-only conviction
+      passed validation (fixed in the fixture, not in the schema).
+- [ ] **TS2 — a fine's floor is $1.** With no mandatory minimum the picker's
+      floor is one unit, so the lightest fine is $1 (seen in the path matrix's
+      bench record). Related to S2.
+- [ ] **TS3 — no component tests.** UI behavior rests on the E2E driver
+      alone; `SentencingControl`'s seeding and the picker floor have no unit
+      coverage.
+- [ ] **TS4 — no hermetic integration test of the real stages.**
+      `gameService.test.ts` mocks every stage; nothing runs the real stage
+      functions together over canned Gemini responses.
+- [ ] **TS5 — fixed sleeps and swallowed waits in the driver**
+      (`advanceTo`'s 150 ms poll; `.waitFor().catch(() => {})` before a
+      check). They fail late rather than falsely pass, but slow a failing run.
+- [ ] **TS6 — the live suite can run files in parallel.** `vitest.live.config.ts`
+      sets no `fileParallelism: false`, so a full `test:live` stacks the
+      schema probe and the sweep into the same minute. Run the diagnostic file
+      alone under a free-tier key.
+
+**From the AI architect:**
+- [ ] **AR1 — no observability in the shipped app.** Call counts, retries and
+      timing exist only in the live diagnostic; a player sees none of it (A5).
+
+**From three paced `qa-agent` playthroughs** (generated cases, 2026-10-14; a
+model judging a model, so each was confirmed by reading the beat itself):
+- [ ] **QA1 — testimony is ruling-blind (HIGH).** In a generated *People v.
+      Pendleton* the court suppressed the recorded interview as involuntary,
+      and the detective then told the court on direct that the defendant
+      "acknowledged initiating the wire transfers" in that interview. Witness
+      testimony is written before any ruling exists, and unlike closings
+      (`exhibitPoints` `ifAdmitted`/`ifExcluded`) it has no ruling-keyed
+      variant. Fix in the same pattern: per-exhibit testimony fragments the
+      script picks off the ruling, or a rule that testimony never relays an
+      exhibit's content. Needs a `test:live` re-measure either way.
+- [ ] **QA2 — VerdictVoice says "the State".** California prosecutes as "the
+      People"; reaction lines also spoke at verdict time as if evidence were
+      still to come. Prompt change in `VERDICT_VOICE_SYSTEM`; re-measure.
+- [ ] **QA3 — scene drift survived `establishedFacts`.** A boot print was
+      "inside" the cage in one stage and "next to" it in another.
+- [ ] **QA4 — smaller verbiage.** "findings of guilt" (plural) read after a
+      split verdict; "on the early morning hours"; the People asked for bank
+      records to be "marked and entered" after the court had already admitted
+      them (the post-ruling reaction line is written as if before the ruling).
+- [x] **QA tool: a truncated judgment aborted the whole run.** The judge model
+      resolves to a version-less alias, so no thinking cap can be sent, and
+      its thinking exhausted the 2048-token output cap. The call now sits
+      inside the degrade loop and the cap is 8192.
+- [x] **QA tool: review follow-ups.** The key now travels as the
+      `x-goog-api-key` header, not `?key=`. A 4xx or a safety stop is fatal
+      rather than degraded, so a bad key fails the run instead of quietly
+      defaulting every beat. That 4xx was also being retried by the
+      transport's own catch, which is fixed. Retry-After is honored, and
+      numeric env overrides are validated.
+- [ ] **QA tool: contrast findings are mostly false positives.** Screenshots
+      catch transcript rows mid fade-in and the judge reads them as
+      low-contrast text. Wait for the row's animation to settle before capture.
+
+## Branch code review (2026-10-15)
+
+- [x] **`anySignal` fallback leaked listeners.** On browsers without
+      `AbortSignal.any`, each request left an abort listener on the player's
+      long-lived cancel signal. It now returns `{ signal, release }`, and the
+      transport and `generateCase` release in `finally`.
+- [x] **Cancel versus a failure racing it — no change.** If the player has
+      cancelled, `generateCase` reports a cancel even when a stage failed in
+      the same instant. The welcome screen ignores a cancelled run's late
+      outcome anyway, so the Mistrial screen would be wrong there.
+- [x] **Sibling abort noise — no change.** `Promise.all` has already settled
+      on the first rejection, so the aborted sibling's AbortError is dropped.
+- [x] **`withoutMaxItems` and `anyOf` — no change.** `toGeminiSchema` flattens
+      every union before the repair schema is post-processed, so no `anyOf` or
+      `oneOf` reaches it.
+- [x] **OCEAN `.int()` — verified.** The compiled snapshot emits
+      `"type": "integer"`, and no schema or snapshot changed on this branch.
+- [ ] **`generateAftermath` takes no cancel signal.** It is one call at the
+      end of a case, and the screen shows it until it lands. Thread a signal
+      through if the aftermath screen ever gains a way to leave it.
+
 ## Repair round rejected by the API (live sweep, 2026-10-14 — DONE)
 
 The first `test:live` sweep after the follow-ups below produced a valid case in 4 of 5 runs. All 7 live tests passed. The concurrent stages and the timeout behaved, with no 429s, timeouts or failed stage attempts. The one failed run reached `FinalizeCasePayload.repair` and got a 400 `INVALID_ARGUMENT` on its first call. This was not flakiness: it reproduces on every request. The repair schema was over Gemini's complexity limit, and it had been since before this branch. No earlier sweep had needed a repair, so it was never sent.
@@ -188,11 +303,14 @@ below rather than discovered in review:
 UI commit the E2E driver (now seven runs, 83 checks). **Next step for whoever
 picks this up:** run `npm run test:live`'s diagnostic sweep once with a real
 key, to measure the concurrent pipeline (P7) and the per-attempt timeout (P4)
-against the live API before calling them proven.
+against the live API before calling them proven. *(Done 2026-10-14, while
+merging A2: `test:live` passed 18/18 and the five-run sweep finished 5/5 with
+zero failed attempts, concurrency and timeout included.)*
 
 ### Deliberately not in this plan
 
-- **A2** — needs a live sweep either side (see review point 2).
+- **A2** — needs a live sweep either side (see review point 2). *(Shipped
+  separately in #22, swept live either side.)*
 - **S1 / S2 / A7a** — design decisions for the author. Recommendations:
   S1, a per-count `custodyElection` field defaulting to PRISON plus a picker
   toggle; S2, exposure kept in day-equivalents with the picker presenting the
@@ -353,7 +471,9 @@ instance and is now closed; the rest cluster in that same gap.
       `requireChoiceCoverage` is gone, and the hand-written schemas the two
       comments were attached to no longer exist.)* Distinct from the
       `LedgerEntryRow` `<li>`-wrapper duplication already tracked below.
-- [ ] **A5 — latency, cost, and cancellation.** `generateCase` makes seven
+- [ ] **A5 — latency, cost, and cancellation.** *(Mostly done: concurrency
+      in P7, the timeout in P4, Cancel in P6/P8. Still open: nothing surfaces
+      a per-run call count or cost to the player.)* `generateCase` makes seven
       strictly sequential LLM round trips where the dependency graph allows five
       (`finalizeCasePayload` adds an eighth only when its deterministic repair
       is not enough):

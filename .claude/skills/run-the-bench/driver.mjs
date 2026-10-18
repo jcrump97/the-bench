@@ -7,7 +7,7 @@
 // driver's workhorse is advanceTo(), which clicks through statement beats
 // until a target control appears.
 //
-// Drives all five docket cases end-to-end across six runs:
+// Drives all five docket cases end-to-end across nine runs:
 //   1. Webb, accepted plea, desktop  — modals, reveal gating, click-through, plea ending
 //   2. Webb, forced trial, mobile    — per-exhibit motions, tape playback, convicted ending
 //   3. Boone (WEAK/no offer)         — trial-only path, adjournment on acquittal
@@ -16,6 +16,10 @@
 //   6. Navarro (guided tutorial)     — decision explainers, plea-accepted ending
 //   7. BYOK generating screen        — progress panel, header-only key, Cancel
 //      (Gemini is routed inside the browser: no request leaves, no quota spent)
+//   8. Bench Book chunk unavailable  — a failed lazy load cannot unmount the courtroom
+//   9. The path matrix               — every case down every branch (13 playthroughs):
+//      each plea decision, each verdict class, all exhibits admitted or excluded,
+//      every severity band; one session, so the bench record accumulates
 // Assertions pin demo-case data (names, ranges, beat headings, speaker order,
 // aftermath variant phrases) — if a case in src/lib/demoCases/ or the beat
 // UI changes intentionally, update them here.
@@ -605,6 +609,126 @@ const browser = await chromium.launch(
     (await page.getByRole('dialog').count()) === 0
       && (await page.getByRole('button', { name: 'Open the Bench Book' }).count()) === 1);
   check('Bench Book unavailable: no uncaught error', pageErrors.length === 0, pageErrors.join(' | '));
+  await page.close();
+}
+
+// ---------- Run 9: the path matrix ----------
+// Runs 1–6 walk one story per case. This one plays every case down every
+// branch it has — each plea decision, each verdict outcome class, all
+// exhibits admitted or all excluded — and lands a sentence in each severity
+// band, asserting the minute order's disposition and band each time.
+//
+// One page, one localStorage, cases back to back from the docket: the bench
+// record must count every case as it closes, which no single-case run can see.
+// Sentences are set by position in the picker's own range — floor reads
+// LENIENT, ceiling SEVERE, the midpoint MEASURED — so the expectations follow
+// the cases' statutory ranges rather than restating them.
+const PATHS = [
+  // Navarro (tutorial, offer pending)
+  { case: 'Eli Navarro', plea: 'ACCEPT', sentence: 'CEILING', expect: ['PLEA_ACCEPTED', 'SEVERE'] },
+  { case: 'Eli Navarro', plea: 'REJECT', motions: 'ADMITTED', verdicts: ['GUILTY'], sentence: 'MID', expect: ['CONVICTED', 'MEASURED'], explainers: true },
+  { case: 'Eli Navarro', plea: 'REJECT', motions: 'EXCLUDED', verdicts: ['NOT_GUILTY'], expect: ['ACQUITTED', 'NONE'] },
+  // Webb (offer pending, recorded interview)
+  { case: 'Marcus Webb', plea: 'ACCEPT', sentence: 'FLOOR', expect: ['PLEA_ACCEPTED', 'LENIENT'] },
+  { case: 'Marcus Webb', plea: 'REJECT', motions: 'ADMITTED', verdicts: ['GUILTY'], sentence: 'FLOOR', expect: ['CONVICTED', 'LENIENT'] },
+  { case: 'Marcus Webb', plea: 'REJECT', motions: 'EXCLUDED', verdicts: ['NOT_GUILTY'], expect: ['ACQUITTED', 'NONE'] },
+  // Boone (WEAK: no offer, trial only)
+  { case: 'Curtis Boone', plea: 'ORDER_TRIAL', motions: 'ADMITTED', verdicts: ['GUILTY'], sentence: 'CEILING', expect: ['CONVICTED', 'SEVERE'] },
+  // Reyes (STRONG: offer rejected by the defense, trial only)
+  { case: 'Dominic Reyes', plea: 'ORDER_TRIAL', motions: 'ADMITTED', verdicts: ['GUILTY'], sentence: 'MID', expect: ['CONVICTED', 'MEASURED'] },
+  { case: 'Dominic Reyes', plea: 'ORDER_TRIAL', motions: 'EXCLUDED', verdicts: ['NOT_GUILTY'], expect: ['ACQUITTED', 'NONE'] },
+  // Vaughn (two counts, offer pending)
+  { case: 'Teresa Vaughn', plea: 'ACCEPT', sentence: 'MID', expect: ['PLEA_ACCEPTED', 'MEASURED'] },
+  { case: 'Teresa Vaughn', plea: 'REJECT', motions: 'ADMITTED', verdicts: ['GUILTY', 'GUILTY'], sentence: 'FLOOR', expect: ['CONVICTED', 'LENIENT'] },
+  { case: 'Teresa Vaughn', plea: 'REJECT', motions: 'ADMITTED', verdicts: ['NOT_GUILTY', 'GUILTY'], sentence: 'CEILING', expect: ['SPLIT', 'SEVERE'] },
+  { case: 'Teresa Vaughn', plea: 'REJECT', motions: 'EXCLUDED', verdicts: ['NOT_GUILTY', 'NOT_GUILTY'], expect: ['ACQUITTED', 'NONE'] },
+];
+
+// Sets every term in the sentencing form to the same position in its range.
+// The input's own min/max are the picker's floor and ceiling.
+async function setSentence(page, position) {
+  const inputs = page.locator('input[id^="sentence-"]');
+  for (let i = 0; i < (await inputs.count()); i++) {
+    const input = inputs.nth(i);
+    const floor = Number(await input.getAttribute('min'));
+    const ceiling = Number(await input.getAttribute('max'));
+    const value = position === 'FLOOR' ? floor : position === 'CEILING' ? ceiling : Math.round((floor + ceiling) / 2);
+    await input.fill(String(value));
+    await input.blur();
+  }
+}
+
+{
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  await gotoWithRetry(page, BASE);
+  for (const [index, spec] of PATHS.entries()) {
+    const label = `Path ${index + 1} (${spec.case}: ${[spec.plea, spec.motions, ...(spec.verdicts ?? []), spec.sentence].filter(Boolean).join(' → ')})`;
+    await page.getByRole('button', { name: new RegExp(`People v\\. ${spec.case}`) }).click();
+
+    if (spec.plea === 'ORDER_TRIAL') {
+      const order = page.getByRole('button', { name: 'Order Trial' });
+      if (await advanceTo(page, order, `${label} trial order`)) await order.click();
+    } else {
+      const decision = choiceButton(page, spec.plea);
+      if (await advanceTo(page, decision, `${label} plea ruling`)) await decision.click();
+    }
+
+    if (spec.motions) {
+      // Rule on each exhibit as it is offered until the first verdict is asked for.
+      const next = page.locator('button[data-choice="ADMITTED"], button[data-choice="GUILTY"]');
+      let ruled = 0;
+      while (await advanceTo(page, next, `${label} exhibit ${ruled + 1}`)) {
+        if ((await choiceButton(page, 'GUILTY').count()) > 0) break;
+        if (spec.explainers && ruled === 0) {
+          check(`${label}: the tutorial explains the exhibit ruling`,
+            (await page.locator('[data-tutorial-explainer]').count()) === 1);
+        }
+        await choiceButton(page, spec.motions).click();
+        ruled++;
+      }
+      check(`${label}: every exhibit ${spec.motions.toLowerCase()} one at a time`, ruled > 0, `ruled=${ruled}`);
+    }
+
+    for (const [count, verdict] of (spec.verdicts ?? []).entries()) {
+      const btn = choiceButton(page, verdict);
+      if (await advanceTo(page, btn, `${label} count ${count + 1}`)) {
+        if (spec.explainers && count === 0) {
+          check(`${label}: the tutorial explains the verdict`,
+            (await page.locator('[data-tutorial-explainer]').count()) === 1);
+        }
+        await btn.click();
+      }
+    }
+
+    if (spec.sentence) {
+      const impose = page.getByRole('button', { name: 'Impose Sentence' });
+      if (await advanceTo(page, impose, `${label} sentencing`)) {
+        await setSentence(page, spec.sentence);
+        await impose.click();
+      }
+    } else {
+      const adjourn = page.getByRole('button', { name: 'Adjourn' });
+      if (await advanceTo(page, adjourn, `${label} adjournment`)) await adjourn.click();
+    }
+    await advanceTo(page, page.getByRole('button', { name: 'New Case' }), `${label} case closed`);
+
+    const [disposition, severity] = spec.expect;
+    const card = minuteOrder(page);
+    check(`${label}: minute order filed as ${disposition}, sentence read as ${severity}`,
+      (await card.getAttribute('data-disposition')) === disposition
+        && (await card.getAttribute('data-severity')) === severity,
+      `got ${await card.getAttribute('data-disposition')} / ${await card.getAttribute('data-severity')}`);
+    check(`${label}: an aftermath was written into the record`,
+      (await page.locator('li[data-entry-kind="AFTERMATH"]').count()) === 1);
+
+    await page.getByRole('button', { name: 'New Case' }).click();
+    const recorded = page.locator('[data-bench-record-count]');
+    await recorded.waitFor({ timeout: 5000 });
+    const expected = `${index + 1} case${index === 0 ? '' : 's'} decided`;
+    check(`${label}: the bench record now counts ${expected}`,
+      (await recorded.innerText()).includes(expected), await recorded.innerText());
+  }
+  await page.screenshot({ path: path.join(SHOTS, '19-bench-record-after-matrix.png'), fullPage: true });
   await page.close();
 }
 
