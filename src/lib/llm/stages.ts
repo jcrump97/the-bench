@@ -495,10 +495,28 @@ function buildEvidenceGenSchema(interrogationRequired: boolean) {
       witnesses: EvidenceGenWitnessesSchema,
     })
     .superRefine((data, ctx) => {
+      // Testimony fragments, and later the closings' exhibitPoints, are matched
+      // to a ruling by evidenceId alone. With two exhibits sharing an id, a
+      // fragment can't say which one it meant, and reconcileCrossStageIds would
+      // keep the first claimant's id and rename the second: a fragment written
+      // about the second exhibit would then follow the first one's ruling, so an
+      // excluded confession could be spoken. Evidence ids are their own namespace
+      // and this is the only stage that makes them, so rejecting duplicates here
+      // means reconcile never renames an exhibit.
+      const seenEvidenceIds = new Set<string>();
+      for (const item of data.evidence) {
+        if (seenEvidenceIds.has(item.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `evidence id "${item.id}" is used by more than one exhibit — give every exhibit its own id, and key each exhibitTestimony entry to the exhibit it is about`,
+          });
+        }
+        seenEvidenceIds.add(item.id);
+      }
       // The fragments are matched to the ruling by evidenceId alone, so an id
       // that names no exhibit in this response would never be spoken — and the
       // testimony it carried would silently vanish from the record.
-      const evidenceIds = new Set(data.evidence.map((item) => item.id));
+      const evidenceIds = seenEvidenceIds;
       for (const witness of data.witnesses) {
         for (const entry of witness.exhibitTestimony) {
           if (!evidenceIds.has(entry.evidenceId)) {

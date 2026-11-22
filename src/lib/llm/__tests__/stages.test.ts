@@ -396,6 +396,21 @@ describe('runEvidenceGen', () => {
     expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('e-missing');
   });
 
+  it('retries when two exhibits share an id, so testimony cannot bind to the wrong ruling', async () => {
+    // Without the check, reconcileCrossStageIds renames the second exhibit and
+    // w2's entry for e1 silently follows the first exhibit's ruling.
+    const duplicated = [evidence[0]!, { ...evidence[1]!, id: evidence[0]!.id }, ...evidence.slice(2)];
+    mockCallsWith(
+      JSON.stringify({ evidence: duplicated, witnesses }),
+      JSON.stringify({ evidence, witnesses }),
+    );
+
+    const result = await runEvidenceGen(API_KEY, MODEL, [charge], environment, defendant, null);
+    expect(new Set(result.evidence.map((e) => e.id)).size).toBe(result.evidence.length);
+    expect(vi.mocked(callGemini)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callGemini).mock.calls[1]![2]!.contents).toContain('used by more than one exhibit');
+  });
+
   it('requires exhibitTestimony in the schema sent to the model', async () => {
     mockCallsWith(JSON.stringify({ evidence, witnesses }));
     await runEvidenceGen(API_KEY, MODEL, [charge], environment, defendant, null);
