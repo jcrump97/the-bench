@@ -164,31 +164,31 @@ function describeOffer(
   return `Pleads to: ${pleadsTo}. Proposed sentence: ${sentence}.${dismissed} ${posture.prosecutionRationale}`;
 }
 
-// Assembles one side's closing argument from the base text plus its
-// per-exhibit fragments, picking each fragment's ifAdmitted/ifExcluded
-// variant off the ruling the player actually entered — so the argument can
-// never reference an exhibit's merits under a ruling that didn't happen.
-// Absent `exhibitPoints` (hand-authored demo cases) leaves the base text
-// untouched — those are already internally consistent by construction.
+// Appends per-exhibit fragments to a base text, picking each fragment's
+// ifAdmitted/ifExcluded variant off the ruling the player actually entered —
+// so the assembled text can never rest on an exhibit's content under a ruling
+// that didn't happen. Closing arguments and witness testimony both go through
+// here: each was authored before any motion was ruled on, and each once
+// relayed a custodial confession the court had already excluded. Absent
+// `points` (hand-authored demo cases) leaves the base text untouched.
 //
 // The `?? 'ADMITTED'` default is unreachable in the emitted script and exists
-// only to keep this function total. Closings are emitted on the trial path
-// alone, after the loop above has ruled on every exhibit (an unresolved motion
-// returns early), so every exhibit already has a ruling by the time this runs.
-// The plea path never reaches a closing at all — an accepted plea jumps
-// straight to allocution and sentencing.
-function assembleClosingArgument(
+// only to keep this function total. Testimony and closings are emitted on the
+// trial path alone, after the motion loop has ruled on every exhibit (an
+// unresolved motion returns early), so every exhibit already has a ruling by
+// the time this runs. The plea path never reaches either — an accepted plea
+// jumps straight to allocution and sentencing.
+function appendRulingFragments<Variant>(
   base: string,
-  exhibitPoints: CasePayload['closingArguments']['exhibitPoints'],
+  points: readonly { evidenceId: string; ifAdmitted: Variant; ifExcluded: Variant }[] | undefined,
   motionRulings: MotionRuling[],
-  side: 'prosecution' | 'defense',
+  pick: (variant: Variant) => string | null,
 ): string {
-  if (exhibitPoints === undefined) return base;
-  const fragments = exhibitPoints
+  if (points === undefined) return base;
+  const fragments = points
     .map((point) => {
       const ruling = motionRulings.find((r) => r.evidenceId === point.evidenceId)?.ruling ?? 'ADMITTED';
-      const variant = ruling === 'ADMITTED' ? point.ifAdmitted : point.ifExcluded;
-      return variant[side];
+      return pick(ruling === 'ADMITTED' ? point.ifAdmitted : point.ifExcluded);
     })
     .filter((text): text is string => text !== null && text.length > 0);
   return [base, ...fragments].join(' ');
@@ -496,7 +496,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
         calledByDefense,
         subject: { type: 'WITNESS', id: witness.id },
         heading: `${calledByDefense ? 'The Defense Calls' : 'The People Call'} ${witness.name}`,
-        body: witness.directExamination,
+        body: appendRulingFragments(witness.directExamination, witness.exhibitTestimony, motionRulings, (v) => v.direct),
       });
       if (witness.crossExamination !== null) {
         pushStatement({
@@ -507,7 +507,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
           speakerName: witness.name,
           subject: { type: 'WITNESS', id: witness.id },
           heading: `Cross-Examination of ${witness.name}`,
-          body: witness.crossExamination,
+          body: appendRulingFragments(witness.crossExamination, witness.exhibitTestimony, motionRulings, (v) => v.cross),
         });
       }
     }
@@ -518,7 +518,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       phase: 'ACT_3_VERDICT',
       speaker: 'PROSECUTION',
       heading: 'Closing Argument — The People',
-      body: assembleClosingArgument(caseData.closingArguments.prosecution, caseData.closingArguments.exhibitPoints, motionRulings, 'prosecution'),
+      body: appendRulingFragments(caseData.closingArguments.prosecution, caseData.closingArguments.exhibitPoints, motionRulings, (v) => v.prosecution),
     });
     pushStatement({
       id: 'closing-defense',
@@ -526,7 +526,7 @@ export function buildCourtroomScript(input: BuildCourtroomScriptInput): ScriptBe
       phase: 'ACT_3_VERDICT',
       speaker: 'DEFENSE',
       heading: 'Closing Argument — The Defense',
-      body: assembleClosingArgument(caseData.closingArguments.defense, caseData.closingArguments.exhibitPoints, motionRulings, 'defense'),
+      body: appendRulingFragments(caseData.closingArguments.defense, caseData.closingArguments.exhibitPoints, motionRulings, (v) => v.defense),
     });
 
     for (const charge of caseData.charges) {

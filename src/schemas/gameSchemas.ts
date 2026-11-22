@@ -100,6 +100,12 @@ function addDefendantNameIssues(
     push(`witness.${w.id}.statement`, w.statement);
     push(`witness.${w.id}.directExamination`, w.directExamination);
     push(`witness.${w.id}.crossExamination`, w.crossExamination);
+    for (const entry of w.exhibitTestimony ?? []) {
+      push(`witness.${w.id}.exhibitTestimony.${entry.evidenceId}.ifAdmitted.direct`, entry.ifAdmitted.direct);
+      push(`witness.${w.id}.exhibitTestimony.${entry.evidenceId}.ifAdmitted.cross`, entry.ifAdmitted.cross);
+      push(`witness.${w.id}.exhibitTestimony.${entry.evidenceId}.ifExcluded.direct`, entry.ifExcluded.direct);
+      push(`witness.${w.id}.exhibitTestimony.${entry.evidenceId}.ifExcluded.cross`, entry.ifExcluded.cross);
+    }
   }
 
   for (const { label, text } of fields) {
@@ -382,7 +388,17 @@ export const InterrogationSchema = z.strictObject({
   lines: z.array(InterrogationLineSchema).min(4).max(24),
 });
 
-export const WitnessSchema = z.strictObject({
+// One side of a witness's testimony about a single exhibit, under one ruling.
+// Each examination is a fragment appended to that examination's base text;
+// null adds nothing.
+const ExhibitTestimonyVariantSchema = z.strictObject({
+  direct: noJury(z.string().max(600)).nullable().describe("What the witness adds on direct examination about this exhibit under this ruling, in the first person; null to add nothing."),
+  cross: noJury(z.string().max(600)).nullable().describe("What the witness adds under cross-examination about this exhibit under this ruling, in the first person; null to add nothing. Always null when the witness is not cross-examined."),
+});
+
+// Exported as a shape (like ChargeCoreShape) because Zod refuses .extend() on
+// a refined object, and the EvidenceGen stage needs exhibitTestimony required.
+export const WitnessShape = {
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(101).describe("Full fictional name. Do not include race or protected demographics."),
   role: WitnessRoleEnum,
@@ -394,7 +410,45 @@ export const WitnessSchema = z.strictObject({
   // witnesses are the People's, DEFENSE witnesses are the defense's.
   directExamination: noJury(z.string().min(1).max(1200)).describe("The witness's spoken testimony on direct examination, in the first person, as a continuous narrative the witness would deliver from the stand. Do not include counsel's questions."),
   crossExamination: noJury(z.string().min(1).max(1200)).nullable().describe("The witness's spoken testimony under cross-examination, in the first person, as a continuous narrative. Do not include counsel's questions. Null when opposing counsel declines to cross."),
-});
+  // Per-exhibit testimony fragments, keyed by the same ADMITTED/EXCLUDED
+  // vocabulary as closingArguments.exhibitPoints and assembled onto the base
+  // examinations the same way (courtroomScript.ts), off the ruling the player
+  // actually entered. Testimony is written before any motion is ruled on, and
+  // a live run had a detective recount a confession on direct that the court
+  // had already suppressed. Whatever a witness says about a specific exhibit
+  // lives here, so an excluded exhibit's content never reaches the record.
+  // Optional: hand-authored demo cases may omit it.
+  exhibitTestimony: z.array(z.strictObject({
+    evidenceId: z.string().min(1).max(40),
+    ifAdmitted: ExhibitTestimonyVariantSchema,
+    ifExcluded: ExhibitTestimonyVariantSchema,
+  })).optional(),
+};
+
+// A witness who is not cross-examined has no cross to append to, so a cross
+// fragment would either be dropped silently or conjure a cross-examination
+// the base text says never happened. And one entry per exhibit: the script
+// appends one fragment per entry, so a duplicate repeats the testimony.
+export function addWitnessTestimonyIssues(
+  witness: { crossExamination: string | null; exhibitTestimony?: { evidenceId: string; ifAdmitted: { cross: string | null }; ifExcluded: { cross: string | null } }[] | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  for (const entry of witness.exhibitTestimony ?? []) {
+    if (seen.has(entry.evidenceId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate exhibitTestimony entry for evidence: ${entry.evidenceId}` });
+    }
+    seen.add(entry.evidenceId);
+    if (witness.crossExamination === null && (entry.ifAdmitted.cross !== null || entry.ifExcluded.cross !== null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `exhibitTestimony.${entry.evidenceId} has cross-examination text, but crossExamination is null (the witness is not crossed); set both cross fields to null`,
+      });
+    }
+  }
+}
+
+export const WitnessSchema = z.strictObject(WitnessShape).superRefine(addWitnessTestimonyIssues);
 
 export const EvidenceSchema = z.strictObject({
   id: z.string().min(1).max(40),
@@ -681,6 +735,11 @@ export const CaseSchema = z.strictObject(CaseShape).superRefine((v, ctx) => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate witness id: ${w.id}` });
     }
     witnessIds.add(w.id);
+    for (const entry of w.exhibitTestimony ?? []) {
+      if (!evidenceIds.has(entry.evidenceId)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `witness ${w.id} exhibitTestimony references unknown evidence: ${entry.evidenceId}` });
+      }
+    }
   }
 
   // Structural backstop: any "defendant <Name>" phrase must name the actual
@@ -805,3 +864,4 @@ export type ReactionBeat        = z.infer<typeof ReactionBeatSchema>;
 export type InterrogationLine   = z.infer<typeof InterrogationLineSchema>;
 export type Interrogation       = z.infer<typeof InterrogationSchema>;
 export type ClosingArgumentExhibitPoint = NonNullable<CasePayload['closingArguments']['exhibitPoints']>[number];
+export type WitnessExhibitTestimony = NonNullable<CasePayload['witnesses'][number]['exhibitTestimony']>[number];
