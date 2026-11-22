@@ -246,6 +246,40 @@ describe('WitnessSchema testimony fields', () => {
     delete withoutDirect.directExamination;
     expect(WitnessSchema.safeParse(withoutDirect).success).toBe(false);
   });
+
+  describe('exhibitTestimony', () => {
+    const entry = {
+      evidenceId: 'e2',
+      ifAdmitted: { direct: 'That is the person I saw.', cross: 'The still is grainy, yes.' },
+      ifExcluded: { direct: null, cross: null },
+    };
+
+    it('accepts per-exhibit fragments, and a witness without any', () => {
+      expect(WitnessSchema.safeParse({ ...witness, exhibitTestimony: [entry] }).success).toBe(true);
+      expect(WitnessSchema.safeParse({ ...witness, exhibitTestimony: [] }).success).toBe(true);
+    });
+
+    // courtroomScript appends one fragment per entry, so a duplicate would
+    // repeat the same testimony twice.
+    it('rejects two entries for the same exhibit', () => {
+      const result = WitnessSchema.safeParse({ ...witness, exhibitTestimony: [entry, entry] });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues.some((i) => i.message.includes('Duplicate exhibitTestimony'))).toBe(true);
+    });
+
+    // An uncrossed witness has no cross beat to append to.
+    it('rejects cross text on a witness who is not cross-examined', () => {
+      const result = WitnessSchema.safeParse({ ...witness, crossExamination: null, exhibitTestimony: [entry] });
+      expect(result.success).toBe(false);
+      const clean = { ...entry, ifAdmitted: { ...entry.ifAdmitted, cross: null } };
+      expect(WitnessSchema.safeParse({ ...witness, crossExamination: null, exhibitTestimony: [clean] }).success).toBe(true);
+    });
+
+    it('rejects a jury reference in a fragment', () => {
+      const juried = { ...entry, ifAdmitted: { direct: 'I told the jury what I saw.', cross: null } };
+      expect(WitnessSchema.safeParse({ ...witness, exhibitTestimony: [juried] }).success).toBe(false);
+    });
+  });
 });
 
 describe('CharacterSchema names', () => {
@@ -462,6 +496,32 @@ describe('CaseSchema after pleaPosture removal (1D)', () => {
       },
     };
     expect(CasePayloadSchema.safeParse(withPoints).success).toBe(true);
+  });
+
+  it('rejects exhibitTestimony naming an exhibit the case does not have', () => {
+    const [first, ...rest] = rawValidCase.witnesses;
+    const dangling = {
+      ...rawValidCase,
+      witnesses: [
+        { ...first, exhibitTestimony: [{ evidenceId: 'e-missing', ifAdmitted: { direct: 'It matched.', cross: null }, ifExcluded: { direct: null, cross: null } }] },
+        ...rest,
+      ],
+    };
+    const result = CasePayloadSchema.safeParse(dangling);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((i) => i.message.includes('exhibitTestimony references unknown evidence: e-missing'))).toBe(true);
+  });
+
+  it('holds exhibitTestimony fragments to the defendant-name backstop', () => {
+    const [first, ...rest] = rawValidCase.witnesses;
+    const misnamed = {
+      ...rawValidCase,
+      witnesses: [
+        { ...first, exhibitTestimony: [{ evidenceId: 'e1', ifAdmitted: { direct: 'The print belongs to defendant Morales.', cross: null }, ifExcluded: { direct: null, cross: null } }] },
+        ...rest,
+      ],
+    };
+    expect(CasePayloadSchema.safeParse(misnamed).success).toBe(false);
   });
 
   it('still rejects evidence referencing an unknown targetElementId', () => {

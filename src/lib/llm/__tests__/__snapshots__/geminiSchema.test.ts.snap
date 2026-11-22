@@ -577,6 +577,66 @@ exports[`compiled stage response schemas > EvidenceGen 1`] = `
             "minLength": 1,
             "type": "string",
           },
+          "exhibitTestimony": {
+            "items": {
+              "properties": {
+                "evidenceId": {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "ifAdmitted": {
+                  "properties": {
+                    "cross": {
+                      "description": "What the witness adds under cross-examination about this exhibit under this ruling, in the first person; null to add nothing. Always null when the witness is not cross-examined.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "direct": {
+                      "description": "What the witness adds on direct examination about this exhibit under this ruling, in the first person; null to add nothing.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "direct",
+                    "cross",
+                  ],
+                  "type": "object",
+                },
+                "ifExcluded": {
+                  "properties": {
+                    "cross": {
+                      "description": "What the witness adds under cross-examination about this exhibit under this ruling, in the first person; null to add nothing. Always null when the witness is not cross-examined.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "direct": {
+                      "description": "What the witness adds on direct examination about this exhibit under this ruling, in the first person; null to add nothing.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "direct",
+                    "cross",
+                  ],
+                  "type": "object",
+                },
+              },
+              "required": [
+                "evidenceId",
+                "ifAdmitted",
+                "ifExcluded",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
           "id": {
             "maxLength": 40,
             "minLength": 1,
@@ -613,6 +673,7 @@ exports[`compiled stage response schemas > EvidenceGen 1`] = `
           "credibilityScore",
           "directExamination",
           "crossExamination",
+          "exhibitTestimony",
         ],
         "type": "object",
       },
@@ -1629,6 +1690,66 @@ exports[`compiled stage response schemas > FinalizeCasePayload.repair 1`] = `
             "maxLength": 1200,
             "minLength": 1,
             "type": "string",
+          },
+          "exhibitTestimony": {
+            "items": {
+              "properties": {
+                "evidenceId": {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "ifAdmitted": {
+                  "properties": {
+                    "cross": {
+                      "description": "What the witness adds under cross-examination about this exhibit under this ruling, in the first person; null to add nothing. Always null when the witness is not cross-examined.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "direct": {
+                      "description": "What the witness adds on direct examination about this exhibit under this ruling, in the first person; null to add nothing.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "direct",
+                    "cross",
+                  ],
+                  "type": "object",
+                },
+                "ifExcluded": {
+                  "properties": {
+                    "cross": {
+                      "description": "What the witness adds under cross-examination about this exhibit under this ruling, in the first person; null to add nothing. Always null when the witness is not cross-examined.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "direct": {
+                      "description": "What the witness adds on direct examination about this exhibit under this ruling, in the first person; null to add nothing.",
+                      "maxLength": 600,
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "direct",
+                    "cross",
+                  ],
+                  "type": "object",
+                },
+              },
+              "required": [
+                "evidenceId",
+                "ifAdmitted",
+                "ifExcluded",
+              ],
+              "type": "object",
+            },
+            "type": "array",
           },
           "id": {
             "maxLength": 40,

@@ -71,6 +71,13 @@ model judging a model, so each was confirmed by reading the beat itself):
       variant. Fix in the same pattern: per-exhibit testimony fragments the
       script picks off the ruling, or a rule that testimony never relays an
       exhibit's content. Needs a `test:live` re-measure either way.
+      Code fix landed (2026-11-22): witnesses carry `exhibitTestimony`, assembled by
+      `appendRulingFragments` like the closings, and VerdictVoice is told to
+      rest on the charge elements and never cite a specific exhibit.
+      **Still owed:** the `test:live` re-measure (schema probe, then a few
+      sweep runs), and keying the demo docket's testimony, where some lines
+      still relay exhibit content (Webb's detective on the interview, Vaughn's
+      investigator on the repair quote, Boone's eyewitness on the photo array).
 - [ ] **QA2 — VerdictVoice says "the State".** California prosecutes as "the
       People"; reaction lines also spoke at verdict time as if evidence were
       still to come. Prompt change in `VERDICT_VOICE_SYSTEM`; re-measure.

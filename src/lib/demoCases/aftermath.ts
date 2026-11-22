@@ -12,7 +12,7 @@ export function selectAftermath(bundle: DemoCaseBundle, outcome: CaseOutcome): s
 }
 
 // The aftermath is assembled, not quoted — the same shape as
-// assembleClosingArgument: an authored base that answers the outcome, plus a
+// appendRulingFragments (courtroomScript.ts): an authored base that answers the outcome, plus a
 // coda that answers the sentence the judge actually chose. Without it a
 // docket case reads identically whether the court gave the floor of the range
 // or the ceiling, which is the one decision the judge makes alone.

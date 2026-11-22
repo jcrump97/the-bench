@@ -269,6 +269,101 @@ describe('buildCourtroomScript — Act 3 trial path', () => {
   });
 });
 
+describe('buildCourtroomScript — ruling-keyed fragments', () => {
+  // The court suppressed the camera still (e2) and admitted the print (e1).
+  const rulings: MotionRuling[] = [
+    { evidenceId: 'e1', ruling: 'ADMITTED' },
+    { evidenceId: 'e2', ruling: 'EXCLUDED' },
+    { evidenceId: 'e3', ruling: 'EXCLUDED' },
+  ];
+  const [eyewitness, investigator] = validCase.witnesses;
+  const caseData = {
+    ...validCase,
+    witnesses: [
+      {
+        ...eyewitness!,
+        exhibitTestimony: [{
+          evidenceId: 'e2',
+          ifAdmitted: { direct: 'The figure in the still is the person I saw.', cross: 'The still is grainy, yes.' },
+          ifExcluded: { direct: 'I can only tell the court what I saw myself.', cross: null },
+        }],
+      },
+      {
+        ...investigator!,
+        exhibitTestimony: [
+          {
+            evidenceId: 'e1',
+            ifAdmitted: { direct: 'The print matched the defendant on twelve points.', cross: null },
+            ifExcluded: { direct: null, cross: null },
+          },
+          {
+            evidenceId: 'e3',
+            ifAdmitted: { direct: 'The crossbar marks matched the door frame.', cross: null },
+            ifExcluded: { direct: null, cross: null },
+          },
+        ],
+      },
+    ],
+    closingArguments: {
+      ...validCase.closingArguments,
+      exhibitPoints: [{
+        evidenceId: 'e2',
+        ifAdmitted: { prosecution: 'The still puts the defendant at the door.', defense: null },
+        ifExcluded: { prosecution: null, defense: 'Without the still, nobody puts my client at that door.' },
+      }],
+    },
+  };
+  const beats = statements(buildCourtroomScript({
+    ...baseInput,
+    caseData,
+    pleaPosture: rejectedPosture,
+    currentPhase: 'ACT_3_VERDICT',
+    motionRulings: rulings,
+  }));
+  const body = (id: string) => beats.find((b) => b.id === id)?.body;
+
+  it('testimony carries only the variant for the ruling the court entered', () => {
+    expect(body('direct-w1')).toBe(`${eyewitness!.directExamination} I can only tell the court what I saw myself.`);
+    expect(body('direct-w1')).not.toContain('The figure in the still');
+    expect(body('direct-w2')).toBe(`${investigator!.directExamination} The print matched the defendant on twelve points.`);
+    // e3 was excluded, and its excluded variant says nothing.
+    expect(body('direct-w2')).not.toContain('crossbar');
+  });
+
+  it('a null cross variant leaves the cross-examination as authored', () => {
+    expect(body('cross-w1')).toBe(eyewitness!.crossExamination);
+  });
+
+  it('the admitted variant is spoken when the court lets the exhibit in', () => {
+    const admitted = statements(buildCourtroomScript({
+      ...baseInput,
+      caseData,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_3_VERDICT',
+      motionRulings: rulings.map((r) => ({ ...r, ruling: 'ADMITTED' as const })),
+    }));
+    const find = (id: string) => admitted.find((b) => b.id === id)?.body;
+    expect(find('direct-w1')).toContain('The figure in the still is the person I saw.');
+    expect(find('cross-w1')).toBe(`${eyewitness!.crossExamination} The still is grainy, yes.`);
+    expect(find('direct-w2')).toContain('The crossbar marks matched the door frame.');
+  });
+
+  it('closings follow the same rule', () => {
+    expect(body('closing-prosecution')).toBe(validCase.closingArguments.prosecution);
+    expect(body('closing-defense')).toBe(`${validCase.closingArguments.defense} Without the still, nobody puts my client at that door.`);
+  });
+
+  it('a witness with no exhibitTestimony testifies exactly as authored', () => {
+    const plain = statements(buildCourtroomScript({
+      ...baseInput,
+      pleaPosture: rejectedPosture,
+      currentPhase: 'ACT_3_VERDICT',
+      motionRulings: rulings,
+    }));
+    expect(plain.find((b) => b.id === 'direct-w1')?.body).toBe(eyewitness!.directExamination);
+  });
+});
+
 describe('buildCourtroomScript — accepted-plea path', () => {
   const pleaInput: BuildCourtroomScriptInput = {
     ...baseInput,

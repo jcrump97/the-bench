@@ -11,7 +11,9 @@ import {
   PleaDecisionSchema,
   PleaNarrativeFieldsSchema,
   CaseSchema,
+  WitnessShape,
   addChoiceCoverageIssues,
+  addWitnessTestimonyIssues,
   defendantFullName,
   AftermathNarrativeSchema,
   type Charge,
@@ -477,13 +479,54 @@ function dropNullInterrogation(value: unknown): unknown {
 // profile said an interview transcript exists. Enforcing presence/absence
 // here feeds a retry, the same way any other validation failure does,
 // instead of letting the mismatch through unnoticed.
+// On this path every witness carries exhibitTestimony, possibly empty — the
+// same move as finalize's `exhibitPoints: required`. Optional, the model can
+// satisfy the schema by leaving it out and writing the exhibit's content into
+// the base testimony, which is the bug the field exists to prevent.
+const EvidenceGenWitnessesSchema = z.array(
+  z.strictObject({ ...WitnessShape, exhibitTestimony: WitnessShape.exhibitTestimony.unwrap() })
+    .superRefine(addWitnessTestimonyIssues),
+).min(2);
+
 function buildEvidenceGenSchema(interrogationRequired: boolean) {
   return z
     .object({
       evidence: z.preprocess(dropNullInterrogation, CaseShape.evidence),
-      witnesses: CaseShape.witnesses,
+      witnesses: EvidenceGenWitnessesSchema,
     })
     .superRefine((data, ctx) => {
+      // Testimony fragments, and later the closings' exhibitPoints, are matched
+      // to a ruling by evidenceId alone. With two exhibits sharing an id, a
+      // fragment can't say which one it meant, and reconcileCrossStageIds would
+      // keep the first claimant's id and rename the second: a fragment written
+      // about the second exhibit would then follow the first one's ruling, so an
+      // excluded confession could be spoken. Evidence ids are their own namespace
+      // and this is the only stage that makes them, so rejecting duplicates here
+      // means reconcile never renames an exhibit.
+      const seenEvidenceIds = new Set<string>();
+      for (const item of data.evidence) {
+        if (seenEvidenceIds.has(item.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `evidence id "${item.id}" is used by more than one exhibit — give every exhibit its own id, and key each exhibitTestimony entry to the exhibit it is about`,
+          });
+        }
+        seenEvidenceIds.add(item.id);
+      }
+      // The fragments are matched to the ruling by evidenceId alone, so an id
+      // that names no exhibit in this response would never be spoken — and the
+      // testimony it carried would silently vanish from the record.
+      const evidenceIds = seenEvidenceIds;
+      for (const witness of data.witnesses) {
+        for (const entry of witness.exhibitTestimony) {
+          if (!evidenceIds.has(entry.evidenceId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `witness ${witness.id} has an exhibitTestimony entry for "${entry.evidenceId}", which is not the id of any exhibit in your evidence list — use one of: ${[...evidenceIds].join(', ')}`,
+            });
+          }
+        }
+      }
       const hasInterrogation = data.evidence.some((item) => item.type === 'INTERROGATION');
       if (interrogationRequired && !hasInterrogation) {
         ctx.addIssue({
@@ -505,7 +548,7 @@ function buildEvidenceGenSchema(interrogationRequired: boolean) {
 // preprocess and the INTERROGATION presence refinement on top; neither is
 // something the model is asked to produce, and the prompt states the latter.
 const EVIDENCE_GEN_GEMINI_SCHEMA = toGeminiSchema(
-  z.object({ evidence: CaseShape.evidence, witnesses: CaseShape.witnesses }),
+  z.object({ evidence: CaseShape.evidence, witnesses: EvidenceGenWitnessesSchema }),
 );
 
 const EVIDENCE_GEN_SYSTEM = `ROLE: You are building the exhibit and witness list for a California criminal case, together with the voiced material the motion hearing and the trial will use.
@@ -519,10 +562,13 @@ RULES:
 4. Point each exhibit's "targetElementId" at one of the element ids you are given, or set it to null.
 5. Give every exhibit and every witness an id unique across the whole case.
 6. Write each witness's "directExamination" and "crossExamination" as first-person testimony the witness delivers from the stand, in a continuous narrative. Do not write counsel's questions mixed into the answer — the transcript voices the witness alone.
-7. Cross-examination may attack a witness's memory, bias, or interpretation, but must not assert a fact that flatly contradicts what the same witness already stated on direct examination (a different timeline, a different sequence of actions) — unless the direct examination itself sets up that contradiction as a prior inconsistent statement being impeached. A witness's account of what happened stays the same account under cross; only how much the court should trust it is in play.
-8. When established facts about the scene are given, every witness statement, disclosure, and testimony must not contradict them — refer to the same facts, not a different version of events.
-9. Keep judge lines under 300 characters, disclosure summaries under 400, and each argument, objection, and reaction line under 600.
-10. ${BENCH_TRIAL_RULE}`;
+7. The court rules on every exhibit before any witness testifies, and it may exclude any of them. So "directExamination" and "crossExamination" must not recount what any exhibit shows, records or says — not what the defendant said in a recorded interview, not a lab result, not what footage, records or messages show. Put everything a witness says about a specific exhibit in that witness's "exhibitTestimony" entry for the exhibit's id: "ifAdmitted" is the testimony when the exhibit came into evidence, "ifExcluded" the testimony when the court excluded it. Under "ifExcluded" the witness never relays the exhibit's content; write null, or a line that stays off it. What a witness saw or did themselves, apart from any exhibit, stays in the base testimony. Give entries only for exhibits the witness's testimony touches, and an empty array to a witness who touches none. When "crossExamination" is null, every "cross" field in that witness's entries is null too.
+8. Cross-examination may attack a witness's memory, bias, or interpretation, but must not assert a fact that flatly contradicts what the same witness already stated on direct examination (a different timeline, a different sequence of actions) — unless the direct examination itself sets up that contradiction as a prior inconsistent statement being impeached. A witness's account of what happened stays the same account under cross; only how much the court should trust it is in play.
+9. When established facts about the scene are given, every witness statement, disclosure, and testimony must not contradict them — refer to the same facts, not a different version of events.
+10. Keep judge lines under 300 characters, disclosure summaries under 400, each testimony fragment under 600, and each argument, objection, and reaction line under 600.
+11. ${BENCH_TRIAL_RULE}
+
+EXAMPLE of rule 7, for the detective who ran a recorded interview (exhibit id "ev-interview"): "directExamination" covers how the investigation went and when the defendant was brought in, and nothing the defendant said on the tape. The entry {"evidenceId":"ev-interview","ifAdmitted":{"direct":"In that interview the defendant told me about being at the warehouse that night.","cross":"No, counsel, I never said the defendant was free to leave."},"ifExcluded":{"direct":null,"cross":null}} carries what the tape adds, and only when the court admitted it.`;
 
 function buildEvidenceGenContents(
   charges: ChargeCore[],
@@ -542,7 +588,7 @@ function buildEvidenceGenContents(
     `Defendant: ${defendantFullName(defendant)}.`,
     'Produce at least 3 evidence items and at least 2 witnesses — the response is rejected if either count falls short.',
     interrogation !== null
-      ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null.`
+      ? `Include exactly one evidence item with type "INTERROGATION". Its interrogation field must be exactly this JSON object (do not alter it): ${JSON.stringify(interrogation)}. Its defenseObjection must not be null. Anything a witness says about what the defendant said in this interview goes only in that witness's exhibitTestimony entry for this exhibit.`
       : 'Do not include any evidence item with type "INTERROGATION" — no usable tape exists for this defendant.',
   ].filter((line) => line.length > 0).join('\n');
   return withFeedback(base, feedback);
@@ -865,8 +911,9 @@ RULES:
 2. Every "verdictOptions" array must cover both outcomes: at least one choice "GUILTY" and at least one choice "NOT_GUILTY".
 3. The judge lines are spoken by the court from the bench. They may name the defendant and may reach for the defendant's circumstances — custody, employment, children, remorse — because the defendant now exists.
 4. Charges are resolved one at a time, in the fixed order you are given, and every charge listed after the one being decided is still pending. Only the reactions for the LAST charge in that order may speak of the case concluding or the defendant being released — every earlier charge's reactions must acknowledge that further counts remain before the court.
-5. Keep each judge line under 300 characters and each reaction line under 600.
-6. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.
+5. These lines are written before the court rules on any exhibit, and the court may exclude any of them. So never name or describe a specific item of evidence or a witness's testimony — no confession or interview, recording, footage, document, record, message, test result, or identification. Ground each line in the elements of the charge, the burden of proof, and the defendant's circumstances; "the evidence" taken as a whole is fine.
+6. Keep each judge line under 300 characters and each reaction line under 600.
+7. ${BENCH_TRIAL_RULE} The judge alone returns the verdict.
 
 EXAMPLE of the id rule: given "Count 1 of 2 — id: charge-grand-theft — Grand Theft", your entry for that count is {"id":"charge-grand-theft", ...}.`;
 
@@ -879,7 +926,12 @@ function buildVerdictVoiceContents(
   // mid-string ("1 of 2 (id charge-x): Name") made the id read as incidental
   // prose, and an id echoed wrong is the one error this stage cannot absorb.
   const orderedCharges = charges
-    .map((c, index) => `- Count ${index + 1} of ${charges.length} — id: ${c.id} — ${c.name}`)
+    .map((c, index) => [
+      `- Count ${index + 1} of ${charges.length} — id: ${c.id} — ${c.name}`,
+      // The elements are what rule 5 tells the lines to rest on instead of the
+      // exhibits; without them the model reaches for evidence it imagines.
+      `  Elements: ${c.elements.map((e) => e.description).join(' ')}`,
+    ].join('\n'))
     .join('\n');
   const base = [
     'Charges, in the fixed order they are resolved at trial:',
