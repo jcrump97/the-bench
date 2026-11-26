@@ -1,0 +1,148 @@
+name: Live Gemini tests
+
+# Runs `npm run test:live` against the real Gemini API with the repository's
+# GEMINI_API_KEY secret. It spends real quota and its results are not
+# deterministic, so it never runs on its own — not on push, not when a pull
+# request opens or updates, and not as part of Verify. Two ways to start it:
+#
+#   1. Add the `run-live-tests` label to a pull request from this repository.
+#      The run tests the PR merged with its base, then takes the label off so
+#      it can be added again for the next run. Pull requests from forks never
+#      reach the secret: the job is skipped for them.
+#   2. Actions → Live Gemini tests → Run workflow (or the API). Optionally give
+#      a pull request number to test that PR merged with its base; leave it
+#      blank to test the branch chosen in "Use workflow from".
+#
+# Each run uploads the per-test results, every played transcript, the
+# pipeline diagnostic and a ledger of requests (how many were sent, and how
+# any refused one was refused: by the network or by Google) as the
+# `live-gemini-results` artifact, and writes the same to the run's summary.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to test, merged with its base (blank tests the branch above)
+        required: false
+        default: ''
+      diagnostic_runs:
+        description: Full case generations for the pipeline diagnostic (each is about eight model calls)
+        required: false
+        default: '3'
+  pull_request:
+    types: [labeled]
+
+permissions: {}
+
+# One live run per pull request (or branch) at a time. A run already spending
+# quota is allowed to finish rather than being thrown away halfway.
+concurrency:
+  group: live-gemini-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  cancel-in-progress: false
+
+env:
+  OUT: /tmp/live-output
+
+jobs:
+  live:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'run-live-tests' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      # Inputs reach shell only through env, and the PR number must be a
+      # number before it is used to build a ref.
+      - name: Check inputs
+        env:
+          PR: ${{ inputs.pr }}
+          RUNS: ${{ inputs.diagnostic_runs }}
+        run: |
+          if [ -n "$PR" ] && ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+            echo "::error::pr must be a pull request number, got '$PR'"; exit 1
+          fi
+          if [ -n "$RUNS" ] && ! [[ "$RUNS" =~ ^[0-9]+$ ]]; then
+            echo "::error::diagnostic_runs must be a whole number, got '$RUNS'"; exit 1
+          fi
+
+      # On a labeled pull request the default ref is already the PR merged
+      # with its base. On a manual run with a PR number, use the same merge ref.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.pr && format('refs/pull/{0}/merge', inputs.pr) || '' }}
+          persist-credentials: false
+
+      # Without a key every live test skips, and a run of skips reads as a
+      # pass. Fail loudly instead. Only emptiness is checked; the value is
+      # never printed.
+      - name: Check the key is configured
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::The GEMINI_API_KEY repository secret is missing or empty."; exit 1
+          fi
+          echo "GEMINI_API_KEY is set."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # One file at a time: run in parallel, the files stack their calls into
+      # the same minute and a free-tier key measures the rate limiter instead
+      # of the pipeline (see CLAUDE.md).
+      - name: Live suite
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIAGNOSTIC_RUNS: ${{ inputs.diagnostic_runs || '3' }}
+          DIAGNOSTIC_PAUSE_MS: '60000'
+          DIAGNOSTIC_REPORT: ${{ env.OUT }}/pipeline-diagnostic.txt
+          LIVE_TRANSCRIPT_DIR: ${{ env.OUT }}/transcripts
+          LIVE_REQUEST_LOG: ${{ env.OUT }}/requests.jsonl
+        run: |
+          mkdir -p "$OUT"
+          npx vitest run --config vitest.live.config.ts --no-file-parallelism \
+            --reporter=default --reporter=junit --outputFile.junit="$OUT/junit.xml"
+
+      - name: Summary
+        if: always()
+        run: node .github/scripts/live-summary.mjs "$OUT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-gemini-results
+          path: ${{ env.OUT }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Takes the label off once the run is over, pass or fail, so adding it
+  # again starts the next run. Kept out of the job above so the job that holds
+  # the key never holds a token that can write to the repository.
+  unlabel:
+    needs: live
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'run-live-tests' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove the run-live-tests label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh api --method DELETE "repos/$REPO/issues/$PR/labels/run-live-tests" --silent || echo "Label already removed."

@@ -6,8 +6,9 @@ name: Verify
 # artifact, so the thing tested is the thing deployed.
 #
 # Deliberately absent: `npm run test:live` and the qa-agent skill. Both spend
-# real Gemini quota and are non-deterministic. They stay manual-only, and
-# GEMINI_API_KEY must never become a CI secret.
+# real Gemini quota and are non-deterministic, so neither is a gate. The live
+# suite runs only on request, in live-tests.yml (a PR label or a manual run),
+# and that workflow alone reads the GEMINI_API_KEY secret.
 
 on:
   pull_request:

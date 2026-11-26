@@ -13,6 +13,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/lib/llm/__tests__/live/**/*.live.test.ts'],
+    // Counts every request sent with the real key and how each was refused,
+    // network or Google (see the file).
+    setupFiles: ['src/lib/llm/__tests__/live/requestLedger.ts'],
     testTimeout: 60_000,
     hookTimeout: 240_000,
   },
