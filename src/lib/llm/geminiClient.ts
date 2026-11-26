@@ -2,6 +2,7 @@
 // is locked (see CLAUDE.md), and this surface is small enough not to need one.
 
 import { anySignal } from './anySignal';
+import { samplingFor } from './sampling';
 
 const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 // A pipeline makes 6+ of these calls; a sustained burst of 429s (e.g. a
@@ -236,7 +237,7 @@ export async function callGemini(
       //    `thinkingLevel` for 3.x, and sending both is a 400), and the
       //    levels differ within 3.x too (3.8 Flash rejects `minimal`).
       //    modelSelection now resolves a concrete versioned name, so the
-      //    family is readable but any per-family thinking
+      //    family is readable (see sampling.ts), but any per-family thinking
       //    value would still be an unprobed request change. The fallback
       //    `-latest` alias names no version at all.
       // 3. The pipeline measures 5/5 with zero failed attempts on the model's
@@ -245,11 +246,9 @@ export async function callGemini(
       // So the model's own default stands. If a future stage does need
       // bounded reasoning, add it per-stage behind a probe — never a constant.
       generationConfig: {
-        // Structured JSON output is measurably more schema-compliant at
-        // lower temperature; 0.7 keeps case-to-case narrative variety (the
-        // point of live generation) while cutting down on malformed/schema-
-        // violating responses that otherwise burn a generateValidated retry.
-        temperature: 0.7,
+        // Temperature only where the model family honors it; current Gemini
+        // models ignore it and later ones will reject it. See sampling.ts.
+        ...samplingFor(model),
         maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         responseMimeType: 'application/json',
         responseSchema: options.responseSchema,
