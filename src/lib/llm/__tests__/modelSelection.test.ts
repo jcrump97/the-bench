@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { selectModel, getOrSelectModel, clearModelCache } from '../modelSelection';
+import {
+  selectModel,
+  getOrSelectModel,
+  clearModelCache,
+  chooseModel,
+  MAX_COST_PER_CASE_USD,
+} from '../modelSelection';
+import type { RawModel } from '../geminiClient';
+import { costPerCase, findPricedModel, priceOn } from '../modelPricing';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -144,6 +152,135 @@ describe('selectModel', () => {
     );
 
     await expect(selectModel('AIzaTestKey1234567890123456789')).resolves.toBe('gemini-flash-latest');
+  });
+});
+
+function model(name: string, extra: Partial<RawModel> = {}): RawModel {
+  return { name: `models/${name}`, supportedGenerationMethods: ['generateContent'], ...extra };
+}
+
+const NOV_26_2026 = new Date('2026-11-26T12:00:00Z');
+
+describe('chooseModel (priced)', () => {
+  const CURRENT_LINEUP = [
+    model('gemini-flash-lite-latest'),
+    model('gemini-flash-latest'),
+    model('gemini-2.5-flash-lite'),
+    model('gemini-3.1-flash-lite'),
+    model('gemini-3.5-flash-lite'),
+    model('gemini-3.6-flash'),
+    model('gemini-3.8-flash'),
+    model('gemini-4-argon'),
+    model('gemini-3.1-pro-preview'),
+  ];
+
+  it('picks a concrete priced model over any alias or unpriced name', () => {
+    expect(chooseModel(CURRENT_LINEUP, NOV_26_2026)).toBe('gemini-3.5-flash-lite');
+  });
+
+  it('picks the newest model within the per-case budget, not the cheapest alone', () => {
+    // 3.1 Flash-Lite is cheaper per case, but 3.5 Flash-Lite is newer and
+    // within budget; 3.8 Flash is newer still but over it.
+    const lineup = [model('gemini-3.1-flash-lite'), model('gemini-3.5-flash-lite'), model('gemini-3.8-flash')];
+    expect(chooseModel(lineup, NOV_26_2026)).toBe('gemini-3.5-flash-lite');
+  });
+
+  it('places the 2026-11-26 table on the budget as the selector comments describe', () => {
+    const costOn = (id: string, day: Date): number => {
+      const entry = findPricedModel(id);
+      const price = entry === undefined ? null : priceOn(entry, day);
+      if (price === null) throw new Error(`${id} is not priced on ${day.toISOString()}`);
+      return costPerCase(price);
+    };
+    expect(costOn('gemini-3.1-flash-lite', NOV_26_2026)).toBeLessThanOrEqual(MAX_COST_PER_CASE_USD);
+    expect(costOn('gemini-3.5-flash-lite', NOV_26_2026)).toBeLessThanOrEqual(MAX_COST_PER_CASE_USD);
+    expect(costOn('gemini-3.8-flash', NOV_26_2026)).toBeGreaterThan(MAX_COST_PER_CASE_USD);
+    expect(costOn('gemini-3.6-flash', NOV_26_2026)).toBeGreaterThan(MAX_COST_PER_CASE_USD);
+  });
+
+  it('chooses only among models ListModels returned, whatever the table holds', () => {
+    expect(chooseModel([model('gemini-3.1-flash-lite'), model('gemini-3.6-flash')], NOV_26_2026)).toBe(
+      'gemini-3.1-flash-lite',
+    );
+  });
+
+  it('skips a priced model on or after its shutdown day, even while ListModels still lists it', () => {
+    const lineup = [model('gemini-3.1-flash-lite'), model('gemini-flash-lite-latest')];
+    expect(chooseModel(lineup, new Date('2027-05-06T23:59:59Z'))).toBe('gemini-3.1-flash-lite');
+    // Shut down, and known to be: the unpriced alias takes over.
+    expect(chooseModel(lineup, new Date('2027-05-07T00:00:00Z'))).toBe('gemini-flash-lite-latest');
+  });
+
+  it('uses the cheapest priced model when none is within budget, newest on a tie', () => {
+    const lineup = [model('gemini-3.6-flash'), model('gemini-3.8-flash')];
+    // 3.8 Flash's introductory price makes it the cheaper of the two.
+    expect(chooseModel(lineup, new Date('2026-12-31T12:00:00Z'))).toBe('gemini-3.8-flash');
+    // From 2027-01-01 both cost the same; the newer one wins.
+    expect(chooseModel(lineup, new Date('2027-01-01T12:00:00Z'))).toBe('gemini-3.8-flash');
+    expect(chooseModel([model('gemini-3.6-flash')], new Date('2027-01-01T12:00:00Z'))).toBe('gemini-3.6-flash');
+  });
+
+  it('rejects a model whose reported output limit is below what every call asks for', () => {
+    const lineup = [model('gemini-3.5-flash-lite', { outputTokenLimit: 8_192 }), model('gemini-3.1-flash-lite')];
+    expect(chooseModel(lineup, NOV_26_2026)).toBe('gemini-3.1-flash-lite');
+  });
+
+  it('rejects a model whose reported input limit is too small, and accepts one that reports none', () => {
+    const lineup = [model('gemini-3.5-flash-lite', { inputTokenLimit: 4_096 }), model('gemini-3.1-flash-lite')];
+    expect(chooseModel(lineup, NOV_26_2026)).toBe('gemini-3.1-flash-lite');
+    expect(
+      chooseModel([model('gemini-3.5-flash-lite', { inputTokenLimit: 1_048_576, outputTokenLimit: 65_536 })], NOV_26_2026),
+    ).toBe('gemini-3.5-flash-lite');
+  });
+
+  it('ignores a priced model that does not support generateContent', () => {
+    const lineup = [
+      { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['embedContent'] },
+      model('gemini-3.1-flash-lite'),
+    ];
+    expect(chooseModel(lineup, NOV_26_2026)).toBe('gemini-3.1-flash-lite');
+  });
+
+  it('falls back to the unpriced ranking when no listed model is priced', () => {
+    const lineup = [model('gemini-4-argon'), model('gemini-flash-latest'), model('gemini-flash-lite-latest')];
+    expect(chooseModel(lineup, NOV_26_2026)).toBe('gemini-flash-lite-latest');
+  });
+
+  it('returns null when nothing survives the filters', () => {
+    expect(chooseModel([model('gemini-2.5-pro'), model('text-embedding-004')], NOV_26_2026)).toBeNull();
+  });
+
+  it('is deterministic regardless of the order ListModels returns', () => {
+    const reversed = [...CURRENT_LINEUP].reverse();
+    expect(chooseModel(reversed, NOV_26_2026)).toBe(chooseModel(CURRENT_LINEUP, NOV_26_2026));
+  });
+});
+
+describe('selectModel (priced)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reads token limits from ListModels and returns the priced pick for the given day', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        models: [
+          {
+            name: 'models/gemini-3.5-flash-lite',
+            supportedGenerationMethods: ['generateContent'],
+            inputTokenLimit: 1_048_576,
+            outputTokenLimit: 65_536,
+          },
+          { name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] },
+        ],
+      }),
+    );
+
+    await expect(selectModel('AIzaTestKey1234567890123456789', NOV_26_2026)).resolves.toBe('gemini-3.5-flash-lite');
   });
 });
 

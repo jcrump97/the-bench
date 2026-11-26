@@ -81,7 +81,7 @@ export interface GeminiCallOptions {
 // needs real headroom. Left unset, an overrun truncates the JSON mid-object
 // and the failure reads as "not valid JSON" — a diagnosis that sends you
 // looking at the wrong thing entirely. Verified accepted by the API.
-const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
+export const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
 
 // This is a crime simulation: assault, weapons, narcotics, and custodial
 // interrogation are the subject matter, not an accident. Default thresholds
@@ -95,9 +95,13 @@ const SAFETY_SETTINGS = [
   'HARM_CATEGORY_DANGEROUS_CONTENT',
 ].map((category) => ({ category, threshold: 'BLOCK_ONLY_HIGH' }));
 
-interface RawModel {
+// The subset of ListModels' Model resource the selector reads. It carries
+// no price field; see modelPricing.ts.
+export interface RawModel {
   name: string;
   supportedGenerationMethods?: string[];
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
 }
 
 // The key rides in a request header, never the query string. A `?key=` URL is
@@ -229,10 +233,12 @@ export async function callGemini(
       //    value would break every call, which is exactly how the evidence
       //    array's minItems broke this pipeline.
       // 2. The parameter is split by model family (`thinkingBudget` for 2.5,
-      //    `thinkingLevel` for 3.x, and sending both is a 400) — but
-      //    modelSelection deliberately prefers `-latest` *aliases*, whose
-      //    names carry no version. There is no reliable way to pick the right
-      //    parameter from the name we actually resolve.
+      //    `thinkingLevel` for 3.x, and sending both is a 400), and the
+      //    levels differ within 3.x too (3.8 Flash rejects `minimal`).
+      //    modelSelection now resolves a concrete versioned name, so the
+      //    family is readable but any per-family thinking
+      //    value would still be an unprobed request change. The fallback
+      //    `-latest` alias names no version at all.
       // 3. The pipeline measures 5/5 with zero failed attempts on the model's
       //    default. There is no failure here for a thinking budget to buy back.
       //
