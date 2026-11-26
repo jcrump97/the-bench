@@ -938,6 +938,10 @@ the session transcript; this is the consolidated action list.
 2. Is `temperature: 0.7` still optimal after the prompt rebuild? The 5/5
    measurement was at 0.7; re-measuring at 0.6/0.8 might find a better
    operating point now that the model has stronger structural guidance.
+   *(Moot on current models: Google's Gemini 3.6 notes say temperature is
+   ignored from 3.6 Flash and 3.5 Flash-Lite on, and will be rejected by
+   later models. `sampling.ts` now sends a temperature only to Gemini 2.x,
+   at 0.3; see CLAUDE.md.)*
 3. Does `assessDefense` mutate the `proposedSentence` array it shares with
    `derivePleaOfferTerms`? `gameService.ts:64-65` passes the same reference
    to both. Likely safe (`discountSentences` returns new arrays) but

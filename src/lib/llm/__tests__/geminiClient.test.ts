@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { callGemini, listModels, GeminiError } from '../geminiClient';
+import { HONORED_TEMPERATURE } from '../sampling';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -67,13 +68,13 @@ describe('callGemini', () => {
     expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'AIzaTestKey1234567890123456789' });
   });
 
-  it('sets a moderate temperature for schema-compliant-but-varied output', async () => {
+  it('sends no temperature to a model family that ignores it', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
     );
 
-    await callGemini('AIzaTestKey1234567890123456789', 'gemini-flash-latest', {
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-3.5-flash-lite', {
       systemInstruction: 'sys',
       contents: 'content',
       responseSchema: { type: 'object' },
@@ -81,7 +82,26 @@ describe('callGemini', () => {
 
     const call = fetchMock.mock.calls[0];
     const body = JSON.parse(String(call?.[1]?.body));
-    expect(body.generationConfig.temperature).toBe(0.7);
+    expect(body.generationConfig).not.toHaveProperty('temperature');
+    expect(body.generationConfig).not.toHaveProperty('topP');
+    expect(body.generationConfig).not.toHaveProperty('topK');
+  });
+
+  it('sends a low temperature to a Gemini 2.x model, which honors it', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    );
+
+    await callGemini('AIzaTestKey1234567890123456789', 'gemini-2.5-flash', {
+      systemInstruction: 'sys',
+      contents: 'content',
+      responseSchema: { type: 'object' },
+    });
+
+    const call = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.generationConfig.temperature).toBe(HONORED_TEMPERATURE);
   });
 
   it('retries on a 429 then succeeds', async () => {
