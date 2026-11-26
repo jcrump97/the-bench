@@ -146,15 +146,20 @@ Gemini request answered inside the browser, so it needs no key and spends no
 quota. What each run asserts is in the
 [`run-the-bench` skill](./.claude/skills/run-the-bench/SKILL.md).
 
-Two further checks are **manual only**. Both call the real Gemini API and spend
-real quota, and neither is wired into CI:
+Two further checks run **only on request**. Both call the real Gemini API and
+spend real quota, so neither is a gate. `test:live` can also run in CI through
+the [Live Gemini tests workflow](./.github/workflows/live-tests.yml): add the
+`run-live-tests` label to a pull request, or start it by hand from the Actions
+tab. It never runs on its own.
 
 ```bash
-npm run test:live                             # live pipeline suite, every response schema, 5-run sweep
+npm run test:live                             # live pipeline suite, every response schema, playthroughs, 5-run sweep
 node .claude/skills/qa-agent/qa-agent.mjs     # LLM-as-judge playthrough of a generated case
 ```
 
-`test:live` validates the pipeline against the actual API, and it has found
+`test:live` validates the pipeline against the actual API, and plays every
+branch of a freshly generated case to the end to check the transcript reads the
+way a player would want it to. It has found
 five bugs the mocked suite could not: a retired model build still listed as
 available; Gemini sending `null` where a field should be absent; two schemas
 the API rejected outright (one keyword combination, and one over its
